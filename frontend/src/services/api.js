@@ -1,33 +1,42 @@
 import axios from 'axios';
+import store from '@/store';
 
-// ブラウザ環境では相対パスを使用し、サーバーサイドレンダリング時は環境変数を使用
 const baseURL = typeof window !== 'undefined'
-    ? '/api'  // 開発環境ではVue CLIのプロキシが処理
+    ? '/api'
     : process.env.VUE_APP_API_URL;
 
-// デバッグ情報
 if (process.env.NODE_ENV === 'development') {
     console.log('API baseURL:', baseURL);
     console.log('VUE_APP_API_URL:', process.env.VUE_APP_API_URL);
 }
 
-// APIクライアントの作成
 const api = axios.create({
     baseURL: baseURL,
     headers: {
         'Content-Type': 'application/json'
     },
-    // タイムアウト設定を追加
     timeout: 10000
 });
 
-// リクエストインターセプターの追加
 api.interceptors.request.use(
     config => {
-        // 毎回リクエスト時にトークンを取得して設定
         const token = localStorage.getItem('token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
+        }
+
+        const isImpersonating = store.getters['auth/isImpersonating'];
+        const impersonatedUser = store.getters['auth/impersonatedUser'];
+
+        console.log('APIリクエスト前:', {
+            isImpersonating,
+            impersonatedUser: impersonatedUser?.id,
+            url: config.url
+        });
+
+        if (isImpersonating && impersonatedUser) {
+            config.headers['x-impersonate-user-id'] = impersonatedUser.id;
+            console.log('なりすましヘッダー追加:', impersonatedUser.id);
         }
 
         if (process.env.NODE_ENV === 'development') {
@@ -42,7 +51,6 @@ api.interceptors.request.use(
     }
 );
 
-// レスポンスインターセプター
 api.interceptors.response.use(
     response => {
         if (process.env.NODE_ENV === 'development') {
@@ -51,7 +59,6 @@ api.interceptors.response.use(
         return response;
     },
     error => {
-        // エラー情報を詳細にログ出力
         console.error('APIエラー:', {
             url: error.config?.url,
             method: error.config?.method,
@@ -60,7 +67,6 @@ api.interceptors.response.use(
             data: error.response?.data
         });
 
-        // 認証エラー（401）の場合、ログイン画面にリダイレクト
         if (error.response && error.response.status === 401) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');

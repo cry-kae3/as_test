@@ -142,15 +142,24 @@ const actions = {
             throw new Error('管理者権限が必要です');
         }
 
+        console.log('なりすまし開始:', user);
         commit('setOriginalUser', state.currentUser);
         commit('setImpersonatedUser', user);
+        commit('setIsImpersonating', true);
+
+        console.log('なりすまし状態更新後:', {
+            isImpersonating: state.isImpersonating,
+            impersonatedUser: state.impersonatedUser,
+            originalUser: state.originalUser
+        });
     },
 
     async stopImpersonating({ commit, state }) {
         if (!state.originalUser) return;
 
-        commit('setCurrentUser', state.originalUser);
-        commit('resetImpersonation');
+        commit('setIsImpersonating', false);
+        commit('setImpersonatedUser', null);
+        commit('setOriginalUser', null);
     },
 
     async logout({ commit }) {
@@ -180,12 +189,18 @@ const mutations = {
     },
 
     setImpersonatedUser(state, user) {
-        state.isImpersonating = true;
+        console.log('setImpersonatedUser:', user);
         state.impersonatedUser = user;
     },
 
     setOriginalUser(state, user) {
+        console.log('setOriginalUser:', user);
         state.originalUser = user;
+    },
+
+    setIsImpersonating(state, isImpersonating) {
+        console.log('setIsImpersonating:', isImpersonating);
+        state.isImpersonating = isImpersonating;
     },
 
     resetImpersonation(state) {

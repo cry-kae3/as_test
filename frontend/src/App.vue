@@ -4,8 +4,7 @@
     <ConfirmDialog />
 
     <div v-if="isAuthenticated" class="layout-wrapper">
-      <!-- サイドバーメニュー -->
-      <div class="layout-sidebar" :class="{ active: menuActive }">
+      <div class="layout-sidebar" :class="{ active: menuActive }" style="display: block !important; visibility: visible !important;">
         <div class="sidebar-header">
           <router-link to="/" class="app-logo">
             <h1>AIS</h1>
@@ -17,7 +16,6 @@
             <li
               v-for="item in filteredMenuItems"
               :key="item.label"
-              v-show="item.visible === undefined || item.visible"
             >
               <router-link :to="item.to" class="menu-item">
                 <i :class="item.icon"></i>
@@ -28,11 +26,8 @@
         </div>
       </div>
 
-      <!-- メインコンテンツ -->
       <div class="layout-main">
-        <!-- ヘッダー -->
         <div class="layout-topbar">
-          <!-- モバイル向けメニューボタン -->
           <Button
             icon="pi pi-bars"
             @click="toggleMenu"
@@ -40,7 +35,6 @@
           />
 
           <div class="user-menu">
-            <!-- 管理者用ユーザー切替ドロップダウン -->
             <Dropdown
               v-if="isAdmin && !isImpersonating"
               v-model="selectedUser"
@@ -51,16 +45,10 @@
               class="mr-2"
             />
 
-            <!-- 現在のユーザー名：閲覧モード中は閲覧対象のユーザー名を表示 -->
-            <span v-if="currentUser" class="username mr-2">
-              {{
-                isImpersonating && impersonatedUser
-                  ? impersonatedUser.username
-                  : currentUser.username
-              }}
+            <span v-if="displayUser" class="username mr-2">
+              {{ displayUser.username }}
             </span>
 
-            <!-- 閲覧モード中は元に戻るボタンを表示 -->
             <Button
               v-if="isImpersonating"
               icon="pi pi-user"
@@ -69,7 +57,6 @@
               class="p-button-rounded p-button-text p-button-info mr-2"
             />
 
-            <!-- ログアウトボタン -->
             <Button
               icon="pi pi-power-off"
               @click="logout"
@@ -79,18 +66,15 @@
           </div>
         </div>
 
-        <!-- 閲覧モード表示バー -->
         <div v-if="isImpersonating" class="impersonation-bar">
           <i class="pi pi-eye"></i>
-          <span>{{ impersonatedUser.username }} として閲覧中</span>
+          <span v-if="impersonatedUser">{{ impersonatedUser.username }} として閲覧中</span>
         </div>
 
-        <!-- コンテンツエリア -->
         <div class="layout-content">
           <router-view />
         </div>
 
-        <!-- フッター -->
         <div class="layout-footer">
           <div class="footer-content">
             <span>&copy; {{ new Date().getFullYear() }} AIS</span>
@@ -99,7 +83,6 @@
       </div>
     </div>
 
-    <!-- 未認証時はログイン画面のみ表示 -->
     <div v-else>
       <router-view />
     </div>
@@ -135,11 +118,30 @@ export default {
       () => store.getters["auth/impersonatedUser"]
     );
 
-    const actualCurrentUser = computed(() => {
-      if (isImpersonating.value) {
-        return impersonatedUser.value;
+    const displayUser = computed(() => {
+      return isImpersonating.value && impersonatedUser.value 
+        ? impersonatedUser.value 
+        : currentUser.value;
+    });
+
+    const effectiveUser = computed(() => {
+      let user = isImpersonating.value && impersonatedUser.value 
+        ? impersonatedUser.value 
+        : currentUser.value;
+        
+      if (user && (user.role === 'manager' || user.role === 'customer')) {
+        user = { ...user, role: 'owner' };
       }
-      return currentUser.value;
+        
+      console.log('effectiveUser計算:', {
+        isImpersonating: isImpersonating.value,
+        impersonatedUser: impersonatedUser.value,
+        currentUser: currentUser.value,
+        result: user,
+        resultRole: user?.role
+      });
+      
+      return user;
     });
 
     const menuItems = ref([
@@ -182,12 +184,41 @@ export default {
     ]);
 
     const filteredMenuItems = computed(() => {
-      if (!actualCurrentUser.value) return [];
+      console.log('filteredMenuItems計算中', {
+        isAuthenticated: isAuthenticated.value,
+        effectiveUser: effectiveUser.value,
+        effectiveUserRole: effectiveUser.value?.role,
+        isImpersonating: isImpersonating.value,
+        impersonatedUser: impersonatedUser.value,
+        currentUser: currentUser.value
+      });
       
-      const userRole = actualCurrentUser.value.role;
-      return menuItems.value.filter(item => 
-        item.roles.includes(userRole)
-      );
+      if (!isAuthenticated.value) {
+        console.log('認証されていません');
+        return [];
+      }
+      
+      if (!effectiveUser.value) {
+        console.log('effectiveUserがnull');
+        return [];
+      }
+      
+      const userRole = effectiveUser.value.role;
+      console.log('userRole:', userRole, typeof userRole);
+      
+      if (!userRole) {
+        console.log('userRoleがない');
+        return [];
+      }
+      
+      const filtered = menuItems.value.filter(item => {
+        const hasAccess = item.roles.includes(userRole);
+        console.log(`メニュー${item.label}: roles=${item.roles}, userRole=${userRole}, hasAccess=${hasAccess}`);
+        return hasAccess;
+      });
+      
+      console.log('フィルター済みメニュー:', filtered);
+      return filtered;
     });
 
     const toggleMenu = () => {
@@ -209,12 +240,10 @@ export default {
           );
           return response.data;
         } else {
-          console.error("不正なレスポンス形式:", response);
           userList.value = [];
           return [];
         }
       } catch (error) {
-        console.error("ユーザー一覧取得エラー:", error);
         userList.value = [];
         return [];
       }
@@ -223,11 +252,22 @@ export default {
     const switchUser = () => {
       if (!selectedUser.value || !currentUser.value) return;
 
+      console.log('ユーザー切替:', selectedUser.value);
       store.dispatch("auth/startImpersonating", selectedUser.value);
+      
+      setTimeout(() => {
+        console.log('切り替え後の状態:', {
+          isImpersonating: isImpersonating.value,
+          impersonatedUser: impersonatedUser.value,
+          effectiveUser: effectiveUser.value
+        });
+      }, 100);
+      
       router.push("/");
     };
 
     const stopImpersonating = () => {
+      console.log('なりすまし停止');
       store.dispatch("auth/stopImpersonating");
       selectedUser.value = null;
     };
@@ -244,6 +284,28 @@ export default {
           menuActive.value = false;
         }
       }
+    );
+
+    watch(
+      [isImpersonating, impersonatedUser, currentUser, effectiveUser],
+      (newValues, oldValues) => {
+        console.log('Watchが発火:', {
+          newValues: {
+            isImpersonating: newValues[0],
+            impersonatedUser: newValues[1],
+            currentUser: newValues[2],
+            effectiveUser: newValues[3]
+          },
+          oldValues: {
+            isImpersonating: oldValues[0],
+            impersonatedUser: oldValues[1],
+            currentUser: oldValues[2],
+            effectiveUser: oldValues[3]
+          }
+        });
+        console.log('filteredMenuItems長さ:', filteredMenuItems.value.length);
+      },
+      { deep: true, immediate: true }
     );
     
     onMounted(async () => {
@@ -275,6 +337,7 @@ export default {
       selectedUser,
       isImpersonating,
       impersonatedUser,
+      displayUser,
       menuActive,
       toggleMenu,
       fetchUsers,
@@ -303,13 +366,15 @@ export default {
   width: 250px;
   background-color: #1e293b;
   color: white;
-  position: fixed;
+  position: fixed !important;
   height: 100vh;
   left: 0;
   top: 0;
   z-index: 999;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease;
+  display: block !important;
+  visibility: visible !important;
 }
 
 .sidebar-header {

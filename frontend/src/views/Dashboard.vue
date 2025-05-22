@@ -1,4 +1,3 @@
-// frontend/src/views/Dashboard.vue
 <template>
   <div class="dashboard">
     <h1 class="text-3xl font-bold">ダッシュボード</h1>

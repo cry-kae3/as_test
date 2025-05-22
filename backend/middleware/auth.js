@@ -19,7 +19,36 @@ const authenticateJWT = async (req, res, next) => {
             return res.status(404).json({ message: 'ユーザーが見つかりません' });
         }
 
-        req.user = user;
+        const impersonateUserId = req.headers['x-impersonate-user-id'];
+
+        console.log('認証ミドルウェア:', {
+            originalUserId: user.id,
+            originalUserRole: user.role,
+            impersonateUserId: impersonateUserId
+        });
+
+        if (impersonateUserId && user.role === 'admin') {
+            try {
+                const impersonateUser = await User.findByPk(impersonateUserId);
+                if (impersonateUser) {
+                    console.log('なりすまし有効:', {
+                        impersonateUserId: impersonateUser.id,
+                        impersonateUserRole: impersonateUser.role
+                    });
+                    req.user = impersonateUser;
+                    req.originalUser = user;
+                    req.isImpersonating = true;
+                } else {
+                    console.log('なりすまし対象ユーザーが見つからない');
+                    req.user = user;
+                }
+            } catch (error) {
+                console.error('なりすまし処理エラー:', error);
+                req.user = user;
+            }
+        } else {
+            req.user = user;
+        }
 
         next();
     } catch (error) {
@@ -33,7 +62,9 @@ const isAdmin = (req, res, next) => {
         return res.status(401).json({ message: '認証されていません' });
     }
 
-    if (req.user.role !== 'admin') {
+    const effectiveRole = req.originalUser ? req.originalUser.role : req.user.role;
+
+    if (effectiveRole !== 'admin') {
         return res.status(403).json({ message: '管理者権限が必要です' });
     }
 
@@ -41,7 +72,14 @@ const isAdmin = (req, res, next) => {
 };
 
 const isOwnerOrAdmin = (req, res, next) => {
-    if (req.user && (req.user.role === 'admin' || req.user.role === 'owner')) {
+    if (!req.user) {
+        return res.status(401).json({ message: '認証されていません' });
+    }
+
+    const effectiveRole = req.originalUser ? req.originalUser.role : req.user.role;
+    const userRole = req.user.role;
+
+    if (effectiveRole === 'admin' || userRole === 'owner') {
         next();
     } else {
         res.status(403).json({ message: 'オーナーまたは管理者権限が必要です' });
@@ -49,7 +87,13 @@ const isOwnerOrAdmin = (req, res, next) => {
 };
 
 const isAuthorized = (req, res, next) => {
-    if (req.user && (req.user.role === 'staff' || req.user.role === 'owner' || req.user.role === 'admin')) {
+    if (!req.user) {
+        return res.status(401).json({ message: '認証されていません' });
+    }
+
+    const userRole = req.user.role;
+
+    if (userRole === 'staff' || userRole === 'owner' || (req.originalUser && req.originalUser.role === 'admin')) {
         next();
     } else {
         res.status(403).json({ message: '権限がありません' });
