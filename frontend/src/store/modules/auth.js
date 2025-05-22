@@ -22,14 +22,41 @@ const getters = {
     impersonatedUser: state => state.impersonatedUser,
     originalUser: state => state.originalUser,
     effectiveUser: state => {
+        // なりすまし中は被なりすましユーザーを返す
         if (state.isImpersonating && state.impersonatedUser) {
             return state.impersonatedUser;
         }
+        // 通常時は現在のユーザーを返す
         return state.currentUser;
     },
     effectiveUserRole: (state, getters) => {
         const user = getters.effectiveUser;
-        return user ? user.role : null;
+        if (!user) return null;
+
+        // manager または customer を owner に正規化
+        if (user.role === 'manager' || user.role === 'customer') {
+            return 'owner';
+        }
+
+        return user.role;
+    },
+    // 表示に使用するユーザー情報
+    displayUser: (state, getters) => {
+        return getters.effectiveUser;
+    },
+    // 権限チェック用のヘルパー
+    hasAdminAccess: (state, getters) => {
+        // 管理者、または管理者によるなりすまし
+        return getters.effectiveUserRole === 'admin' ||
+            (state.originalUser && state.originalUser.role === 'admin');
+    },
+    hasOwnerAccess: (state, getters) => {
+        const role = getters.effectiveUserRole;
+        return role === 'admin' || role === 'owner';
+    },
+    hasStoreAccess: (state, getters) => {
+        const role = getters.effectiveUserRole;
+        return role === 'admin' || role === 'owner' || role === 'staff';
     }
 };
 

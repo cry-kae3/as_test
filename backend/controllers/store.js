@@ -4,19 +4,40 @@ exports.getAllStores = async (req, res) => {
     try {
         let whereClause = {};
 
-        if (req.user.role === 'owner' || req.user.role === 'staff') {
-            let ownerId = req.user.id;
+        console.log('getAllStores - ユーザー情報:', {
+            userId: req.user.id,
+            userRole: req.user.role,
+            isImpersonating: req.isImpersonating,
+            originalUser: req.originalUser?.id
+        });
 
-            if (req.user.role === 'staff' && req.user.parent_user_id) {
-                ownerId = req.user.parent_user_id;
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                let ownerId = req.user.id;
+                whereClause.owner_id = ownerId;
+                console.log('なりすましモード - オーナー権限でフィルタリング適用 - owner_id:', ownerId);
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                let ownerId = req.user.parent_user_id;
+                whereClause.owner_id = ownerId;
+                console.log('なりすましモード - スタッフ権限でフィルタリング適用 - owner_id:', ownerId);
             }
-
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            let ownerId = req.user.id;
             whereClause.owner_id = ownerId;
+            console.log('通常モード - オーナー権限でフィルタリング適用 - owner_id:', ownerId);
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            let ownerId = req.user.parent_user_id;
+            whereClause.owner_id = ownerId;
+            console.log('通常モード - スタッフ権限でフィルタリング適用 - owner_id:', ownerId);
         }
+
+        console.log('最終的なwhereClause:', whereClause);
 
         const stores = await Store.findAll({
             where: whereClause
         });
+
+        console.log('取得した店舗数:', stores.length);
 
         res.status(200).json(stores);
     } catch (error) {
@@ -31,14 +52,16 @@ exports.getStoreById = async (req, res) => {
 
         let whereClause = { id };
 
-        if (req.user.role === 'owner' || req.user.role === 'staff') {
-            let ownerId = req.user.id;
-
-            if (req.user.role === 'staff' && req.user.parent_user_id) {
-                ownerId = req.user.parent_user_id;
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                whereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                whereClause.owner_id = req.user.parent_user_id;
             }
-
-            whereClause.owner_id = ownerId;
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            whereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            whereClause.owner_id = req.user.parent_user_id;
         }
 
         const store = await Store.findOne({
@@ -64,6 +87,28 @@ exports.getStoreClosedDays = async (req, res) => {
     try {
         const { id } = req.params;
 
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause
+        });
+
+        if (!store) {
+            return res.status(404).json({ message: '店舗が見つかりません' });
+        }
+
         const closedDays = await StoreClosedDay.findAll({
             where: { store_id: id }
         });
@@ -78,6 +123,28 @@ exports.getStoreClosedDays = async (req, res) => {
 exports.getStoreStaffRequirements = async (req, res) => {
     try {
         const { id } = req.params;
+
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause
+        });
+
+        if (!store) {
+            return res.status(404).json({ message: '店舗が見つかりません' });
+        }
 
         const staffRequirements = await StoreStaffRequirement.findAll({
             where: { store_id: id }
@@ -108,9 +175,18 @@ exports.createStore = async (req, res) => {
         }
 
         let ownerId = req.user.id;
-        if (req.user.role === 'staff' && req.user.parent_user_id) {
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                ownerId = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                ownerId = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
             ownerId = req.user.parent_user_id;
         }
+
+        console.log('店舗作成 - owner_id設定:', ownerId);
 
         const result = await sequelize.transaction(async (t) => {
             const store = await Store.create({
@@ -196,14 +272,16 @@ exports.updateStore = async (req, res) => {
 
         let whereClause = { id };
 
-        if (req.user.role === 'owner' || req.user.role === 'staff') {
-            let ownerId = req.user.id;
-
-            if (req.user.role === 'staff' && req.user.parent_user_id) {
-                ownerId = req.user.parent_user_id;
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                whereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                whereClause.owner_id = req.user.parent_user_id;
             }
-
-            whereClause.owner_id = ownerId;
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            whereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            whereClause.owner_id = req.user.parent_user_id;
         }
 
         const store = await Store.findOne({ where: whereClause });
@@ -282,14 +360,16 @@ exports.deleteStore = async (req, res) => {
 
         let whereClause = { id };
 
-        if (req.user.role === 'owner' || req.user.role === 'staff') {
-            let ownerId = req.user.id;
-
-            if (req.user.role === 'staff' && req.user.parent_user_id) {
-                ownerId = req.user.parent_user_id;
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                whereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                whereClause.owner_id = req.user.parent_user_id;
             }
-
-            whereClause.owner_id = ownerId;
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            whereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            whereClause.owner_id = req.user.parent_user_id;
         }
 
         const store = await Store.findOne({ where: whereClause });
@@ -310,6 +390,28 @@ exports.deleteStore = async (req, res) => {
 exports.getBusinessHours = async (req, res) => {
     try {
         const { id } = req.params;
+
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause
+        });
+
+        if (!store) {
+            return res.status(404).json({ message: '店舗が見つかりません' });
+        }
 
         const businessHours = await BusinessHours.findAll({
             where: { store_id: id },
@@ -344,6 +446,31 @@ exports.saveBusinessHours = async (req, res) => {
         if (isNaN(storeIdNum)) {
             return res.status(400).json({
                 message: '無効な店舗ID形式です'
+            });
+        }
+
+        let storeWhereClause = { id: storeIdNum };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause,
+            transaction
+        });
+
+        if (!store) {
+            return res.status(404).json({
+                message: '店舗が見つかりません'
             });
         }
 
@@ -388,6 +515,31 @@ exports.saveClosedDays = async (req, res) => {
         transaction = await sequelize.transaction();
         const { id } = req.params;
         const closedDaysData = req.body;
+
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause,
+            transaction
+        });
+
+        if (!store) {
+            return res.status(404).json({
+                message: '店舗が見つかりません'
+            });
+        }
 
         console.log('定休日保存開始:', { storeId: id, data: closedDaysData });
 
@@ -434,6 +586,31 @@ exports.saveStaffRequirements = async (req, res) => {
         const { id } = req.params;
         const requirementsData = req.body;
 
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause,
+            transaction
+        });
+
+        if (!store) {
+            return res.status(404).json({
+                message: '店舗が見つかりません'
+            });
+        }
+
         console.log('人員要件保存開始:', { storeId: id, data: requirementsData });
 
         await StoreStaffRequirement.destroy({
@@ -478,6 +655,31 @@ exports.saveStaffRequirements = async (req, res) => {
 exports.deleteAllStaffRequirements = async (req, res) => {
     try {
         const { id } = req.params;
+
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause
+        });
+
+        if (!store) {
+            return res.status(404).json({
+                message: '店舗が見つかりません'
+            });
+        }
+
         await StoreStaffRequirement.destroy({
             where: { store_id: id }
         });
@@ -495,6 +697,31 @@ exports.deleteAllStaffRequirements = async (req, res) => {
 exports.deleteAllClosedDays = async (req, res) => {
     try {
         const { id } = req.params;
+
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause
+        });
+
+        if (!store) {
+            return res.status(404).json({
+                message: '店舗が見つかりません'
+            });
+        }
+
         await StoreClosedDay.destroy({
             where: { store_id: id }
         });

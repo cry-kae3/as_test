@@ -79,6 +79,12 @@ const isOwnerOrAdmin = (req, res, next) => {
     const effectiveRole = req.originalUser ? req.originalUser.role : req.user.role;
     const userRole = req.user.role;
 
+    console.log('isOwnerOrAdmin チェック:', {
+        effectiveRole,
+        userRole,
+        originalUser: req.originalUser?.role
+    });
+
     if (effectiveRole === 'admin' || userRole === 'owner') {
         next();
     } else {
@@ -101,7 +107,24 @@ const isAuthorized = (req, res, next) => {
 };
 
 const isManager = (req, res, next) => {
-    return isAuthorized(req, res, next);
+    if (!req.user) {
+        return res.status(401).json({ message: '認証されていません' });
+    }
+
+    const effectiveRole = req.originalUser ? req.originalUser.role : req.user.role;
+    const userRole = req.user.role;
+
+    console.log('isManager チェック:', {
+        effectiveRole,
+        userRole,
+        originalUser: req.originalUser?.role
+    });
+
+    if (effectiveRole === 'admin' || userRole === 'owner' || userRole === 'staff') {
+        next();
+    } else {
+        res.status(403).json({ message: '権限がありません' });
+    }
 };
 
 module.exports = {

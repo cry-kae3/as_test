@@ -58,9 +58,16 @@ const getAllDayOffRequests = async (req, res) => {
     }
 };
 
+// backend/controllers/staff.js の getAllStaff 関数を修正
+
 const getAllStaff = async (req, res) => {
     try {
         const { store_id } = req.query;
+        console.log('getAllStaff called with:', {
+            store_id,
+            user: req.user,
+            userRole: req.user?.role
+        });
 
         const where = {};
         if (store_id) {
@@ -73,10 +80,19 @@ const getAllStaff = async (req, res) => {
                 attributes: ['id', 'name'],
                 required: true
             },
-            { model: StaffDayPreference, as: 'dayPreferences' },
-            { model: StaffDayOffRequest, as: 'dayOffRequests' }
+            {
+                model: StaffDayPreference,
+                as: 'dayPreferences',
+                required: false // LEFT JOIN に変更
+            },
+            {
+                model: StaffDayOffRequest,
+                as: 'dayOffRequests',
+                required: false // LEFT JOIN に変更
+            }
         ];
 
+        // 権限チェックを改善
         if (req.user.role === 'owner' || req.user.role === 'staff') {
             let ownerId = req.user.id;
 
@@ -84,18 +100,48 @@ const getAllStaff = async (req, res) => {
                 ownerId = req.user.parent_user_id;
             }
 
+            // Storeのwhere条件を設定
             include[0].where = { owner_id: ownerId };
+
+            console.log('Store where condition:', include[0].where);
         }
+
+        console.log('Executing query with where:', where);
+        console.log('Include configuration:', JSON.stringify(include, null, 2));
 
         const staff = await Staff.findAll({
             where,
-            include
+            include,
+            order: [['id', 'ASC']] // 並び順を追加
+        });
+
+        console.log(`Found ${staff.length} staff members`);
+
+        // 各スタッフのデータをログ出力
+        staff.forEach((s, index) => {
+            console.log(`Staff ${index + 1}:`, {
+                id: s.id,
+                name: `${s.last_name} ${s.first_name}`,
+                store_id: s.store_id,
+                dayPreferences: s.dayPreferences?.length || 0,
+                dayOffRequests: s.dayOffRequests?.length || 0
+            });
         });
 
         res.status(200).json(staff);
     } catch (error) {
-        console.error('スタッフ一覧取得エラー:', error);
-        res.status(500).json({ message: 'スタッフ一覧の取得中にエラーが発生しました' });
+        console.error('スタッフ一覧取得エラー詳細:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            sql: error.sql || 'No SQL',
+            parameters: error.parameters || 'No parameters'
+        });
+
+        res.status(500).json({
+            message: 'スタッフ一覧の取得中にエラーが発生しました',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
     }
 };
 
