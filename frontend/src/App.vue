@@ -350,6 +350,10 @@ export default {
 </script>
 
 <style>
+
+body{
+  margin:0px;
+}
 .app-container {
   min-height: 100vh;
   display: flex;
@@ -469,8 +473,15 @@ export default {
 
 .layout-content {
   flex: 1;
-  padding: 1.5rem;
+  padding: 0px;
+  width: calc(100vw - 270px);
+  margin:auto;
+
+}
+
+.layout-wrapper{
   background-color: #f8f9fa;
+
 }
 
 .layout-footer {
@@ -662,4 +673,15 @@ export default {
   --red-600: #dc2626;
   --red-700: #b91c1c;
 }
+
+
+.p-dialog-content{
+  border-radius: 0px !important;
+}
+
+.grid{
+  margin-left:0px !important;
+  margin-right:0px !important;
+}
+
 </style>

@@ -1649,11 +1649,9 @@ export default {
 }
 
 :deep(.p-datatable) {
-  height: 100%;
 }
 
 :deep(.p-datatable .p-datatable-wrapper) {
-  height: calc(100vh - 300px);
 }
 
 :deep(.p-datatable-thead > tr > th) {

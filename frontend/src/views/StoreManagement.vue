@@ -47,11 +47,11 @@
         :paginator="true"
         :rows="10"
         :rowsPerPageOptions="[5, 10, 25, 50]"
-        class="p-datatable-sm"
         stripedRows
         removableSort
         :scrollable="true"
-        scrollHeight="calc(100vh - 300px)"
+        scrollHeight="flex"
+        responsiveLayout="scroll"
       >
         <template #empty>
           <div class="text-center py-4">店舗が見つかりません</div>
@@ -60,41 +60,37 @@
           <div class="text-center py-4">データを読み込み中...</div>
         </template>
 
-        <Column field="name" header="店舗名" sortable style="min-width: 12rem">
+        <Column field="name" header="店舗名" sortable>
           <template #body="{ data }">
             <div class="store-name-cell">{{ data.name }}</div>
           </template>
         </Column>
 
-        <Column field="area" header="エリア" sortable style="min-width: 8rem">
+        <Column field="area" header="エリア" sortable>
           <template #body="{ data }">
             {{ data.area || "未設定" }}
           </template>
         </Column>
 
-        <Column field="address" header="住所" sortable style="min-width: 16rem">
+        <Column field="postal_code" header="郵便番号" sortable>
+          <template #body="{ data }">
+            {{ data.postal_code || "未設定" }}
+          </template>
+        </Column>
+
+        <Column field="address" header="住所" sortable>
           <template #body="{ data }">
             {{ data.address || "未設定" }}
           </template>
         </Column>
 
-        <Column
-          field="phone"
-          header="電話番号"
-          sortable
-          style="min-width: 10rem"
-        >
+        <Column field="phone" header="電話番号" sortable>
           <template #body="{ data }">
             {{ data.phone || "未設定" }}
           </template>
         </Column>
 
-        <Column
-          field="closedDays"
-          header="定休日"
-          sortable
-          style="min-width: 8rem"
-        >
+        <Column field="closedDays" header="定休日" sortable>
           <template #body="{ data }">
             <div>
               <div>{{ getClosedDaysText(data.id) }}</div>
@@ -109,11 +105,7 @@
           </template>
         </Column>
 
-        <Column
-          field="businessHours"
-          header="営業時間"
-          style="min-width: 10rem"
-        >
+        <Column field="businessHours" header="営業時間">
           <template #body="{ data }">
             <Button
               icon="pi pi-clock"
@@ -124,7 +116,7 @@
           </template>
         </Column>
 
-        <Column header="操作" style="min-width: 10rem; width: 10rem">
+        <Column header="操作" :exportable="false">
           <template #body="{ data }">
             <div class="action-buttons">
               <Button
@@ -150,7 +142,7 @@
       header="新規店舗"
       :modal="true"
       class="p-fluid store-dialog"
-      :style="{ width: '90vw', maxWidth: '800px', height: '90vh' }"
+      :style="{ width: '96vw', maxWidth: '1000px', height: '95vh' }"
       :maximizable="true"
     >
       <div class="dialog-content">
@@ -2266,10 +2258,12 @@ export default {
 <style scoped>
 .store-management {
   padding: 1rem;
-  max-height: 100vh;
+  height: 100vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .page-header {
@@ -2290,17 +2284,30 @@ export default {
   margin-bottom: 1rem;
   gap: 1rem;
   flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .search-container {
   flex: 1;
   max-width: 400px;
+  min-width: 200px;
+}
+
+.actions {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .table-container {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .loading-container {
@@ -2596,10 +2603,11 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 120px;
 }
 
 .staff-input {
-  width: 80px;
+  width: 120px !important;
 }
 
 .staff-unit {
@@ -2709,7 +2717,40 @@ export default {
   gap: 0.5rem;
 }
 
+:deep(.p-datatable) {
+  height: 100%;
+}
+
+:deep(.p-datatable .p-datatable-wrapper) {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+:deep(.p-datatable-thead > tr > th) {
+  padding: 0.75rem;
+  font-weight: 600;
+}
+
+:deep(.p-datatable-tbody > tr > td) {
+  padding: 0.75rem;
+}
+
 @media (max-width: 1200px) {
+  .store-management {
+    padding: 0.5rem;
+  }
+  
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  
+  .search-container {
+    max-width: none;
+    width: 100%;
+  }
+  
   .store-dialog {
     width: 95vw !important;
     max-width: none !important;
@@ -2718,19 +2759,16 @@ export default {
 
 @media (max-width: 768px) {
   .store-management {
-    padding: 0.5rem;
+    padding: 0.25rem;
+    height: 100vh;
   }
-
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
+  
+  :deep(.p-datatable-thead > tr > th),
+  :deep(.p-datatable-tbody > tr > td) {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.9rem;
   }
-
-  .search-container {
-    max-width: none;
-    margin-bottom: 0.5rem;
-  }
-
+  
   .store-dialog {
     width: 100vw !important;
     height: 100vh !important;
@@ -2786,6 +2824,11 @@ export default {
   .page-title {
     font-size: 1.25rem;
   }
+  
+  .store-management {
+    padding: 0.125rem;
+    height: 100vh;
+  }
 
   .requirement-item {
     padding: 0.5rem;
@@ -2796,29 +2839,16 @@ export default {
   }
 
   .staff-input {
-    width: 60px;
+    width: 80px !important;
   }
 }
 
-:deep(.p-datatable) {
-  height: 100%;
+.staff-input :deep(.p-inputnumber) {
+  min-width: 120px !important;
 }
 
-:deep(.p-datatable .p-datatable-wrapper) {
-  height: calc(100vh - 300px);
-}
-
-:deep(.p-datatable-thead > tr > th) {
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background-color: var(--surface-card);
-}
-
-:deep(.p-datatable-tbody > tr > td) {
-  padding: 0.75rem 0.5rem;
-  white-space: nowrap;
+.staff-input :deep(.p-inputnumber-input) {
+  min-width: 80px !important;
 }
 
 :deep(.p-tabview .p-tabview-panels) {

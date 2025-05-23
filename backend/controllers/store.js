@@ -35,7 +35,21 @@ exports.getAllStores = async (req, res) => {
         console.log('最終的なwhereClause:', whereClause);
 
         const stores = await Store.findAll({
-            where: whereClause
+            where: whereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ]
         });
 
         console.log('取得した店舗数:', stores.length);
@@ -67,6 +81,20 @@ exports.getStoreById = async (req, res) => {
 
         const store = await Store.findOne({
             where: whereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ],
             include: [
                 { model: StoreClosedDay, as: 'closedDays' },
                 { model: StoreStaffRequirement, as: 'staffRequirements' }
@@ -103,7 +131,21 @@ exports.getStoreClosedDays = async (req, res) => {
         }
 
         const store = await Store.findOne({
-            where: storeWhereClause
+            where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ]
         });
 
         if (!store) {
@@ -140,7 +182,21 @@ exports.getStoreStaffRequirements = async (req, res) => {
         }
 
         const store = await Store.findOne({
-            where: storeWhereClause
+            where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ]
         });
 
         if (!store) {
@@ -168,7 +224,9 @@ exports.createStore = async (req, res) => {
             opening_time,
             closing_time,
             closed_days,
-            staff_requirements
+            staff_requirements,
+            area,
+            postal_code
         } = req.body;
 
         if (!name || !opening_time || !closing_time) {
@@ -208,7 +266,9 @@ exports.createStore = async (req, res) => {
                 email,
                 opening_time,
                 closing_time,
-                owner_id: ownerId
+                owner_id: ownerId,
+                area,
+                postal_code
             }, { transaction: t });
 
             if (closed_days && closed_days.length > 0) {
@@ -240,6 +300,20 @@ exports.createStore = async (req, res) => {
         });
 
         const createdStore = await Store.findByPk(result.id, {
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ],
             include: [
                 { model: StoreClosedDay, as: 'closedDays' },
                 { model: StoreStaffRequirement, as: 'staffRequirements' }
@@ -279,7 +353,9 @@ exports.updateStore = async (req, res) => {
             opening_time,
             closing_time,
             closed_days,
-            staff_requirements
+            staff_requirements,
+            area,
+            postal_code
         } = req.body;
 
         let whereClause = { id };
@@ -327,7 +403,9 @@ exports.updateStore = async (req, res) => {
                 phone: phone !== undefined ? phone : store.phone,
                 email: email !== undefined ? email : store.email,
                 opening_time: opening_time || store.opening_time,
-                closing_time: closing_time || store.closing_time
+                closing_time: closing_time || store.closing_time,
+                area: area !== undefined ? area : store.area,
+                postal_code: postal_code !== undefined ? postal_code : store.postal_code
             }, { transaction: t });
 
             if (closed_days !== undefined) {
@@ -371,6 +449,20 @@ exports.updateStore = async (req, res) => {
         });
 
         const updatedStore = await Store.findByPk(id, {
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ],
             include: [
                 { model: StoreClosedDay, as: 'closedDays' },
                 { model: StoreStaffRequirement, as: 'staffRequirements' }
@@ -436,7 +528,21 @@ exports.getBusinessHours = async (req, res) => {
         }
 
         const store = await Store.findOne({
-            where: storeWhereClause
+            where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ]
         });
 
         if (!store) {
@@ -495,6 +601,20 @@ exports.saveBusinessHours = async (req, res) => {
 
         const store = await Store.findOne({
             where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ],
             transaction
         });
 
@@ -562,6 +682,20 @@ exports.saveClosedDays = async (req, res) => {
 
         const store = await Store.findOne({
             where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ],
             transaction
         });
 
@@ -632,6 +766,20 @@ exports.saveStaffRequirements = async (req, res) => {
 
         const store = await Store.findOne({
             where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ],
             transaction
         });
 
@@ -701,7 +849,21 @@ exports.deleteAllStaffRequirements = async (req, res) => {
         }
 
         const store = await Store.findOne({
-            where: storeWhereClause
+            where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ]
         });
 
         if (!store) {
@@ -743,7 +905,21 @@ exports.deleteAllClosedDays = async (req, res) => {
         }
 
         const store = await Store.findOne({
-            where: storeWhereClause
+            where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ]
         });
 
         if (!store) {
