@@ -936,6 +936,7 @@
   </div>
 </template>
 
+
 <script>
 import { ref, reactive, computed, onMounted } from "vue";
 import { useStore } from "vuex";
@@ -1756,9 +1757,16 @@ export default {
         }
 
         const storeData = {
-          ...newStoreDialog.store,
+          name: newStoreDialog.store.name.trim(),
+          address: newStoreDialog.store.address || null,
+          phone: newStoreDialog.store.phone || null,
+          email: newStoreDialog.store.email || null,
+          opening_time: newStoreDialog.store.opening_time,
+          closing_time: newStoreDialog.store.closing_time,
+          postal_code: newStoreDialog.store.postal_code || null,
           area: newStoreDialog.store.area || null,
         };
+
         console.log("送信する店舗基本情報:", storeData);
         const createdStore = await store.dispatch(
           "store/createStore",
@@ -1886,7 +1894,14 @@ export default {
         }
 
         const storeDataToUpdate = {
-          ...storeDialog.store,
+          id: storeDialog.store.id,
+          name: storeDialog.store.name.trim(),
+          address: storeDialog.store.address || null,
+          phone: storeDialog.store.phone || null,
+          email: storeDialog.store.email || null,
+          opening_time: storeDialog.store.opening_time,
+          closing_time: storeDialog.store.closing_time,
+          postal_code: storeDialog.store.postal_code || null,
           area: storeDialog.store.area || null,
         };
 
