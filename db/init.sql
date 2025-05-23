@@ -20,6 +20,7 @@ CREATE TABLE stores (
     closing_time TIME NOT NULL,
     owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     area VARCHAR(100),
+    postal_code VARCHAR(20),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -162,5 +163,5 @@ CREATE TABLE staff_stores (
     UNIQUE(staff_id, store_id)
 );
 
-INSERT INTO stores (name, address, phone, email, opening_time, closing_time) 
-VALUES ('サンプル店舗', '東京都渋谷区1-1-1', '03-1234-5678', 'sample@example.com', '09:00', '22:00');
+INSERT INTO stores (name, address, phone, email, opening_time, closing_time, area, postal_code) 
+VALUES ('サンプル店舗', '東京都渋谷区1-1-1', '03-1234-5678', 'sample@example.com', '09:00', '22:00', '東京都心エリア', '150-0001');

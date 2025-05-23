@@ -1,15 +1,26 @@
 <template>
   <div class="store-management">
-    <h1 class="page-title">店舗管理</h1>
+    <div class="page-header">
+      <h1 class="page-title">店舗管理</h1>
+    </div>
 
     <div class="toolbar">
-      <Button
-        label="新規店舗"
-        icon="pi pi-plus"
-        class="p-button-primary"
-        @click="openNew"
-        v-if="isAdmin"
-      />
+      <div class="search-container">
+        <span class="p-input-icon-left">
+          <i class="pi pi-search" />
+          <InputText placeholder="検索..." />
+        </span>
+      </div>
+
+      <div class="actions">
+        <Button
+          label="新規店舗"
+          icon="pi pi-plus"
+          class="p-button-primary"
+          @click="openNew"
+          v-if="isAdmin"
+        />
+      </div>
     </div>
 
     <div v-if="loading" class="loading-container">
@@ -28,19 +39,27 @@
       </Message>
     </div>
 
-    <div v-else class="stores-container">
+    <div v-else class="table-container">
       <DataTable
         :value="stores"
-        responsiveLayout="scroll"
-        stripedRows
+        :loading="loading"
+        dataKey="id"
         :paginator="true"
         :rows="10"
-        :rowsPerPageOptions="[5, 10, 20, 50]"
-        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-        currentPageReportTemplate="全 {totalRecords} 件中 {first} 〜 {last} 件を表示"
-        filterDisplay="menu"
+        :rowsPerPageOptions="[5, 10, 25, 50]"
         class="p-datatable-sm"
+        stripedRows
+        removableSort
+        :scrollable="true"
+        scrollHeight="calc(100vh - 300px)"
       >
+        <template #empty>
+          <div class="text-center py-4">店舗が見つかりません</div>
+        </template>
+        <template #loading>
+          <div class="text-center py-4">データを読み込み中...</div>
+        </template>
+
         <Column field="name" header="店舗名" sortable style="min-width: 12rem">
           <template #body="{ data }">
             <div class="store-name-cell">{{ data.name }}</div>
@@ -107,18 +126,18 @@
 
         <Column header="操作" style="min-width: 10rem; width: 10rem">
           <template #body="{ data }">
-            <div class="store-actions">
+            <div class="action-buttons">
               <Button
                 icon="pi pi-pencil"
-                label="編集"
-                class="p-button-outlined p-button-sm mr-2"
+                class="p-button-rounded p-button-text p-button-plain"
                 @click="editStore(data)"
+                title="編集"
               />
               <Button
                 icon="pi pi-trash"
-                label="削除"
-                class="p-button-outlined p-button-danger p-button-sm"
+                class="p-button-rounded p-button-text p-button-danger"
                 @click="confirmDeleteStore(data)"
+                title="削除"
               />
             </div>
           </template>
@@ -131,89 +150,100 @@
       header="新規店舗"
       :modal="true"
       class="p-fluid store-dialog"
-      :style="{ width: '800px' }"
+      :style="{ width: '90vw', maxWidth: '800px', height: '90vh' }"
+      :maximizable="true"
     >
-      <TabView>
-        <TabPanel header="基本情報">
-          <div class="store-form">
-            <div class="form-section">
-              <div class="field">
-                <label for="new-name"
-                  >店舗名 <span class="required-mark">*</span></label
-                >
-                <InputText
-                  id="new-name"
-                  v-model="newStoreDialog.store.name"
-                  :class="{
-                    'p-invalid': submitted && !newStoreDialog.store.name,
-                  }"
-                />
-                <small
-                  v-if="submitted && !newStoreDialog.store.name"
-                  class="p-error"
-                  >店舗名は必須です</small
-                >
-              </div>
-
-              <div class="field">
-                <label for="new-area">エリア</label>
-                <AutoComplete
-                  id="new-area"
-                  v-model="newStoreDialog.store.area"
-                  :suggestions="filteredAreas"
-                  @complete="searchArea"
-                  placeholder="例: 東京都心エリア"
-                  :dropdown="true"
-                  :minLength="0"
-                />
-              </div>
-
-              <div class="field">
-                <label for="new-zip-input">郵便番号</label>
-                <div class="postal-row">
-                  <InputText
-                    id="new-zip-input"
-                    v-model="newZipCode"
-                    placeholder="（ハイフンなし）"
-                    class="zip-input"
-                    maxlength="7"
-                  />
-                  <Button
-                    label="検索"
-                    icon="pi pi-search"
-                    class="p-button-sm ml-2"
-                    style="width: 100px; font-size: 0.85rem"
-                    @click="searchWithNewZip"
-                  />
+      <div class="dialog-content">
+        <TabView class="full-height-tabs">
+          <TabPanel header="基本情報">
+            <div class="tab-content">
+              <div class="p-grid p-formgrid">
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="new-name"
+                      >店舗名 <span class="required-mark">*</span></label
+                    >
+                    <InputText
+                      id="new-name"
+                      v-model="newStoreDialog.store.name"
+                      :class="{
+                        'p-invalid': submitted && !newStoreDialog.store.name,
+                      }"
+                    />
+                    <small
+                      v-if="submitted && !newStoreDialog.store.name"
+                      class="p-error"
+                      >店舗名は必須です</small
+                    >
+                  </div>
                 </div>
-                <small class="form-text text-muted"
-                  >ハイフンなしで7桁の数字を入力</small
-                >
-              </div>
 
-              <div class="field">
-                <label for="new-address">住所</label>
-                <Textarea
-                  id="new-address"
-                  v-model="newStoreDialog.store.address"
-                  rows="3"
-                />
-              </div>
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="new-area">エリア</label>
+                    <AutoComplete
+                      id="new-area"
+                      v-model="newStoreDialog.store.area"
+                      :suggestions="filteredAreas"
+                      @complete="searchArea"
+                      placeholder="例: 東京都心エリア"
+                      :dropdown="true"
+                      :minLength="0"
+                    />
+                  </div>
+                </div>
 
-              <div class="field">
-                <label for="new-phone">電話番号</label>
-                <InputText
-                  id="new-phone"
-                  v-model="newStoreDialog.store.phone"
-                />
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="new-zip-input">郵便番号</label>
+                    <div class="postal-row">
+                      <InputText
+                        id="new-zip-input"
+                        v-model="newZipCode"
+                        placeholder="（ハイフンなし）"
+                        class="zip-input"
+                        maxlength="7"
+                      />
+                      <Button
+                        label="検索"
+                        icon="pi pi-search"
+                        class="p-button-sm ml-2"
+                        style="width: 100px; font-size: 0.85rem"
+                        @click="searchWithNewZip"
+                      />
+                    </div>
+                    <small class="form-text text-muted"
+                      >ハイフンなしで7桁の数字を入力</small
+                    >
+                  </div>
+                </div>
+
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="new-address">住所</label>
+                    <Textarea
+                      id="new-address"
+                      v-model="newStoreDialog.store.address"
+                      rows="3"
+                    />
+                  </div>
+                </div>
+
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="new-phone">電話番号</label>
+                    <InputText
+                      id="new-phone"
+                      v-model="newStoreDialog.store.phone"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </TabPanel>
+          </TabPanel>
 
-        <TabPanel header="営業時間">
-          <div class="store-form">
-            <div class="form-section">
+          <TabPanel header="営業時間">
+            <div class="tab-content">
               <div class="field">
                 <h4>曜日ごとの営業時間</h4>
 
@@ -289,12 +319,10 @@
                 </div>
               </div>
             </div>
-          </div>
-        </TabPanel>
+          </TabPanel>
 
-        <TabPanel header="特別定休日">
-          <div class="store-form">
-            <div class="form-section">
+          <TabPanel header="特別定休日">
+            <div class="tab-content">
               <div class="field">
                 <h4>特別定休日指定</h4>
                 <div class="specific-dates">
@@ -303,6 +331,7 @@
                       v-model="selectedSpecificDate"
                       dateFormat="yy-mm-dd"
                       placeholder="日付を選択"
+                      showIcon
                     />
                     <Button
                       icon="pi pi-plus"
@@ -335,12 +364,10 @@
                 </div>
               </div>
             </div>
-          </div>
-        </TabPanel>
+          </TabPanel>
 
-        <TabPanel header="人員要件">
-          <div class="store-form">
-            <div class="form-section">
+          <TabPanel header="人員要件">
+            <div class="tab-content">
               <h4 class="section-title">曜日ごとの人員要件</h4>
 
               <div
@@ -403,24 +430,26 @@
                 </div>
               </div>
             </div>
-          </div>
-        </TabPanel>
-      </TabView>
+          </TabPanel>
+        </TabView>
+      </div>
 
       <template #footer>
-        <Button
-          label="キャンセル"
-          icon="pi pi-times"
-          class="p-button-text"
-          @click="hideNewDialog"
-        />
-        <Button
-          label="保存"
-          icon="pi pi-check"
-          class="p-button-primary"
-          @click="saveNewStore"
-          :loading="saving"
-        />
+        <div class="dialog-footer">
+          <Button
+            label="キャンセル"
+            icon="pi pi-times"
+            class="p-button-text"
+            @click="hideNewDialog"
+          />
+          <Button
+            label="保存"
+            icon="pi pi-check"
+            class="p-button-primary"
+            @click="saveNewStore"
+            :loading="saving"
+          />
+        </div>
       </template>
     </Dialog>
 
@@ -507,84 +536,100 @@
       header="店舗編集"
       :modal="true"
       class="p-fluid store-dialog"
-      :style="{ width: '800px' }"
+      :style="{ width: '90vw', maxWidth: '800px', height: '90vh' }"
+      :maximizable="true"
     >
-      <TabView>
-        <TabPanel header="基本情報">
-          <div class="store-form">
-            <div class="form-section">
-              <div class="field">
-                <label for="edit-name"
-                  >店舗名 <span class="required-mark">*</span></label
-                >
-                <InputText
-                  id="edit-name"
-                  v-model="storeDialog.store.name"
-                  :class="{ 'p-invalid': submitted && !storeDialog.store.name }"
-                />
-                <small
-                  v-if="submitted && !storeDialog.store.name"
-                  class="p-error"
-                  >店舗名は必須です</small
-                >
-              </div>
-
-              <div class="field">
-                <label for="edit-area">エリア</label>
-                <AutoComplete
-                  id="edit-area"
-                  v-model="storeDialog.store.area"
-                  :suggestions="filteredAreas"
-                  @complete="searchArea"
-                  placeholder="例: 東京都心エリア"
-                  :dropdown="true"
-                  :minLength="0"
-                />
-              </div>
-
-              <div class="field">
-                <label for="edit-zip-input">郵便番号</label>
-                <div class="postal-row">
-                  <InputText
-                    id="edit-zip-input"
-                    v-model="editZipCode"
-                    placeholder="（ハイフンなし）"
-                    class="zip-input"
-                    maxlength="7"
-                  />
-                  <Button
-                    label="検索"
-                    icon="pi pi-search"
-                    class="p-button-sm ml-2"
-                    style="width: 100px; font-size: 0.85rem"
-                    @click="searchWithEditZip"
-                  />
+      <div class="dialog-content">
+        <TabView class="full-height-tabs">
+          <TabPanel header="基本情報">
+            <div class="tab-content">
+              <div class="p-grid p-formgrid">
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="edit-name"
+                      >店舗名 <span class="required-mark">*</span></label
+                    >
+                    <InputText
+                      id="edit-name"
+                      v-model="storeDialog.store.name"
+                      :class="{
+                        'p-invalid': submitted && !storeDialog.store.name,
+                      }"
+                    />
+                    <small
+                      v-if="submitted && !storeDialog.store.name"
+                      class="p-error"
+                      >店舗名は必須です</small
+                    >
+                  </div>
                 </div>
-                <small class="form-text text-muted"
-                  >ハイフンなしで7桁の数字を入力</small
-                >
-              </div>
 
-              <div class="field">
-                <label for="edit-address">住所</label>
-                <Textarea
-                  id="edit-address"
-                  v-model="storeDialog.store.address"
-                  rows="3"
-                />
-              </div>
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="edit-area">エリア</label>
+                    <AutoComplete
+                      id="edit-area"
+                      v-model="storeDialog.store.area"
+                      :suggestions="filteredAreas"
+                      @complete="searchArea"
+                      placeholder="例: 東京都心エリア"
+                      :dropdown="true"
+                      :minLength="0"
+                    />
+                  </div>
+                </div>
 
-              <div class="field">
-                <label for="edit-phone">電話番号</label>
-                <InputText id="edit-phone" v-model="storeDialog.store.phone" />
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="edit-zip-input">郵便番号</label>
+                    <div class="postal-row">
+                      <InputText
+                        id="edit-zip-input"
+                        v-model="editZipCode"
+                        placeholder="（ハイフンなし）"
+                        class="zip-input"
+                        maxlength="7"
+                      />
+                      <Button
+                        label="検索"
+                        icon="pi pi-search"
+                        class="p-button-sm ml-2"
+                        style="width: 100px; font-size: 0.85rem"
+                        @click="searchWithEditZip"
+                      />
+                    </div>
+                    <small class="form-text text-muted"
+                      >ハイフンなしで7桁の数字を入力</small
+                    >
+                  </div>
+                </div>
+
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="edit-address">住所</label>
+                    <Textarea
+                      id="edit-address"
+                      v-model="storeDialog.store.address"
+                      rows="3"
+                    />
+                  </div>
+                </div>
+
+                <div class="p-col-12">
+                  <div class="field">
+                    <label for="edit-phone">電話番号</label>
+                    <InputText
+                      id="edit-phone"
+                      v-model="storeDialog.store.phone"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </TabPanel>
+          </TabPanel>
 
-        <TabPanel header="営業時間">
-          <div class="store-form">
-            <div class="form-section">
+          <TabPanel header="営業時間">
+            <div class="tab-content">
               <div class="field">
                 <h4>曜日ごとの営業時間</h4>
                 <div
@@ -657,12 +702,10 @@
                 </div>
               </div>
             </div>
-          </div>
-        </TabPanel>
+          </TabPanel>
 
-        <TabPanel header="特別定休日">
-          <div class="store-form">
-            <div class="form-section">
+          <TabPanel header="特別定休日">
+            <div class="tab-content">
               <div class="field">
                 <h4>特別定休日指定</h4>
                 <div class="specific-dates">
@@ -671,6 +714,7 @@
                       v-model="selectedEditSpecificDate"
                       dateFormat="yy-mm-dd"
                       placeholder="日付を選択"
+                      showIcon
                     />
                     <Button
                       icon="pi pi-plus"
@@ -703,12 +747,10 @@
                 </div>
               </div>
             </div>
-          </div>
-        </TabPanel>
+          </TabPanel>
 
-        <TabPanel header="人員要件">
-          <div class="store-form">
-            <div class="form-section">
+          <TabPanel header="人員要件">
+            <div class="tab-content">
               <h4 class="section-title">曜日ごとの人員要件</h4>
 
               <div
@@ -773,207 +815,26 @@
                 </div>
               </div>
             </div>
-          </div>
-        </TabPanel>
-      </TabView>
-
-      <template #footer>
-        <Button
-          label="キャンセル"
-          icon="pi pi-times"
-          class="p-button-text"
-          @click="hideDialog"
-        />
-        <Button
-          label="保存"
-          icon="pi pi-check"
-          class="p-button-primary"
-          @click="saveStore"
-          :loading="saving"
-        />
-      </template>
-    </Dialog>
-
-    <Dialog
-      v-model:visible="detailsDialog.visible"
-      :header="
-        detailsDialog.store ? detailsDialog.store.name + ' - 詳細' : '店舗詳細'
-      "
-      :modal="true"
-      :style="{ width: '800px' }"
-      class="store-dialog"
-    >
-      <div v-if="detailsDialog.store" class="store-details-content">
-        <TabView>
-          <TabPanel header="基本情報">
-            <div class="detail-section">
-              <div class="detail-item">
-                <span class="detail-label">店舗名:</span>
-                <span class="detail-value">{{ detailsDialog.store.name }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">エリア:</span>
-                <span class="detail-value">{{
-                  detailsDialog.store.area || "未設定"
-                }}</span>
-              </div>
-              <div v-if="detailsDialog.store.postal_code" class="detail-item">
-                <span class="detail-label">郵便番号:</span>
-                <span class="detail-value">{{
-                  detailsDialog.store.postal_code
-                }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">住所:</span>
-                <span class="detail-value">{{
-                  detailsDialog.store.address || "未設定"
-                }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">電話番号:</span>
-                <span class="detail-value">{{
-                  detailsDialog.store.phone || "未設定"
-                }}</span>
-              </div>
-            </div>
-          </TabPanel>
-
-          <TabPanel header="営業時間">
-            <div class="detail-section">
-              <h4>曜日ごとの営業時間</h4>
-              <div
-                v-for="day in daysOfWeek"
-                :key="'detail-hours-' + day.value"
-                class="day-hours-item"
-              >
-                <div class="day-hours-header">
-                  <span class="day-name">{{ day.label }}曜日</span>
-
-                  <span
-                    v-if="
-                      detailsDialog.businessHours &&
-                      detailsDialog.businessHours[day.value]
-                    "
-                    :class="[
-                      'day-status',
-                      detailsDialog.businessHours[day.value].is_closed
-                        ? 'closed'
-                        : 'open',
-                    ]"
-                  >
-                    {{
-                      detailsDialog.businessHours[day.value].is_closed
-                        ? "定休日"
-                        : "営業日"
-                    }}
-                  </span>
-                </div>
-                <div
-                  v-if="
-                    detailsDialog.businessHours &&
-                    detailsDialog.businessHours[day.value] &&
-                    !detailsDialog.businessHours[day.value].is_closed
-                  "
-                  class="day-hours-time"
-                >
-                  {{
-                    formatTime(
-                      detailsDialog.businessHours[day.value]?.opening_time
-                    )
-                  }}
-                  -
-                  {{
-                    formatTime(
-                      detailsDialog.businessHours[day.value]?.closing_time
-                    )
-                  }}
-                </div>
-              </div>
-            </div>
-          </TabPanel>
-
-          <TabPanel header="特別定休日">
-            <div class="detail-section">
-              <h4>特別定休日</h4>
-              <div class="closed-dates-list">
-                <div
-                  v-if="
-                    detailsDialog.specificDates &&
-                    detailsDialog.specificDates.length > 0
-                  "
-                  class="closed-dates"
-                >
-                  <Tag
-                    v-for="(date, index) in detailsDialog.specificDates"
-                    :key="'date-' + index"
-                    :value="formatDate(date)"
-                    severity="danger"
-                    class="mr-2 mb-2"
-                  />
-                </div>
-                <div v-else class="no-closed-dates">
-                  特別定休日は設定されていません
-                </div>
-              </div>
-            </div>
-          </TabPanel>
-
-          <TabPanel header="人員要件">
-            <div class="detail-section">
-              <h4>曜日ごとの人員要件</h4>
-              <div
-                v-for="day in daysOfWeek"
-                :key="'day-req-' + day.value"
-                class="day-req-section"
-              >
-                <h5>{{ day.label }}曜日</h5>
-                <div
-                  v-if="
-                    detailsDialog.dayRequirements &&
-                    detailsDialog.dayRequirements[day.value] &&
-                    detailsDialog.dayRequirements[day.value].length > 0
-                  "
-                  class="requirements-list"
-                >
-                  <div
-                    v-for="(req, index) in detailsDialog.dayRequirements[
-                      day.value
-                    ]"
-                    :key="day.value + '-req-' + index"
-                    class="requirement-row"
-                  >
-                    <span class="req-time"
-                      >{{ formatTime(req.start_time) }} -
-                      {{ formatTime(req.end_time) }}</span
-                    >
-                    <span class="req-count"
-                      >{{ req.required_staff_count }}名</span
-                    >
-                  </div>
-                </div>
-                <div v-else class="no-requirements">
-                  人員要件は設定されていません
-                </div>
-              </div>
-            </div>
           </TabPanel>
         </TabView>
       </div>
 
       <template #footer>
-        <Button
-          label="閉じる"
-          icon="pi pi-times"
-          class="p-button-text"
-          @click="detailsDialog.visible = false"
-        />
-        <Button
-          v-if="isAdmin"
-          label="編集"
-          icon="pi pi-pencil"
-          class="p-button-primary"
-          @click="editFromDetails"
-        />
+        <div class="dialog-footer">
+          <Button
+            label="キャンセル"
+            icon="pi pi-times"
+            class="p-button-text"
+            @click="hideDialog"
+          />
+          <Button
+            label="保存"
+            icon="pi pi-check"
+            class="p-button-primary"
+            @click="saveStore"
+            :loading="saving"
+          />
+        </div>
       </template>
     </Dialog>
 
@@ -1071,7 +932,6 @@
       </template>
     </Dialog>
 
-    <ConfirmDialog></ConfirmDialog>
     <Toast />
   </div>
 </template>
@@ -1093,7 +953,6 @@ import TabPanel from "primevue/tabpanel";
 import Calendar from "primevue/calendar";
 import ProgressSpinner from "primevue/progressspinner";
 import Message from "primevue/message";
-import ConfirmDialog from "primevue/confirmdialog";
 import Toast from "primevue/toast";
 import InputText from "primevue/inputtext";
 import Checkbox from "primevue/checkbox";
@@ -1118,7 +977,6 @@ export default {
     Calendar,
     ProgressSpinner,
     Message,
-    ConfirmDialog,
     Toast,
     InputText,
     Checkbox,
@@ -1162,22 +1020,6 @@ export default {
       return options;
     });
 
-    const generateTimeOptions = () => {
-      const options = [];
-      for (let hour = 0; hour < 24; hour++) {
-        for (let minute of ["00", "30"]) {
-          const formattedHour = hour.toString().padStart(2, "0");
-          options.push({
-            label: `${formattedHour}:${minute}`,
-            value: `${formattedHour}:${minute}`,
-          });
-        }
-      }
-      return options;
-    };
-
-    timeOptions.value = generateTimeOptions();
-
     const newStoreDialog = reactive({
       visible: false,
       store: {
@@ -1211,13 +1053,12 @@ export default {
       dayRequirements: {},
     });
 
-    const detailsDialog = reactive({
+    const businessHoursDialog = reactive({
       visible: false,
       store: null,
-      businessHours: {},
       specificDates: [],
-      dayRequirements: {},
     });
+
     const applyAllTimeDialog = reactive({
       visible: false,
       opening_time: "09:00",
@@ -1230,21 +1071,6 @@ export default {
       closing_time: "18:00",
     });
 
-    const initTimeOptions = () => {
-      const options = [];
-      for (let hour = 0; hour < 24; hour++) {
-        for (let minute of ["00", "30"]) {
-          const formattedHour = hour.toString().padStart(2, "0");
-          const timeValue = `${formattedHour}:${minute}`;
-          options.push({
-            label: timeValue,
-            value: timeValue,
-          });
-        }
-      }
-      timeOptions.value = options;
-    };
-
     const daysOfWeek = [
       { value: 0, label: "日" },
       { value: 1, label: "月" },
@@ -1255,24 +1081,13 @@ export default {
       { value: 6, label: "土" },
     ];
 
-    onMounted(() => {
-      initTimeOptions();
-      fetchStores();
-    });
-
     const fetchStores = async () => {
       loading.value = true;
       try {
         const response = await store.dispatch("store/fetchStores");
         stores.value = response;
 
-        const uniqueAreas = new Set();
-        stores.value.forEach((storeItem) => {
-          if (storeItem.area && storeItem.area.trim()) {
-            uniqueAreas.add(storeItem.area.trim());
-          }
-        });
-        areaOptions.value = Array.from(uniqueAreas).sort();
+        await generateAreaOptions();
 
         const detailPromises = stores.value.map((storeItem) =>
           loadStoreDetails(storeItem.id)
@@ -1292,6 +1107,77 @@ export default {
       }
     };
 
+    const generateAreaOptions = async () => {
+      try {
+        const currentUser = store.getters["auth/currentUser"];
+        const effectiveUser = store.getters["auth/effectiveUser"];
+        const isAdminUser = store.getters["auth/isAdmin"];
+        const isImpersonating = store.getters["auth/isImpersonating"];
+
+        console.log("エリア候補生成 - ユーザー情報:", {
+          currentUser: currentUser?.id,
+          effectiveUser: effectiveUser?.id,
+          isAdmin: isAdminUser,
+          isImpersonating,
+        });
+
+        const uniqueAreas = new Set();
+
+        if (
+          isAdminUser &&
+          (!isImpersonating ||
+            (isImpersonating && currentUser?.role === "admin"))
+        ) {
+          stores.value.forEach((storeItem) => {
+            if (storeItem.area && storeItem.area.trim()) {
+              uniqueAreas.add(storeItem.area.trim());
+            }
+          });
+
+          console.log("管理者権限 - 全エリアを表示:", Array.from(uniqueAreas));
+        } else {
+          let ownerId = effectiveUser?.id;
+          if (
+            effectiveUser?.role === "staff" &&
+            effectiveUser?.parent_user_id
+          ) {
+            ownerId = effectiveUser.parent_user_id;
+          }
+
+          console.log("権限フィルタリング - オーナーID:", ownerId);
+
+          stores.value.forEach((storeItem) => {
+            console.log("店舗チェック:", {
+              storeId: storeItem.id,
+              storeName: storeItem.name,
+              storeOwnerId: storeItem.owner_id,
+              storeArea: storeItem.area,
+              match: storeItem.owner_id === ownerId,
+            });
+
+            if (
+              storeItem.owner_id === ownerId &&
+              storeItem.area &&
+              storeItem.area.trim()
+            ) {
+              uniqueAreas.add(storeItem.area.trim());
+            }
+          });
+
+          console.log("権限フィルタリング後のエリア:", Array.from(uniqueAreas));
+        }
+
+        areaOptions.value = Array.from(uniqueAreas).sort();
+        filteredAreas.value = areaOptions.value;
+
+        console.log("最終的なエリア候補:", areaOptions.value);
+      } catch (error) {
+        console.error("エリア候補の生成に失敗しました:", error);
+        areaOptions.value = [];
+        filteredAreas.value = [];
+      }
+    };
+
     const openNew = () => {
       submitted.value = false;
       newStoreDialog.store = {
@@ -1306,6 +1192,8 @@ export default {
       newZipCode.value = "";
       selectedSpecificDate.value = null;
       newStoreDialog.specificDates = [];
+
+      generateAreaOptions();
 
       newStoreDialog.businessHours = {};
       daysOfWeek.forEach((day) => {
@@ -1364,12 +1252,12 @@ export default {
           storeDialog.dayRequirements[day.value] = [];
         });
 
+        await generateAreaOptions();
+
         console.log("店舗ID:", storeData.id, "のデータを取得中...");
 
         await loadStoreBusinessHours(storeData.id);
-
         await loadStoreClosedDays(storeData.id);
-
         await loadStaffRequirements(storeData.id);
 
         console.log("読み込み完了 - storeDialog:", {
@@ -1393,48 +1281,24 @@ export default {
       }
     };
 
-    const viewStoreDetails = async (storeData) => {
-      detailsDialog.store = storeData;
-
-      detailsDialog.businessHours = {};
-      detailsDialog.specificDates = [];
-      detailsDialog.dayRequirements = {};
-
-      daysOfWeek.forEach((day) => {
-        detailsDialog.businessHours[day.value] = {
-          is_closed: false,
-          opening_time: "09:00",
-          closing_time: "18:00",
-        };
-
-        detailsDialog.dayRequirements[day.value] = [];
-      });
-
-      detailsDialog.visible = true;
-
-      await loadBusinessHoursForDetails(storeData.id);
-
-      await loadClosedDaysForDetails(storeData.id);
-
-      await loadStaffRequirementsForDetails(storeData.id);
-    };
-
-    const editFromDetails = () => {
-      if (detailsDialog.store) {
-        detailsDialog.visible = false;
-        editStore(detailsDialog.store);
-      }
-    };
-
     const searchArea = (event) => {
       const query = event.query.toLowerCase();
-      if (!query) {
-        filteredAreas.value = areaOptions.value;
+
+      console.log("エリア検索:", {
+        query,
+        availableAreas: areaOptions.value,
+        inputValue: query,
+      });
+
+      if (!query || query.trim() === "") {
+        filteredAreas.value = [...areaOptions.value];
       } else {
         filteredAreas.value = areaOptions.value.filter((area) =>
           area.toLowerCase().includes(query)
         );
       }
+
+      console.log("フィルタリング結果:", filteredAreas.value);
     };
 
     const validateStoreName = (name, excludeId = null) => {
@@ -1510,36 +1374,6 @@ export default {
             day_of_week: day.value,
           };
         });
-      }
-    };
-
-    const loadBusinessHoursForDetails = async (storeId) => {
-      try {
-        const businessHours = await store.dispatch(
-          "store/fetchStoreBusinessHours",
-          storeId
-        );
-
-        detailsDialog.businessHours = {};
-        daysOfWeek.forEach((day) => {
-          detailsDialog.businessHours[day.value] = {
-            is_closed: false,
-            opening_time: "09:00",
-            closing_time: "18:00",
-          };
-        });
-
-        businessHours.forEach((hour) => {
-          if (hour.day_of_week >= 0 && hour.day_of_week <= 6) {
-            detailsDialog.businessHours[hour.day_of_week] = {
-              is_closed: hour.is_closed,
-              opening_time: hour.opening_time || "09:00",
-              closing_time: hour.closing_time || "18:00",
-            };
-          }
-        });
-      } catch (error) {
-        console.error("営業時間データの取得に失敗しました:", error);
       }
     };
 
@@ -1669,21 +1503,6 @@ export default {
       }
     };
 
-    const loadClosedDaysForDetails = async (storeId) => {
-      try {
-        const closedDays = await store.dispatch(
-          "store/fetchStoreClosedDays",
-          storeId
-        );
-
-        detailsDialog.specificDates = closedDays
-          .filter((day) => day.specific_date)
-          .map((day) => new Date(day.specific_date));
-      } catch (error) {
-        console.error("定休日データの取得に失敗しました:", error);
-      }
-    };
-
     const loadStaffRequirements = async (storeId) => {
       try {
         const requirements = await store.dispatch(
@@ -1740,36 +1559,6 @@ export default {
       }
     };
 
-    const loadStaffRequirementsForDetails = async (storeId) => {
-      try {
-        const requirements = await store.dispatch(
-          "store/fetchStoreStaffRequirements",
-          storeId
-        );
-
-        detailsDialog.dayRequirements = {};
-        daysOfWeek.forEach((day) => {
-          detailsDialog.dayRequirements[day.value] = [];
-        });
-
-        requirements.forEach((req) => {
-          if (req.day_of_week >= 0 && req.day_of_week <= 6) {
-            if (!detailsDialog.dayRequirements[req.day_of_week]) {
-              detailsDialog.dayRequirements[req.day_of_week] = [];
-            }
-
-            detailsDialog.dayRequirements[req.day_of_week].push({
-              start_time: req.start_time,
-              end_time: req.end_time,
-              required_staff_count: req.required_staff_count,
-            });
-          }
-        });
-      } catch (error) {
-        console.error("人員要件データの取得に失敗しました:", error);
-      }
-    };
-
     const hideNewDialog = () => {
       newStoreDialog.visible = false;
       submitted.value = false;
@@ -1781,18 +1570,12 @@ export default {
     };
 
     const showApplyAllTimeDialog = () => {
-      if (timeOptions.value.length === 0) {
-        initTimeOptions();
-      }
       applyAllTimeDialog.opening_time = "09:00";
       applyAllTimeDialog.closing_time = "18:00";
       applyAllTimeDialog.visible = true;
     };
 
     const showEditApplyAllTimeDialog = () => {
-      if (timeOptions.value.length === 0) {
-        initTimeOptions();
-      }
       editApplyAllTimeDialog.opening_time = "09:00";
       editApplyAllTimeDialog.closing_time = "18:00";
       editApplyAllTimeDialog.visible = true;
@@ -1972,7 +1755,10 @@ export default {
           );
         }
 
-        const storeData = { ...newStoreDialog.store };
+        const storeData = {
+          ...newStoreDialog.store,
+          area: newStoreDialog.store.area || null,
+        };
         console.log("送信する店舗基本情報:", storeData);
         const createdStore = await store.dispatch(
           "store/createStore",
@@ -2065,6 +1851,7 @@ export default {
         saving.value = false;
       }
     };
+
     const saveStore = async () => {
       submitted.value = true;
 
@@ -2098,10 +1885,15 @@ export default {
           );
         }
 
-        console.log("更新する店舗情報:", storeDialog.store);
+        const storeDataToUpdate = {
+          ...storeDialog.store,
+          area: storeDialog.store.area || null,
+        };
+
+        console.log("更新する店舗情報:", storeDataToUpdate);
         let savedStore = await store.dispatch(
           "store/updateStore",
-          storeDialog.store
+          storeDataToUpdate
         );
         let storeId = parseInt(savedStore.id, 10);
 
@@ -2191,85 +1983,6 @@ export default {
           summary: "エラー",
           detail: errorMessage,
           life: 3000,
-        });
-      } finally {
-        saving.value = false;
-      }
-    };
-
-    const saveStaff = async () => {
-      submitted.value = true;
-
-      if (!staffDialog.staff.last_name || !staffDialog.staff.first_name) {
-        return;
-      }
-
-      saving.value = true;
-
-      try {
-        const dayPreferences = daysOfWeek.map((day) => ({
-          day_of_week: day.value,
-          available: staffDialog.dayPreferences[day.value].available,
-          preferred_start_time:
-            staffDialog.dayPreferences[day.value].preferred_start_time || null,
-          preferred_end_time:
-            staffDialog.dayPreferences[day.value].preferred_end_time || null,
-          break_start_time:
-            staffDialog.dayPreferences[day.value].break_start_time || null,
-          break_end_time:
-            staffDialog.dayPreferences[day.value].break_end_time || null,
-        }));
-
-        const dayOffRequests = staffDialog.dayOffRequests.map((request) => ({
-          date: request.date,
-          reason: request.reason || "requested",
-          status: request.status || "pending",
-        }));
-
-        if (staffDialog.isNew) {
-          const staffData = {
-            ...staffDialog.staff,
-            day_preferences: dayPreferences,
-            day_off_requests: dayOffRequests,
-          };
-
-          await store.dispatch("staff/createStaff", staffData);
-
-          toast.add({
-            severity: "success",
-            summary: "作成完了",
-            detail: "スタッフを作成しました",
-            life: 3002,
-          });
-        } else {
-          const staffData = {
-            ...staffDialog.staff,
-            day_preferences: dayPreferences,
-            day_off_requests: dayOffRequests,
-          };
-
-          await store.dispatch("staff/updateStaff", {
-            id: staffDialog.staff.id,
-            staffData: staffData,
-          });
-
-          toast.add({
-            severity: "success",
-            summary: "更新完了",
-            detail: "スタッフ情報を更新しました",
-            life: 3002,
-          });
-        }
-
-        hideDialog();
-        await fetchStaffList();
-      } catch (error) {
-        console.error("スタッフ保存エラー:", error);
-        toast.add({
-          severity: "error",
-          summary: "エラー",
-          detail: "スタッフの保存に失敗しました: " + error.message,
-          life: 3002,
         });
       } finally {
         saving.value = false;
@@ -2413,11 +2126,6 @@ export default {
       }
     };
 
-    const getDayOfWeekLabel = (dayValue) => {
-      const day = daysOfWeek.find((d) => d.value === dayValue);
-      return day ? day.label : "";
-    };
-
     const formatDate = (date) => {
       if (!date) return "";
 
@@ -2457,85 +2165,6 @@ export default {
       return "00:00";
     };
 
-    const hasMultipleBusinessHours = (storeId) => {
-      console.log("hasMultipleBusinessHours 呼び出し, storeId:", storeId);
-
-      const storeItem = stores.value.find((s) => s.id === storeId);
-      if (!storeItem || !storeItem.businessHours) {
-        console.log("店舗または営業時間データがありません");
-        return false;
-      }
-
-      console.log("営業時間データ:", storeItem.businessHours);
-
-      const openDays = Object.values(storeItem.businessHours).filter(
-        (hour) => !hour.is_closed
-      );
-
-      if (openDays.length === 0) {
-        console.log("営業日がありません");
-        return false;
-      }
-
-      function normalizeTime(time) {
-        if (!time) return "";
-        return time.split(":").slice(0, 2).join(":");
-      }
-
-      const firstDay = openDays[0];
-      const firstOpeningTime = normalizeTime(firstDay.opening_time);
-      const firstClosingTime = normalizeTime(firstDay.closing_time);
-
-      const hasMultiple = openDays.some((day) => {
-        const dayOpeningTime = normalizeTime(day.opening_time);
-        const dayClosingTime = normalizeTime(day.closing_time);
-
-        const isDifferent =
-          dayOpeningTime !== firstOpeningTime ||
-          dayClosingTime !== firstClosingTime;
-
-        console.log(
-          `曜日 ${day.day_of_week} の時間: ${dayOpeningTime}-${dayClosingTime}, ` +
-            `基準時間: ${firstOpeningTime}-${firstClosingTime}, 違い: ${isDifferent}`
-        );
-
-        return isDifferent;
-      });
-
-      console.log("複数の営業時間パターンあり:", hasMultiple);
-      return hasMultiple;
-    };
-
-    const showBusinessHoursTooltip = (event, storeId) => {
-      const storeItem = stores.value.find((s) => s.id === storeId);
-      if (!storeItem || !storeItem.businessHours) return;
-
-      let info = "";
-      daysOfWeek.forEach((day) => {
-        const hourData = storeItem.businessHours[day.value];
-        if (!hourData) {
-          info += `${day.label}曜日: 情報なし\n`;
-          return;
-        }
-
-        if (hourData.is_closed) {
-          info += `${day.label}曜日: 定休日\n`;
-        } else {
-          info += `${day.label}曜日: ${formatTime(
-            hourData.opening_time
-          )} - ${formatTime(hourData.closing_time)}\n`;
-        }
-      });
-
-      alert(`${storeItem.name}の曜日ごとの営業時間:\n\n${info}`);
-    };
-
-    const businessHoursDialog = reactive({
-      visible: false,
-      store: null,
-      specificDates: [],
-    });
-
     const showBusinessHoursDialog = async (storeData) => {
       businessHoursDialog.store = storeData;
       businessHoursDialog.specificDates = [];
@@ -2558,6 +2187,10 @@ export default {
       businessHoursDialog.visible = true;
     };
 
+    onMounted(() => {
+      fetchStores();
+    });
+
     return {
       loading,
       saving,
@@ -2569,18 +2202,17 @@ export default {
       selectedEditSpecificDate,
       newStoreDialog,
       storeDialog,
-      detailsDialog,
       applyAllTimeDialog,
       editApplyAllTimeDialog,
+      businessHoursDialog,
       daysOfWeek,
       isAdmin,
       timeOptions,
       areaOptions,
       filteredAreas,
+      generateAreaOptions,
       openNew,
       editStore,
-      viewStoreDetails,
-      editFromDetails,
       hideNewDialog,
       hideDialog,
       showApplyAllTimeDialog,
@@ -2605,13 +2237,9 @@ export default {
       removeRequirementEdit,
       formatDate,
       formatTime,
-      getDayOfWeekLabel,
       getClosedDaysText,
       getSpecialClosedDaysText,
       loadStoreDetails,
-      hasMultipleBusinessHours,
-      showBusinessHoursTooltip,
-      businessHoursDialog,
       showBusinessHoursDialog,
       searchArea,
       validateStoreName,
@@ -2619,3 +2247,585 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.store-management {
+  padding: 1rem;
+  max-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-header {
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.search-container {
+  flex: 1;
+  max-width: 400px;
+}
+
+.table-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  gap: 1rem;
+}
+
+.loading-text {
+  color: var(--text-color-secondary);
+  font-size: 1rem;
+}
+
+.empty-message {
+  padding: 2rem;
+}
+
+.message-content {
+  display: flex;
+  align-items: center;
+}
+
+.store-name-cell {
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.special-closed-days {
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+  margin-top: 0.25rem;
+}
+
+.special-closed-label {
+  font-weight: 500;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: center;
+}
+
+.store-dialog {
+  max-height: 90vh;
+}
+
+:deep(.store-dialog .p-dialog) {
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.store-dialog .p-dialog-content) {
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+}
+
+.dialog-content {
+  height: 60vh;
+  min-height: 400px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.full-height-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.full-height-tabs .p-tabview-panels) {
+  flex: 1;
+  overflow: hidden;
+}
+
+:deep(.full-height-tabs .p-tabview-panel) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.tab-content {
+  height: 100%;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.field label {
+  font-weight: 500;
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+.required-mark {
+  color: var(--red-500);
+}
+
+.postal-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.zip-input {
+  flex: 1;
+}
+
+.form-text {
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+  margin-top: 0.25rem;
+}
+
+.business-hours-item {
+  padding: 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  background-color: var(--surface-ground);
+  margin-bottom: 1rem;
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.day-header h5 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.day-closed-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.day-closed-toggle label {
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+}
+
+.time-inputs {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: end;
+}
+
+.time-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.time-field label {
+  font-size: 0.8rem;
+  color: var(--text-color-secondary);
+}
+
+.time-separator {
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--text-color-secondary);
+  padding-bottom: 0.5rem;
+}
+
+.closed-message {
+  text-align: center;
+  color: var(--text-color-secondary);
+  font-style: italic;
+  padding: 1rem;
+  background-color: var(--red-50);
+  border-radius: 4px;
+  border: 1px solid var(--red-200);
+}
+
+.business-hours-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.specific-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.date-picker {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.date-picker .p-calendar {
+  flex: 1;
+}
+
+.selected-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  background-color: var(--surface-ground);
+}
+
+.date-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--blue-100);
+  color: var(--blue-700);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.no-dates {
+  color: var(--text-color-secondary);
+  font-style: italic;
+  align-self: center;
+  margin: auto;
+}
+
+.section-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.day-requirements {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  background-color: var(--surface-ground);
+}
+
+.day-title {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.requirement-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background-color: var(--surface-card);
+  border-radius: 4px;
+  border: 1px solid var(--surface-border);
+}
+
+.time-range {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.time-dropdown {
+  min-width: 100px;
+}
+
+.staff-count {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.staff-input {
+  width: 80px;
+}
+
+.staff-unit {
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+}
+
+.remove-button {
+  flex-shrink: 0;
+}
+
+.add-requirement {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.time-band-add-button {
+  width: 100%;
+}
+
+.business-hours-detail {
+  padding: 1rem 0;
+}
+
+.business-hours-detail h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.day-hours-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  background-color: var(--surface-ground);
+}
+
+.day-hours-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.day-name {
+  font-weight: 500;
+  color: var(--text-color);
+  min-width: 60px;
+}
+
+.day-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.day-status.open {
+  background-color: var(--green-100);
+  color: var(--green-700);
+}
+
+.day-status.closed {
+  background-color: var(--red-100);
+  color: var(--red-700);
+}
+
+.day-hours-time {
+  font-family: monospace;
+  font-size: 0.9rem;
+  color: var(--text-color-secondary);
+  margin-top: 0.25rem;
+}
+
+.special-closed-days-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.special-date-tag {
+  padding: 0.25rem 0.5rem;
+  background-color: var(--red-100);
+  color: var(--red-700);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.no-special-days {
+  color: var(--text-color-secondary);
+  font-style: italic;
+  text-align: center;
+  padding: 1rem;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+@media (max-width: 1200px) {
+  .store-dialog {
+    width: 95vw !important;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .store-management {
+    padding: 0.5rem;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-container {
+    max-width: none;
+    margin-bottom: 0.5rem;
+  }
+
+  .store-dialog {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+
+  :deep(.store-dialog .p-dialog) {
+    margin: 0;
+    border-radius: 0;
+    max-height: 100vh;
+  }
+
+  .dialog-content {
+    height: calc(100vh - 120px);
+  }
+
+  .time-inputs {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .time-separator {
+    display: none;
+  }
+
+  .requirement-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .time-range {
+    justify-content: space-between;
+  }
+
+  .staff-count {
+    justify-content: center;
+  }
+
+  .postal-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .day-hours-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 1.25rem;
+  }
+
+  .requirement-item {
+    padding: 0.5rem;
+  }
+
+  .time-dropdown {
+    min-width: 80px;
+  }
+
+  .staff-input {
+    width: 60px;
+  }
+}
+
+:deep(.p-datatable) {
+  height: 100%;
+}
+
+:deep(.p-datatable .p-datatable-wrapper) {
+  height: calc(100vh - 300px);
+}
+
+:deep(.p-datatable-thead > tr > th) {
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: var(--surface-card);
+}
+
+:deep(.p-datatable-tbody > tr > td) {
+  padding: 0.75rem 0.5rem;
+  white-space: nowrap;
+}
+
+:deep(.p-tabview .p-tabview-panels) {
+  padding: 0;
+  height: calc(60vh - 100px);
+  overflow: hidden;
+}
+
+:deep(.p-tabview .p-tabview-panel) {
+  height: 100%;
+  overflow-y: auto;
+}
+
+:deep(.p-autocomplete .p-autocomplete-dropdown) {
+  border-left: 1px solid var(--surface-border);
+}
+
+:deep(.p-autocomplete-panel) {
+  max-height: 200px;
+}
+
+:deep(.p-calendar .p-inputtext) {
+  width: 100%;
+}
+</style>

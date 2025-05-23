@@ -46,6 +46,10 @@ module.exports = (sequelize, DataTypes) => {
         area: {
             type: DataTypes.STRING(100),
             allowNull: true
+        },
+        postal_code: {
+            type: DataTypes.STRING(20),
+            allowNull: true
         }
     }, {
         tableName: 'stores',
