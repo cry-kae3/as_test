@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router';
 import store from '@/store';
 import ChangeLogs from '../views/ChangeLogs.vue';
 
-// ルート定義
 const routes = [
     {
         path: '/',
@@ -34,11 +33,6 @@ const routes = [
         meta: { requiresAuth: true }
     },
     {
-        path: '/:pathMatch(.*)*',
-        name: 'NotFound',
-        component: () => import('@/views/NotFound.vue')
-    },
-    {
         path: '/change-logs',
         name: 'ChangeLogs',
         component: ChangeLogs,
@@ -49,6 +43,11 @@ const routes = [
         name: 'UserManagement',
         component: () => import('@/views/UserManagement.vue'),
         meta: { requiresAuth: true, requiresAdmin: true }
+    },
+    {
+        path: '/:pathMatch(.*)*',
+        name: 'NotFound',
+        component: () => import('@/views/NotFound.vue')
     }
 ];
 
@@ -57,7 +56,6 @@ const router = createRouter({
     routes
 });
 
-// ナビゲーションガードを設定
 router.beforeEach((to, from, next) => {
     const isAuthenticated = store.getters['auth/isAuthenticated'];
     const currentUser = store.getters['auth/currentUser'];
