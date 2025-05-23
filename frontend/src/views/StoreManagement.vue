@@ -47,6 +47,12 @@
           </template>
         </Column>
 
+        <Column field="area" header="エリア" sortable style="min-width: 8rem">
+          <template #body="{ data }">
+            {{ data.area || "未設定" }}
+          </template>
+        </Column>
+
         <Column field="address" header="住所" sortable style="min-width: 16rem">
           <template #body="{ data }">
             {{ data.address || "未設定" }}
@@ -144,6 +150,15 @@
                   class="p-error"
                   >店舗名は必須です</small
                 >
+              </div>
+
+              <div class="field">
+                <label for="new-area">エリア</label>
+                <InputText
+                  id="new-area"
+                  v-model="newStoreDialog.store.area"
+                  placeholder="例: 東京都心エリア"
+                />
               </div>
 
               <div class="field">
@@ -504,6 +519,15 @@
               </div>
 
               <div class="field">
+                <label for="edit-area">エリア</label>
+                <InputText
+                  id="edit-area"
+                  v-model="storeDialog.store.area"
+                  placeholder="例: 東京都心エリア"
+                />
+              </div>
+
+              <div class="field">
                 <label for="edit-zip-input">郵便番号</label>
                 <div class="postal-row">
                   <InputText
@@ -571,7 +595,9 @@
                     v-if="!storeDialog.businessHours[day.value].is_closed"
                     class="time-inputs"
                   >
-                    <div class="time-field">
+                  
+
+                  <div class="time-field">
                       <label :for="'edit-opening-time-' + day.value"
                         >営業開始時間</label
                       >
@@ -769,6 +795,10 @@
               <div class="detail-item">
                 <span class="detail-label">店舗名:</span>
                 <span class="detail-value">{{ detailsDialog.store.name }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">エリア:</span>
+                <span class="detail-value">{{ detailsDialog.store.area || "未設定" }}</span>
               </div>
               <div v-if="detailsDialog.store.postal_code" class="detail-item">
                 <span class="detail-label">郵便番号:</span>
@@ -1134,6 +1164,7 @@ export default {
         address: "",
         phone: "",
         postal_code: "",
+        area: "",
         opening_time: "09:00",
         closing_time: "18:00",
       },
@@ -1150,6 +1181,7 @@ export default {
         address: "",
         phone: "",
         postal_code: "",
+        area: "",
         opening_time: "09:00",
         closing_time: "18:00",
       },
@@ -1238,6 +1270,7 @@ export default {
         address: "",
         phone: "",
         postal_code: "",
+        area: "",
         opening_time: "09:00",
         closing_time: "18:00",
       };

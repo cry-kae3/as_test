@@ -77,10 +77,18 @@ module.exports = (sequelize, DataTypes) => {
         timestamps: true
     });
 
-    // インスタンスメソッド
     Staff.prototype.getFullName = function () {
         return `${this.last_name} ${this.first_name}`;
     };
 
+    Staff.associate = function (models) {
+        Staff.belongsToMany(models.Store, {
+            through: 'staff_stores',
+            as: 'stores',
+            foreignKey: 'staff_id',
+            otherKey: 'store_id'
+        });
+    };
+
     return Staff;
-  };
+};

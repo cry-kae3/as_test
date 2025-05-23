@@ -42,6 +42,10 @@ module.exports = (sequelize, DataTypes) => {
                 model: 'users',
                 key: 'id'
             }
+        },
+        area: {
+            type: DataTypes.STRING(100),
+            allowNull: true
         }
     }, {
         tableName: 'stores',

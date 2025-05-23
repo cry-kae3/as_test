@@ -23,6 +23,20 @@ StoreStaffRequirement.belongsTo(Store, { foreignKey: 'store_id' });
 Store.hasMany(Staff, { foreignKey: 'store_id', as: 'staff' });
 Staff.belongsTo(Store, { foreignKey: 'store_id' });
 
+Staff.belongsToMany(Store, {
+    through: 'staff_stores',
+    as: 'stores',
+    foreignKey: 'staff_id',
+    otherKey: 'store_id'
+});
+
+Store.belongsToMany(Staff, {
+    through: 'staff_stores',
+    as: 'availableStaff',
+    foreignKey: 'store_id',
+    otherKey: 'staff_id'
+});
+
 Staff.hasMany(StaffDayPreference, { foreignKey: 'staff_id', as: 'dayPreferences' });
 StaffDayPreference.belongsTo(Staff, { foreignKey: 'staff_id' });
 

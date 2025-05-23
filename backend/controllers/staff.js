@@ -58,8 +58,6 @@ const getAllDayOffRequests = async (req, res) => {
     }
 };
 
-// backend/controllers/staff.js の getAllStaff 関数を修正
-
 const getAllStaff = async (req, res) => {
     try {
         const { store_id } = req.query;
@@ -83,16 +81,22 @@ const getAllStaff = async (req, res) => {
             {
                 model: StaffDayPreference,
                 as: 'dayPreferences',
-                required: false // LEFT JOIN に変更
+                required: false
             },
             {
                 model: StaffDayOffRequest,
                 as: 'dayOffRequests',
-                required: false // LEFT JOIN に変更
+                required: false
+            },
+            {
+                model: Store,
+                as: 'stores',
+                through: { attributes: [] },
+                attributes: ['id', 'name', 'area'],
+                required: false
             }
         ];
 
-        // 権限チェックを改善
         if (req.user.role === 'owner' || req.user.role === 'staff') {
             let ownerId = req.user.id;
 
@@ -100,7 +104,6 @@ const getAllStaff = async (req, res) => {
                 ownerId = req.user.parent_user_id;
             }
 
-            // Storeのwhere条件を設定
             include[0].where = { owner_id: ownerId };
 
             console.log('Store where condition:', include[0].where);
@@ -112,12 +115,11 @@ const getAllStaff = async (req, res) => {
         const staff = await Staff.findAll({
             where,
             include,
-            order: [['id', 'ASC']] // 並び順を追加
+            order: [['id', 'ASC']]
         });
 
         console.log(`Found ${staff.length} staff members`);
 
-        // 各スタッフのデータをログ出力
         staff.forEach((s, index) => {
             console.log(`Staff ${index + 1}:`, {
                 id: s.id,
@@ -156,7 +158,14 @@ const getStaffById = async (req, res) => {
                 required: true
             },
             { model: StaffDayPreference, as: 'dayPreferences' },
-            { model: StaffDayOffRequest, as: 'dayOffRequests' }
+            { model: StaffDayOffRequest, as: 'dayOffRequests' },
+            {
+                model: Store,
+                as: 'stores',
+                through: { attributes: [] },
+                attributes: ['id', 'name', 'area'],
+                required: false
+            }
         ];
 
         if (req.user.role === 'owner' || req.user.role === 'staff') {
@@ -200,7 +209,8 @@ const getStaffById = async (req, res) => {
 
         const completeResponse = {
             ...staff.toJSON(),
-            dayPreferences: [...staff.dayPreferences, ...additionalPreferences]
+            dayPreferences: [...staff.dayPreferences, ...additionalPreferences],
+            store_ids: staff.stores ? staff.stores.map(store => store.id) : []
         };
 
         res.status(200).json(completeResponse);
@@ -214,6 +224,7 @@ const createStaff = async (req, res) => {
     try {
         const {
             store_id,
+            store_ids,
             first_name,
             last_name,
             furigana,
@@ -264,6 +275,10 @@ const createStaff = async (req, res) => {
                 max_consecutive_days
             }, { transaction: t });
 
+            if (store_ids && store_ids.length > 0) {
+                await staff.setStores(store_ids, { transaction: t });
+            }
+
             if (day_preferences && day_preferences.length > 0) {
                 await StaffDayPreference.bulkCreate(
                     day_preferences.map(pref => ({
@@ -312,7 +327,13 @@ const createStaff = async (req, res) => {
             include: [
                 { model: Store, attributes: ['id', 'name'] },
                 { model: StaffDayPreference, as: 'dayPreferences' },
-                { model: StaffDayOffRequest, as: 'dayOffRequests' }
+                { model: StaffDayOffRequest, as: 'dayOffRequests' },
+                {
+                    model: Store,
+                    as: 'stores',
+                    through: { attributes: [] },
+                    attributes: ['id', 'name', 'area']
+                }
             ]
         });
 
@@ -328,6 +349,7 @@ const updateStaff = async (req, res) => {
         const { id } = req.params;
         const {
             store_id,
+            store_ids,
             first_name,
             last_name,
             furigana,
@@ -347,6 +369,7 @@ const updateStaff = async (req, res) => {
         console.log("受け取ったデータ:", {
             id,
             store_id,
+            store_ids,
             day_preferences,
             day_off_requests
         });
@@ -405,6 +428,10 @@ const updateStaff = async (req, res) => {
                 max_hours_per_day: max_hours_per_day !== undefined ? max_hours_per_day : staff.max_hours_per_day,
                 max_consecutive_days: max_consecutive_days !== undefined ? max_consecutive_days : staff.max_consecutive_days
             }, { transaction: t });
+
+            if (store_ids && store_ids.length > 0) {
+                await staff.setStores(store_ids, { transaction: t });
+            }
 
             if (day_preferences !== undefined) {
                 await StaffDayPreference.destroy({
@@ -539,7 +566,13 @@ const updateStaff = async (req, res) => {
             include: [
                 { model: Store, attributes: ['id', 'name'] },
                 { model: StaffDayPreference, as: 'dayPreferences' },
-                { model: StaffDayOffRequest, as: 'dayOffRequests' }
+                { model: StaffDayOffRequest, as: 'dayOffRequests' },
+                {
+                    model: Store,
+                    as: 'stores',
+                    through: { attributes: [] },
+                    attributes: ['id', 'name', 'area']
+                }
             ]
         });
 

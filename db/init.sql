@@ -19,6 +19,7 @@ CREATE TABLE stores (
     opening_time TIME NOT NULL,
     closing_time TIME NOT NULL,
     owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    area VARCHAR(100),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -150,6 +151,15 @@ CREATE TABLE user_change_logs (
     change_reason TEXT,
     impersonation_mode BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE staff_stores (
+    id SERIAL PRIMARY KEY,
+    staff_id INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+    store_id INTEGER NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(staff_id, store_id)
 );
 
 INSERT INTO stores (name, address, phone, email, opening_time, closing_time) 
