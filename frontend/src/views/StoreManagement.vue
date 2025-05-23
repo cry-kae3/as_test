@@ -79,7 +79,10 @@
           <template #body="{ data }">
             <div>
               <div>{{ getClosedDaysText(data.id) }}</div>
-              <div v-if="getSpecialClosedDaysText(data.id)" class="special-closed-days">
+              <div
+                v-if="getSpecialClosedDaysText(data.id)"
+                class="special-closed-days"
+              >
                 <span class="special-closed-label">特別定休日:</span>
                 {{ getSpecialClosedDaysText(data.id) }}
               </div>
@@ -154,10 +157,14 @@
 
               <div class="field">
                 <label for="new-area">エリア</label>
-                <InputText
+                <AutoComplete
                   id="new-area"
                   v-model="newStoreDialog.store.area"
+                  :suggestions="filteredAreas"
+                  @complete="searchArea"
                   placeholder="例: 東京都心エリア"
+                  :dropdown="true"
+                  :minLength="0"
                 />
               </div>
 
@@ -476,7 +483,13 @@
         </div>
 
         <h4 class="mt-4">特別定休日</h4>
-        <div v-if="businessHoursDialog.specificDates && businessHoursDialog.specificDates.length > 0" class="special-closed-days-list">
+        <div
+          v-if="
+            businessHoursDialog.specificDates &&
+            businessHoursDialog.specificDates.length > 0
+          "
+          class="special-closed-days-list"
+        >
           <div
             v-for="(date, index) in businessHoursDialog.specificDates"
             :key="'special-date-' + index"
@@ -485,9 +498,7 @@
             {{ formatDate(date) }}
           </div>
         </div>
-        <div v-else class="no-special-days">
-          特別定休日は設定されていません
-        </div>
+        <div v-else class="no-special-days">特別定休日は設定されていません</div>
       </div>
     </Dialog>
 
@@ -520,10 +531,14 @@
 
               <div class="field">
                 <label for="edit-area">エリア</label>
-                <InputText
+                <AutoComplete
                   id="edit-area"
                   v-model="storeDialog.store.area"
+                  :suggestions="filteredAreas"
+                  @complete="searchArea"
                   placeholder="例: 東京都心エリア"
+                  :dropdown="true"
+                  :minLength="0"
                 />
               </div>
 
@@ -595,9 +610,7 @@
                     v-if="!storeDialog.businessHours[day.value].is_closed"
                     class="time-inputs"
                   >
-                  
-
-                  <div class="time-field">
+                    <div class="time-field">
                       <label :for="'edit-opening-time-' + day.value"
                         >営業開始時間</label
                       >
@@ -706,7 +719,9 @@
                 <h5 class="day-title">{{ day.label }}曜日</h5>
 
                 <div
-                  v-for="(req, reqIndex) in getRequirementsForDayEdit(day.value)"
+                  v-for="(req, reqIndex) in getRequirementsForDayEdit(
+                    day.value
+                  )"
                   :key="dayIndex + '-' + reqIndex"
                   class="requirement-item"
                 >
@@ -798,7 +813,9 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">エリア:</span>
-                <span class="detail-value">{{ detailsDialog.store.area || "未設定" }}</span>
+                <span class="detail-value">{{
+                  detailsDialog.store.area || "未設定"
+                }}</span>
               </div>
               <div v-if="detailsDialog.store.postal_code" class="detail-item">
                 <span class="detail-label">郵便番号:</span>
@@ -1083,6 +1100,7 @@ import Checkbox from "primevue/checkbox";
 import Tag from "primevue/tag";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
+import AutoComplete from "primevue/autocomplete";
 import { formatDateToJP } from "@/utils/date";
 
 export default {
@@ -1107,6 +1125,7 @@ export default {
     Tag,
     DataTable,
     Column,
+    AutoComplete,
   },
 
   setup() {
@@ -1122,6 +1141,8 @@ export default {
     const editZipCode = ref("");
     const selectedSpecificDate = ref(null);
     const selectedEditSpecificDate = ref(null);
+    const areaOptions = ref([]);
+    const filteredAreas = ref([]);
 
     const isAdmin = computed(() => {
       return store.getters["auth/isAdmin"];
@@ -1244,6 +1265,14 @@ export default {
       try {
         const response = await store.dispatch("store/fetchStores");
         stores.value = response;
+
+        const uniqueAreas = new Set();
+        stores.value.forEach((storeItem) => {
+          if (storeItem.area && storeItem.area.trim()) {
+            uniqueAreas.add(storeItem.area.trim());
+          }
+        });
+        areaOptions.value = Array.from(uniqueAreas).sort();
 
         const detailPromises = stores.value.map((storeItem) =>
           loadStoreDetails(storeItem.id)
@@ -1395,6 +1424,27 @@ export default {
         detailsDialog.visible = false;
         editStore(detailsDialog.store);
       }
+    };
+
+    const searchArea = (event) => {
+      const query = event.query.toLowerCase();
+      if (!query) {
+        filteredAreas.value = areaOptions.value;
+      } else {
+        filteredAreas.value = areaOptions.value.filter((area) =>
+          area.toLowerCase().includes(query)
+        );
+      }
+    };
+
+    const validateStoreName = (name, excludeId = null) => {
+      const trimmedName = name.trim();
+      return stores.value.some((store) => {
+        if (excludeId && store.id === excludeId) {
+          return false;
+        }
+        return store.name.trim().toLowerCase() === trimmedName.toLowerCase();
+      });
     };
 
     const loadStoreBusinessHours = async (storeId) => {
@@ -1582,8 +1632,8 @@ export default {
       }
 
       const specialDates = storeItem.closedDays
-        .filter(day => day.specific_date)
-        .map(day => formatDate(new Date(day.specific_date)));
+        .filter((day) => day.specific_date)
+        .map((day) => formatDate(new Date(day.specific_date)));
 
       return specialDates.length > 0 ? specialDates.join(", ") : "";
     };
@@ -1848,1229 +1898,724 @@ export default {
       if (exists) {
         toast.add({
           severity: "warn",
-         summary: "重複",
-         detail: "この日付は既に追加されています",
-         life: 2000,
-       });
-       return;
-     }
-
-     newStoreDialog.specificDates.push(new Date(selectedSpecificDate.value));
-     selectedSpecificDate.value = null;
-   };
-
-   const addSpecificDateEdit = () => {
-     if (!selectedEditSpecificDate.value) return;
-
-     const exists = storeDialog.specificDates.some(
-       (date) =>
-         formatDate(date) === formatDate(selectedEditSpecificDate.value)
-     );
-
-     if (exists) {
-       toast.add({
-         severity: "warn",
-         summary: "重複",
-         detail: "この日付は既に追加されています",
-         life: 2000,
-       });
-       return;
-     }
-
-     storeDialog.specificDates.push(new Date(selectedEditSpecificDate.value));
-     selectedEditSpecificDate.value = null;
-   };
-
-   const removeSpecificDateNew = (index) => {
-     newStoreDialog.specificDates.splice(index, 1);
-   };
-
-   const removeSpecificDateEdit = (index) => {
-     storeDialog.specificDates.splice(index, 1);
-   };
-
-   const saveNewStore = async () => {
-     submitted.value = true;
-
-     if (!newStoreDialog.store.name.trim()) {
-       toast.add({
-         severity: "error",
-         summary: "入力エラー",
-         detail: "店舗名は必須項目です",
-         life: 3000,
-       });
-       return;
-     }
-
-     saving.value = true;
-
-     try {
-       if (newZipCode.value) {
-         newStoreDialog.store.postal_code = newZipCode.value.replace(
-           /(\d{3})(\d{4})/,
-           "$1-$2"
-         );
-       }
-
-       const storeData = { ...newStoreDialog.store };
-       console.log("送信する店舗基本情報:", storeData);
-       const createdStore = await store.dispatch(
-         "store/createStore",
-         storeData
-       );
-       console.log("作成された店舗情報:", createdStore);
-
-       if (!createdStore || !createdStore.id) {
-         throw new Error("店舗情報の作成に失敗しました");
-       }
-
-       const storeId = parseInt(createdStore.id, 10);
-
-       const businessHoursData = [];
-       daysOfWeek.forEach((day) => {
-         businessHoursData.push({
-           store_id: storeId,
-           day_of_week: parseInt(day.value, 10),
-           is_closed: newStoreDialog.businessHours[day.value].is_closed,
-           opening_time: newStoreDialog.businessHours[day.value].opening_time,
-           closing_time: newStoreDialog.businessHours[day.value].closing_time,
-         });
-       });
-
-       console.log("送信する営業時間データ:", businessHoursData);
-       await store.dispatch("store/saveBusinessHours", {
-         storeId: storeId,
-         businessHours: businessHoursData,
-       });
-
-       if (newStoreDialog.specificDates.length > 0) {
-         const closedDaysData = newStoreDialog.specificDates.map((date) => ({
-           store_id: storeId,
-           specific_date: formatDate(date),
-         }));
-
-         console.log("送信する定休日データ:", closedDaysData);
-         await store.dispatch("store/saveClosedDays", {
-           storeId: storeId,
-           closedDays: closedDaysData,
-         });
-       }
-
-       const requirementsData = [];
-       daysOfWeek.forEach((day) => {
-         if (
-           newStoreDialog.dayRequirements[day.value] &&
-           newStoreDialog.dayRequirements[day.value].length > 0
-         ) {
-           newStoreDialog.dayRequirements[day.value].forEach((req) => {
-             requirementsData.push({
-               store_id: storeId,
-               day_of_week: parseInt(day.value, 10),
-               start_time: req.start_time,
-               end_time: req.end_time,
-               required_staff_count: parseInt(req.required_staff_count, 10),
-             });
-           });
-         }
-       });
-
-       if (requirementsData.length > 0) {
-         console.log("送信する人員要件データ:", requirementsData);
-         await store.dispatch("store/saveStaffRequirements", {
-           storeId: storeId,
-           requirements: requirementsData,
-         });
-       }
-
-       await fetchStores();
-
-       newStoreDialog.visible = false;
-       submitted.value = false;
-
-       toast.add({
-         severity: "success",
-         summary: "保存完了",
-         detail: `${createdStore.name}を登録しました`,
-         life: 3000,
-       });
-     } catch (error) {
-       console.error("店舗登録エラー:", error);
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: "店舗の登録に失敗しました: " + error.message,
-         life: 3000,
-       });
-     } finally {
-       saving.value = false;
-     }
-   };
-   const saveStore = async () => {
-     submitted.value = true;
-
-     if (!storeDialog.store.name.trim()) {
-       toast.add({
-         severity: "error",
-         summary: "入力エラー",
-         detail: "店舗名は必須項目です",
-         life: 3000,
-       });
-       return;
-     }
-
-     saving.value = true;
-
-     try {
-       if (editZipCode.value) {
-         storeDialog.store.postal_code = editZipCode.value.replace(
-           /(\d{3})(\d{4})/,
-           "$1-$2"
-         );
-       }
-
-       console.log("更新する店舗情報:", storeDialog.store);
-       let savedStore = await store.dispatch(
-         "store/updateStore",
-         storeDialog.store
-       );
-       let storeId = parseInt(savedStore.id, 10);
-
-       if (!storeId) {
-         throw new Error("店舗IDが取得できませんでした");
-       }
-
-       const businessHoursData = [];
-       daysOfWeek.forEach((day) => {
-         businessHoursData.push({
-           store_id: storeId,
-           day_of_week: parseInt(day.value, 10),
-           is_closed: storeDialog.businessHours[day.value].is_closed,
-           opening_time: storeDialog.businessHours[day.value].opening_time,
-           closing_time: storeDialog.businessHours[day.value].closing_time,
-         });
-       });
-
-       console.log("更新する営業時間データ:", businessHoursData);
-       await store.dispatch("store/saveBusinessHours", {
-         storeId: storeId,
-         businessHours: businessHoursData,
-       });
-
-       const closedDaysData = storeDialog.specificDates.map((date) => ({
-         store_id: storeId,
-         specific_date: formatDate(date),
-       }));
-
-       console.log("更新する定休日データ:", closedDaysData);
-       await store.dispatch("store/saveClosedDays", {
-         storeId: storeId,
-         closedDays: closedDaysData,
-       });
-
-       const requirementsData = [];
-       daysOfWeek.forEach((day) => {
-         if (
-           storeDialog.dayRequirements[day.value] &&
-           storeDialog.dayRequirements[day.value].length > 0
-         ) {
-           storeDialog.dayRequirements[day.value].forEach((req) => {
-             requirementsData.push({
-               store_id: storeId,
-               day_of_week: parseInt(day.value, 10),
-               start_time: req.start_time,
-               end_time: req.end_time,
-               required_staff_count: parseInt(req.required_staff_count, 10),
-             });
-           });
-         }
-       });
-
-       console.log("更新する人員要件データ:", requirementsData);
-       await store.dispatch("store/saveStaffRequirements", {
-         storeId: storeId,
-         requirements: requirementsData,
-       });
-
-       await fetchStores();
-
-       storeDialog.visible = false;
-       submitted.value = false;
-
-       toast.add({
-         severity: "success",
-         summary: "保存完了",
-         detail: `${storeDialog.store.name}を更新しました`,
-         life: 3000,
-       });
-     } catch (error) {
-       console.error("店舗更新エラー:", error);
-       console.error("詳細エラー情報:", {
-         message: error.message,
-         response: error.response?.data,
-         status: error.response?.status,
-         stack: error.stack,
-       });
-
-       let errorMessage = "店舗の更新に失敗しました";
-       if (error.response?.data?.message) {
-         errorMessage = error.response.data.message + ": " + error.message;
-       }
-
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: errorMessage,
-         life: 3000,
-       });
-     } finally {
-       saving.value = false;
-     }
-   };
-
-   const saveStaff = async () => {
-     submitted.value = true;
-
-     if (!staffDialog.staff.last_name || !staffDialog.staff.first_name) {
-       return;
-     }
-
-     saving.value = true;
-
-     try {
-       const dayPreferences = daysOfWeek.map((day) => ({
-         day_of_week: day.value,
-         available: staffDialog.dayPreferences[day.value].available,
-         preferred_start_time:
-           staffDialog.dayPreferences[day.value].preferred_start_time || null,
-         preferred_end_time:
-           staffDialog.dayPreferences[day.value].preferred_end_time || null,
-         break_start_time:
-           staffDialog.dayPreferences[day.value].break_start_time || null,
-         break_end_time:
-           staffDialog.dayPreferences[day.value].break_end_time || null,
-       }));
-
-       const dayOffRequests = staffDialog.dayOffRequests.map((request) => ({
-         date: request.date,
-         reason: request.reason || "requested",
-         status: request.status || "pending",
-       }));
-
-       if (staffDialog.isNew) {
-         const staffData = {
-           ...staffDialog.staff,
-           day_preferences: dayPreferences,
-           day_off_requests: dayOffRequests,
-         };
-
-         await store.dispatch("staff/createStaff", staffData);
-
-         toast.add({
-           severity: "success",
-           summary: "作成完了",
-           detail: "スタッフを作成しました",
-           life: 3002,
-         });
-       } else {
-         const staffData = {
-           ...staffDialog.staff,
-           day_preferences: dayPreferences,
-           day_off_requests: dayOffRequests,
-         };
-
-         await store.dispatch("staff/updateStaff", {
-           id: staffDialog.staff.id,
-           staffData: staffData,
-         });
-
-         toast.add({
-           severity: "success",
-           summary: "更新完了",
-           detail: "スタッフ情報を更新しました",
-           life: 3002,
-         });
-       }
-
-       hideDialog();
-       await fetchStaffList();
-     } catch (error) {
-       console.error("スタッフ保存エラー:", error);
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: "スタッフの保存に失敗しました: " + error.message,
-         life: 3002,
-       });
-     } finally {
-       saving.value = false;
-     }
-   };
-
-   const confirmDeleteStore = (storeData) => {
-     confirm.require({
-       message: `${storeData.name}を削除してもよろしいですか？`,
-       header: "店舗削除の確認",
-       icon: "pi pi-exclamation-triangle",
-       acceptClass: "p-button-danger",
-       accept: () => deleteStore(storeData),
-     });
-   };
-
-   const deleteStore = async (storeData) => {
-     try {
-       await store.dispatch("store/deleteStore", storeData.id);
-
-       await fetchStores();
-
-       toast.add({
-         severity: "success",
-         summary: "削除完了",
-         detail: `${storeData.name}を削除しました`,
-         life: 3000,
-       });
-     } catch (error) {
-       console.error("店舗削除エラー:", error);
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: "店舗の削除に失敗しました",
-         life: 3000,
-       });
-     }
-   };
-
-   const searchWithNewZip = async () => {
-     if (!newZipCode.value || !/^\d{7}$/.test(newZipCode.value)) {
-       toast.add({
-         severity: "warn",
-         summary: "形式エラー",
-         detail: "郵便番号はハイフンなしの7桁の数字で入力してください",
-         life: 3000,
-       });
-       return;
-     }
-
-     try {
-       const response = await fetch(
-         `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${newZipCode.value}`
-       );
-       const data = await response.json();
-
-       if (data.results && data.results.length > 0) {
-         const result = data.results[0];
-         const fullAddress = `${result.address1}${result.address2}${result.address3}`;
-
-         newStoreDialog.store.address = fullAddress;
-         newStoreDialog.store.postal_code = `${newZipCode.value.slice(
-           0,
-           3
-         )}-${newZipCode.value.slice(3)}`;
-
-         toast.add({
-           severity: "success",
-           summary: "成功",
-           detail: "住所を取得しました",
-           life: 2000,
-         });
-       } else {
-         toast.add({
-           severity: "error",
-           summary: "検索失敗",
-           detail: "該当する住所が見つかりません",
-           life: 3000,
-         });
-       }
-     } catch (error) {
-       console.error("住所取得エラー:", error);
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: "住所の取得に失敗しました",
-         life: 3000,
-       });
-     }
-   };
-
-   const searchWithEditZip = async () => {
-     if (!editZipCode.value || !/^\d{7}$/.test(editZipCode.value)) {
-       toast.add({
-         severity: "warn",
-         summary: "形式エラー",
-         detail: "郵便番号はハイフンなしの7桁の数字で入力してください",
-         life: 3000,
-       });
-       return;
-     }
-
-     try {
-       const response = await fetch(
-         `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${editZipCode.value}`
-       );
-       const data = await response.json();
-
-       if (data.results && data.results.length > 0) {
-         const result = data.results[0];
-         const fullAddress = `${result.address1}${result.address2}${result.address3}`;
-
-         storeDialog.store.address = fullAddress;
-         storeDialog.store.postal_code = `${editZipCode.value.slice(
-           0,
-           3
-         )}-${editZipCode.value.slice(3)}`;
-
-         toast.add({
-           severity: "success",
-           summary: "成功",
-           detail: "住所を取得しました",
-           life: 2000,
-         });
-       } else {
-         toast.add({
-           severity: "error",
-           summary: "検索失敗",
-           detail: "該当する住所が見つかりません",
-           life: 3000,
-         });
-       }
-     } catch (error) {
-       console.error("住所取得エラー:", error);
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: "住所の取得に失敗しました",
-         life: 3000,
-       });
-     }
-   };
-
-   const getDayOfWeekLabel = (dayValue) => {
-     const day = daysOfWeek.find((d) => d.value === dayValue);
-     return day ? day.label : "";
-   };
-
-   const formatDate = (date) => {
-     if (!date) return "";
-
-     const d = date instanceof Date ? date : new Date(date);
-
-     if (isNaN(d.getTime())) return "";
-
-     const year = d.getFullYear();
-     const month = String(d.getMonth() + 1).padStart(2, "0");
-     const day = String(d.getDate()).padStart(2, "0");
-
-     return `${year}-${month}-${day}`;
-   };
-
-   const formatTime = (time) => {
-     if (!time) return "00:00";
-
-     if (typeof time === "string") {
-       if (time.includes(":")) {
-         const parts = time.split(":");
-         if (parts.length >= 2) {
-           const hours = parts[0].padStart(2, "0");
-           const minutes = parts[1].padStart(2, "0");
-           return `${hours}:${minutes}`;
-         }
-       }
-
-       return time;
-     }
-
-     if (time instanceof Date) {
-       const hours = time.getHours().toString().padStart(2, "0");
-       const minutes = time.getMinutes().toString().padStart(2, "0");
-       return `${hours}:${minutes}`;
-     }
-
-     return "00:00";
-   };
-
-   const hasMultipleBusinessHours = (storeId) => {
-     console.log("hasMultipleBusinessHours 呼び出し, storeId:", storeId);
-
-     const storeItem = stores.value.find((s) => s.id === storeId);
-     if (!storeItem || !storeItem.businessHours) {
-       console.log("店舗または営業時間データがありません");
-       return false;
-     }
-
-     console.log("営業時間データ:", storeItem.businessHours);
-
-     const openDays = Object.values(storeItem.businessHours).filter(
-       (hour) => !hour.is_closed
-     );
-
-     if (openDays.length === 0) {
-       console.log("営業日がありません");
-       return false;
-     }
-
-     function normalizeTime(time) {
-       if (!time) return "";
-       return time.split(":").slice(0, 2).join(":");
-     }
-
-     const firstDay = openDays[0];
-     const firstOpeningTime = normalizeTime(firstDay.opening_time);
-     const firstClosingTime = normalizeTime(firstDay.closing_time);
-
-     const hasMultiple = openDays.some((day) => {
-       const dayOpeningTime = normalizeTime(day.opening_time);
-       const dayClosingTime = normalizeTime(day.closing_time);
-
-       const isDifferent =
-         dayOpeningTime !== firstOpeningTime ||
-         dayClosingTime !== firstClosingTime;
-
-       console.log(
-         `曜日 ${day.day_of_week} の時間: ${dayOpeningTime}-${dayClosingTime}, ` +
-           `基準時間: ${firstOpeningTime}-${firstClosingTime}, 違い: ${isDifferent}`
-       );
-
-       return isDifferent;
-     });
-
-     console.log("複数の営業時間パターンあり:", hasMultiple);
-     return hasMultiple;
-   };
-
-   const showBusinessHoursTooltip = (event, storeId) => {
-     const storeItem = stores.value.find((s) => s.id === storeId);
-     if (!storeItem || !storeItem.businessHours) return;
-
-     let info = "";
-     daysOfWeek.forEach((day) => {
-       const hourData = storeItem.businessHours[day.value];
-       if (!hourData) {
-         info += `${day.label}曜日: 情報なし\n`;
-         return;
-       }
-
-       if (hourData.is_closed) {
-         info += `${day.label}曜日: 定休日\n`;
-       } else {
-         info += `${day.label}曜日: ${formatTime(
-           hourData.opening_time
-         )} - ${formatTime(hourData.closing_time)}\n`;
-       }
-     });
-
-     alert(`${storeItem.name}の曜日ごとの営業時間:\n\n${info}`);
-   };
-
-   const businessHoursDialog = reactive({
-     visible: false,
-     store: null,
-     specificDates: [],
-   });
-
-   const showBusinessHoursDialog = async (storeData) => {
-     businessHoursDialog.store = storeData;
-     businessHoursDialog.specificDates = [];
-
-     if (storeData.id) {
-       try {
-         const closedDays = await store.dispatch(
-           "store/fetchStoreClosedDays",
-           storeData.id
-         );
-
-         businessHoursDialog.specificDates = closedDays
-           .filter(day => day.specific_date)
-           .map(day => new Date(day.specific_date));
-       } catch (error) {
-         console.error("特別定休日データの取得に失敗しました:", error);
-       }
-     }
-
-     businessHoursDialog.visible = true;
-   };
-
-   return {
-     loading,
-     saving,
-     submitted,
-     stores,
-     newZipCode,
-     editZipCode,
-     selectedSpecificDate,
-     selectedEditSpecificDate,
-     newStoreDialog,
-     storeDialog,
-     detailsDialog,
-     applyAllTimeDialog,
-     editApplyAllTimeDialog,
-     daysOfWeek,
-     isAdmin,
-     timeOptions,
-     openNew,
-     editStore,
-     viewStoreDetails,
-     editFromDetails,
-     hideNewDialog,
-     hideDialog,
-     showApplyAllTimeDialog,
-     showEditApplyAllTimeDialog,
-     applyTimeToAllDays,
-     applyTimeToAllDaysEdit,
-     saveNewStore,
-     saveStore,
-     confirmDeleteStore,
-     deleteStore,
-     searchWithNewZip,
-     searchWithEditZip,
-     addSpecificDateNew,
-     addSpecificDateEdit,
-     removeSpecificDateNew,
-     removeSpecificDateEdit,
-     getRequirementsForDayNew,
-     getRequirementsForDayEdit,
-     addRequirementNew,
-     addRequirementEdit,
-     removeRequirementNew,
-     removeRequirementEdit,
-     formatDate,
-     formatTime,
-     getDayOfWeekLabel,
-     getClosedDaysText,
-     getSpecialClosedDaysText,
-     loadStoreDetails,
-     hasMultipleBusinessHours,
-     showBusinessHoursTooltip,
-     businessHoursDialog,
-     showBusinessHoursDialog,
-   };
- },
+          summary: "重複",
+          detail: "この日付は既に追加されています",
+          life: 2000,
+        });
+        return;
+      }
+
+      newStoreDialog.specificDates.push(new Date(selectedSpecificDate.value));
+      selectedSpecificDate.value = null;
+    };
+
+    const addSpecificDateEdit = () => {
+      if (!selectedEditSpecificDate.value) return;
+
+      const exists = storeDialog.specificDates.some(
+        (date) =>
+          formatDate(date) === formatDate(selectedEditSpecificDate.value)
+      );
+
+      if (exists) {
+        toast.add({
+          severity: "warn",
+          summary: "重複",
+          detail: "この日付は既に追加されています",
+          life: 2000,
+        });
+        return;
+      }
+
+      storeDialog.specificDates.push(new Date(selectedEditSpecificDate.value));
+      selectedEditSpecificDate.value = null;
+    };
+
+    const removeSpecificDateNew = (index) => {
+      newStoreDialog.specificDates.splice(index, 1);
+    };
+
+    const removeSpecificDateEdit = (index) => {
+      storeDialog.specificDates.splice(index, 1);
+    };
+
+    const saveNewStore = async () => {
+      submitted.value = true;
+
+      if (!newStoreDialog.store.name.trim()) {
+        toast.add({
+          severity: "error",
+          summary: "入力エラー",
+          detail: "店舗名は必須項目です",
+          life: 3000,
+        });
+        return;
+      }
+
+      if (validateStoreName(newStoreDialog.store.name)) {
+        toast.add({
+          severity: "error",
+          summary: "入力エラー",
+          detail: "同じ名前の店舗が既に存在します",
+          life: 3000,
+        });
+        return;
+      }
+
+      saving.value = true;
+
+      try {
+        if (newZipCode.value) {
+          newStoreDialog.store.postal_code = newZipCode.value.replace(
+            /(\d{3})(\d{4})/,
+            "$1-$2"
+          );
+        }
+
+        const storeData = { ...newStoreDialog.store };
+        console.log("送信する店舗基本情報:", storeData);
+        const createdStore = await store.dispatch(
+          "store/createStore",
+          storeData
+        );
+        console.log("作成された店舗情報:", createdStore);
+
+        if (!createdStore || !createdStore.id) {
+          throw new Error("店舗情報の作成に失敗しました");
+        }
+
+        const storeId = parseInt(createdStore.id, 10);
+
+        const businessHoursData = [];
+        daysOfWeek.forEach((day) => {
+          businessHoursData.push({
+            store_id: storeId,
+            day_of_week: parseInt(day.value, 10),
+            is_closed: newStoreDialog.businessHours[day.value].is_closed,
+            opening_time: newStoreDialog.businessHours[day.value].opening_time,
+            closing_time: newStoreDialog.businessHours[day.value].closing_time,
+          });
+        });
+
+        console.log("送信する営業時間データ:", businessHoursData);
+        await store.dispatch("store/saveBusinessHours", {
+          storeId: storeId,
+          businessHours: businessHoursData,
+        });
+
+        if (newStoreDialog.specificDates.length > 0) {
+          const closedDaysData = newStoreDialog.specificDates.map((date) => ({
+            store_id: storeId,
+            specific_date: formatDate(date),
+          }));
+
+          console.log("送信する定休日データ:", closedDaysData);
+          await store.dispatch("store/saveClosedDays", {
+            storeId: storeId,
+            closedDays: closedDaysData,
+          });
+        }
+
+        const requirementsData = [];
+        daysOfWeek.forEach((day) => {
+          if (
+            newStoreDialog.dayRequirements[day.value] &&
+            newStoreDialog.dayRequirements[day.value].length > 0
+          ) {
+            newStoreDialog.dayRequirements[day.value].forEach((req) => {
+              requirementsData.push({
+                store_id: storeId,
+                day_of_week: parseInt(day.value, 10),
+                start_time: req.start_time,
+                end_time: req.end_time,
+                required_staff_count: parseInt(req.required_staff_count, 10),
+              });
+            });
+          }
+        });
+
+        if (requirementsData.length > 0) {
+          console.log("送信する人員要件データ:", requirementsData);
+          await store.dispatch("store/saveStaffRequirements", {
+            storeId: storeId,
+            requirements: requirementsData,
+          });
+        }
+
+        await fetchStores();
+
+        newStoreDialog.visible = false;
+        submitted.value = false;
+
+        toast.add({
+          severity: "success",
+          summary: "保存完了",
+          detail: `${createdStore.name}を登録しました`,
+          life: 3000,
+        });
+      } catch (error) {
+        console.error("店舗登録エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "店舗の登録に失敗しました: " + error.message,
+          life: 3000,
+        });
+      } finally {
+        saving.value = false;
+      }
+    };
+    const saveStore = async () => {
+      submitted.value = true;
+
+      if (!storeDialog.store.name.trim()) {
+        toast.add({
+          severity: "error",
+          summary: "入力エラー",
+          detail: "店舗名は必須項目です",
+          life: 3000,
+        });
+        return;
+      }
+
+      if (validateStoreName(storeDialog.store.name, storeDialog.store.id)) {
+        toast.add({
+          severity: "error",
+          summary: "入力エラー",
+          detail: "同じ名前の店舗が既に存在します",
+          life: 3000,
+        });
+        return;
+      }
+
+      saving.value = true;
+
+      try {
+        if (editZipCode.value) {
+          storeDialog.store.postal_code = editZipCode.value.replace(
+            /(\d{3})(\d{4})/,
+            "$1-$2"
+          );
+        }
+
+        console.log("更新する店舗情報:", storeDialog.store);
+        let savedStore = await store.dispatch(
+          "store/updateStore",
+          storeDialog.store
+        );
+        let storeId = parseInt(savedStore.id, 10);
+
+        if (!storeId) {
+          throw new Error("店舗IDが取得できませんでした");
+        }
+
+        const businessHoursData = [];
+        daysOfWeek.forEach((day) => {
+          businessHoursData.push({
+            store_id: storeId,
+            day_of_week: parseInt(day.value, 10),
+            is_closed: storeDialog.businessHours[day.value].is_closed,
+            opening_time: storeDialog.businessHours[day.value].opening_time,
+            closing_time: storeDialog.businessHours[day.value].closing_time,
+          });
+        });
+
+        console.log("更新する営業時間データ:", businessHoursData);
+        await store.dispatch("store/saveBusinessHours", {
+          storeId: storeId,
+          businessHours: businessHoursData,
+        });
+
+        const closedDaysData = storeDialog.specificDates.map((date) => ({
+          store_id: storeId,
+          specific_date: formatDate(date),
+        }));
+
+        console.log("更新する定休日データ:", closedDaysData);
+        await store.dispatch("store/saveClosedDays", {
+          storeId: storeId,
+          closedDays: closedDaysData,
+        });
+
+        const requirementsData = [];
+        daysOfWeek.forEach((day) => {
+          if (
+            storeDialog.dayRequirements[day.value] &&
+            storeDialog.dayRequirements[day.value].length > 0
+          ) {
+            storeDialog.dayRequirements[day.value].forEach((req) => {
+              requirementsData.push({
+                store_id: storeId,
+                day_of_week: parseInt(day.value, 10),
+                start_time: req.start_time,
+                end_time: req.end_time,
+                required_staff_count: parseInt(req.required_staff_count, 10),
+              });
+            });
+          }
+        });
+
+        console.log("更新する人員要件データ:", requirementsData);
+        await store.dispatch("store/saveStaffRequirements", {
+          storeId: storeId,
+          requirements: requirementsData,
+        });
+
+        await fetchStores();
+
+        storeDialog.visible = false;
+        submitted.value = false;
+
+        toast.add({
+          severity: "success",
+          summary: "保存完了",
+          detail: `${storeDialog.store.name}を更新しました`,
+          life: 3000,
+        });
+      } catch (error) {
+        console.error("店舗更新エラー:", error);
+        console.error("詳細エラー情報:", {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          stack: error.stack,
+        });
+
+        let errorMessage = "店舗の更新に失敗しました";
+        if (error.response?.data?.message) {
+          errorMessage = error.response.data.message + ": " + error.message;
+        }
+
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: errorMessage,
+          life: 3000,
+        });
+      } finally {
+        saving.value = false;
+      }
+    };
+
+    const saveStaff = async () => {
+      submitted.value = true;
+
+      if (!staffDialog.staff.last_name || !staffDialog.staff.first_name) {
+        return;
+      }
+
+      saving.value = true;
+
+      try {
+        const dayPreferences = daysOfWeek.map((day) => ({
+          day_of_week: day.value,
+          available: staffDialog.dayPreferences[day.value].available,
+          preferred_start_time:
+            staffDialog.dayPreferences[day.value].preferred_start_time || null,
+          preferred_end_time:
+            staffDialog.dayPreferences[day.value].preferred_end_time || null,
+          break_start_time:
+            staffDialog.dayPreferences[day.value].break_start_time || null,
+          break_end_time:
+            staffDialog.dayPreferences[day.value].break_end_time || null,
+        }));
+
+        const dayOffRequests = staffDialog.dayOffRequests.map((request) => ({
+          date: request.date,
+          reason: request.reason || "requested",
+          status: request.status || "pending",
+        }));
+
+        if (staffDialog.isNew) {
+          const staffData = {
+            ...staffDialog.staff,
+            day_preferences: dayPreferences,
+            day_off_requests: dayOffRequests,
+          };
+
+          await store.dispatch("staff/createStaff", staffData);
+
+          toast.add({
+            severity: "success",
+            summary: "作成完了",
+            detail: "スタッフを作成しました",
+            life: 3002,
+          });
+        } else {
+          const staffData = {
+            ...staffDialog.staff,
+            day_preferences: dayPreferences,
+            day_off_requests: dayOffRequests,
+          };
+
+          await store.dispatch("staff/updateStaff", {
+            id: staffDialog.staff.id,
+            staffData: staffData,
+          });
+
+          toast.add({
+            severity: "success",
+            summary: "更新完了",
+            detail: "スタッフ情報を更新しました",
+            life: 3002,
+          });
+        }
+
+        hideDialog();
+        await fetchStaffList();
+      } catch (error) {
+        console.error("スタッフ保存エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "スタッフの保存に失敗しました: " + error.message,
+          life: 3002,
+        });
+      } finally {
+        saving.value = false;
+      }
+    };
+
+    const confirmDeleteStore = (storeData) => {
+      confirm.require({
+        message: `${storeData.name}を削除してもよろしいですか？`,
+        header: "店舗削除の確認",
+        icon: "pi pi-exclamation-triangle",
+        acceptClass: "p-button-danger",
+        accept: () => deleteStore(storeData),
+      });
+    };
+
+    const deleteStore = async (storeData) => {
+      try {
+        await store.dispatch("store/deleteStore", storeData.id);
+
+        await fetchStores();
+
+        toast.add({
+          severity: "success",
+          summary: "削除完了",
+          detail: `${storeData.name}を削除しました`,
+          life: 3000,
+        });
+      } catch (error) {
+        console.error("店舗削除エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "店舗の削除に失敗しました",
+          life: 3000,
+        });
+      }
+    };
+
+    const searchWithNewZip = async () => {
+      if (!newZipCode.value || !/^\d{7}$/.test(newZipCode.value)) {
+        toast.add({
+          severity: "warn",
+          summary: "形式エラー",
+          detail: "郵便番号はハイフンなしの7桁の数字で入力してください",
+          life: 3000,
+        });
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${newZipCode.value}`
+        );
+        const data = await response.json();
+
+        if (data.results && data.results.length > 0) {
+          const result = data.results[0];
+          const fullAddress = `${result.address1}${result.address2}${result.address3}`;
+
+          newStoreDialog.store.address = fullAddress;
+          newStoreDialog.store.postal_code = `${newZipCode.value.slice(
+            0,
+            3
+          )}-${newZipCode.value.slice(3)}`;
+
+          toast.add({
+            severity: "success",
+            summary: "成功",
+            detail: "住所を取得しました",
+            life: 2000,
+          });
+        } else {
+          toast.add({
+            severity: "error",
+            summary: "検索失敗",
+            detail: "該当する住所が見つかりません",
+            life: 3000,
+          });
+        }
+      } catch (error) {
+        console.error("住所取得エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "住所の取得に失敗しました",
+          life: 3000,
+        });
+      }
+    };
+
+    const searchWithEditZip = async () => {
+      if (!editZipCode.value || !/^\d{7}$/.test(editZipCode.value)) {
+        toast.add({
+          severity: "warn",
+          summary: "形式エラー",
+          detail: "郵便番号はハイフンなしの7桁の数字で入力してください",
+          life: 3000,
+        });
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${editZipCode.value}`
+        );
+        const data = await response.json();
+
+        if (data.results && data.results.length > 0) {
+          const result = data.results[0];
+          const fullAddress = `${result.address1}${result.address2}${result.address3}`;
+
+          storeDialog.store.address = fullAddress;
+          storeDialog.store.postal_code = `${editZipCode.value.slice(
+            0,
+            3
+          )}-${editZipCode.value.slice(3)}`;
+
+          toast.add({
+            severity: "success",
+            summary: "成功",
+            detail: "住所を取得しました",
+            life: 2000,
+          });
+        } else {
+          toast.add({
+            severity: "error",
+            summary: "検索失敗",
+            detail: "該当する住所が見つかりません",
+            life: 3000,
+          });
+        }
+      } catch (error) {
+        console.error("住所取得エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "住所の取得に失敗しました",
+          life: 3000,
+        });
+      }
+    };
+
+    const getDayOfWeekLabel = (dayValue) => {
+      const day = daysOfWeek.find((d) => d.value === dayValue);
+      return day ? day.label : "";
+    };
+
+    const formatDate = (date) => {
+      if (!date) return "";
+
+      const d = date instanceof Date ? date : new Date(date);
+
+      if (isNaN(d.getTime())) return "";
+
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+
+      return `${year}-${month}-${day}`;
+    };
+
+    const formatTime = (time) => {
+      if (!time) return "00:00";
+
+      if (typeof time === "string") {
+        if (time.includes(":")) {
+          const parts = time.split(":");
+          if (parts.length >= 2) {
+            const hours = parts[0].padStart(2, "0");
+            const minutes = parts[1].padStart(2, "0");
+            return `${hours}:${minutes}`;
+          }
+        }
+
+        return time;
+      }
+
+      if (time instanceof Date) {
+        const hours = time.getHours().toString().padStart(2, "0");
+        const minutes = time.getMinutes().toString().padStart(2, "0");
+        return `${hours}:${minutes}`;
+      }
+
+      return "00:00";
+    };
+
+    const hasMultipleBusinessHours = (storeId) => {
+      console.log("hasMultipleBusinessHours 呼び出し, storeId:", storeId);
+
+      const storeItem = stores.value.find((s) => s.id === storeId);
+      if (!storeItem || !storeItem.businessHours) {
+        console.log("店舗または営業時間データがありません");
+        return false;
+      }
+
+      console.log("営業時間データ:", storeItem.businessHours);
+
+      const openDays = Object.values(storeItem.businessHours).filter(
+        (hour) => !hour.is_closed
+      );
+
+      if (openDays.length === 0) {
+        console.log("営業日がありません");
+        return false;
+      }
+
+      function normalizeTime(time) {
+        if (!time) return "";
+        return time.split(":").slice(0, 2).join(":");
+      }
+
+      const firstDay = openDays[0];
+      const firstOpeningTime = normalizeTime(firstDay.opening_time);
+      const firstClosingTime = normalizeTime(firstDay.closing_time);
+
+      const hasMultiple = openDays.some((day) => {
+        const dayOpeningTime = normalizeTime(day.opening_time);
+        const dayClosingTime = normalizeTime(day.closing_time);
+
+        const isDifferent =
+          dayOpeningTime !== firstOpeningTime ||
+          dayClosingTime !== firstClosingTime;
+
+        console.log(
+          `曜日 ${day.day_of_week} の時間: ${dayOpeningTime}-${dayClosingTime}, ` +
+            `基準時間: ${firstOpeningTime}-${firstClosingTime}, 違い: ${isDifferent}`
+        );
+
+        return isDifferent;
+      });
+
+      console.log("複数の営業時間パターンあり:", hasMultiple);
+      return hasMultiple;
+    };
+
+    const showBusinessHoursTooltip = (event, storeId) => {
+      const storeItem = stores.value.find((s) => s.id === storeId);
+      if (!storeItem || !storeItem.businessHours) return;
+
+      let info = "";
+      daysOfWeek.forEach((day) => {
+        const hourData = storeItem.businessHours[day.value];
+        if (!hourData) {
+          info += `${day.label}曜日: 情報なし\n`;
+          return;
+        }
+
+        if (hourData.is_closed) {
+          info += `${day.label}曜日: 定休日\n`;
+        } else {
+          info += `${day.label}曜日: ${formatTime(
+            hourData.opening_time
+          )} - ${formatTime(hourData.closing_time)}\n`;
+        }
+      });
+
+      alert(`${storeItem.name}の曜日ごとの営業時間:\n\n${info}`);
+    };
+
+    const businessHoursDialog = reactive({
+      visible: false,
+      store: null,
+      specificDates: [],
+    });
+
+    const showBusinessHoursDialog = async (storeData) => {
+      businessHoursDialog.store = storeData;
+      businessHoursDialog.specificDates = [];
+
+      if (storeData.id) {
+        try {
+          const closedDays = await store.dispatch(
+            "store/fetchStoreClosedDays",
+            storeData.id
+          );
+
+          businessHoursDialog.specificDates = closedDays
+            .filter((day) => day.specific_date)
+            .map((day) => new Date(day.specific_date));
+        } catch (error) {
+          console.error("特別定休日データの取得に失敗しました:", error);
+        }
+      }
+
+      businessHoursDialog.visible = true;
+    };
+
+    return {
+      loading,
+      saving,
+      submitted,
+      stores,
+      newZipCode,
+      editZipCode,
+      selectedSpecificDate,
+      selectedEditSpecificDate,
+      newStoreDialog,
+      storeDialog,
+      detailsDialog,
+      applyAllTimeDialog,
+      editApplyAllTimeDialog,
+      daysOfWeek,
+      isAdmin,
+      timeOptions,
+      areaOptions,
+      filteredAreas,
+      openNew,
+      editStore,
+      viewStoreDetails,
+      editFromDetails,
+      hideNewDialog,
+      hideDialog,
+      showApplyAllTimeDialog,
+      showEditApplyAllTimeDialog,
+      applyTimeToAllDays,
+      applyTimeToAllDaysEdit,
+      saveNewStore,
+      saveStore,
+      confirmDeleteStore,
+      deleteStore,
+      searchWithNewZip,
+      searchWithEditZip,
+      addSpecificDateNew,
+      addSpecificDateEdit,
+      removeSpecificDateNew,
+      removeSpecificDateEdit,
+      getRequirementsForDayNew,
+      getRequirementsForDayEdit,
+      addRequirementNew,
+      addRequirementEdit,
+      removeRequirementNew,
+      removeRequirementEdit,
+      formatDate,
+      formatTime,
+      getDayOfWeekLabel,
+      getClosedDaysText,
+      getSpecialClosedDaysText,
+      loadStoreDetails,
+      hasMultipleBusinessHours,
+      showBusinessHoursTooltip,
+      businessHoursDialog,
+      showBusinessHoursDialog,
+      searchArea,
+      validateStoreName,
+    };
+  },
 };
 </script>
-
-<style>
-.store-management {
- padding: 1rem;
- font-size: 0.9rem;
-}
-
-.page-title {
- margin-bottom: 1.5rem;
- color: var(--text-color);
- font-weight: 600;
- font-size: 1.4rem;
-}
-
-.toolbar {
- margin-bottom: 1.5rem;
- display: flex;
- justify-content: flex-end;
-}
-
-.loading-container {
- display: flex;
- flex-direction: column;
- align-items: center;
- padding: 2rem;
-}
-
-.loading-text {
- margin-top: 1rem;
- color: var(--text-color-secondary);
-}
-
-.stores-container {
- margin-top: 1rem;
-}
-
-.p-datatable.p-datatable-sm .p-datatable-header {
- padding: 0.5rem 1rem;
- background-color: var(--surface-50);
- font-weight: 600;
-}
-
-.p-datatable.p-datatable-sm .p-datatable-thead > tr > th {
- padding: 0.5rem 1rem;
- background-color: var(--surface-100);
- font-weight: 600;
-}
-
-.p-datatable.p-datatable-sm .p-datatable-tbody > tr > td {
- padding: 0.5rem 1rem;
-}
-
-.p-datatable.p-datatable-sm .p-paginator {
- padding: 0.5rem;
-}
-
-.store-name-cell {
- font-weight: 600;
- color: var(--primary-color);
-}
-
-.store-actions {
- display: flex;
- gap: 0.5rem;
-}
-
-.business-hours-detail {
- padding: 0.5rem;
-}
-
-.business-hours-detail h4 {
- margin-top: 0;
- margin-bottom: 1rem;
- font-size: 1.1rem;
- color: var(--text-color);
- border-bottom: 1px solid var(--surface-200);
- padding-bottom: 0.5rem;
-}
-
-.day-hours-item {
- margin-bottom: 0.75rem;
- padding: 0.5rem;
- border-radius: 4px;
- background-color: var(--surface-50);
-}
-
-.day-hours-header {
- display: flex;
- justify-content: space-between;
- align-items: center;
- margin-bottom: 0.25rem;
-}
-
-.day-name {
- font-weight: 600;
- font-size: 0.95rem;
-}
-
-.day-status {
- font-size: 0.85rem;
- padding: 0.2rem 0.5rem;
- border-radius: 4px;
-}
-
-.day-status.open {
- background-color: var(--green-100);
- color: var(--green-700);
-}
-
-.day-status.closed {
- background-color: var(--red-100);
- color: var(--red-700);
-}
-
-.day-hours-time {
- font-size: 0.95rem;
- color: var(--text-color);
-}
-
-.store-dialog .p-dialog-content {
- padding: 0 1rem 1rem 1rem;
-}
-
-.store-dialog .p-tabview .p-tabview-panels {
- padding: 0.5rem 0;
-}
-
-.store-dialog .p-tabview .p-tabview-nav li .p-tabview-nav-link {
- padding: 0.5rem 1rem;
- font-size: 0.9rem;
-}
-
-.store-dialog .p-tabview-panels {
- padding: 0.5rem 0.3rem;
-}
-
-.store-form {
- padding: 0.5rem;
- font-size: 0.9rem;
-}
-
-.form-section {
- margin-bottom: 1rem;
-}
-
-.form-section h3 {
- color: var(--text-color);
- font-size: 1.05rem;
- margin-bottom: 0.6rem;
- padding-bottom: 0.3rem;
- border-bottom: 1px solid var(--surface-border);
-}
-
-.form-section h4 {
- color: var(--text-color-secondary);
- font-size: 0.95rem;
- margin-bottom: 0.5rem;
-}
-
-.field {
- margin-bottom: 0.8rem;
-}
-
-.field label {
- font-size: 0.85rem;
- margin-bottom: 0.2rem;
- display: block;
-}
-
-.required-mark {
- color: var(--red-500);
-}
-
-.business-hours-item {
- background-color: var(--surface-ground);
- border-radius: 4px;
- padding: 0.7rem;
- margin-bottom: 0.7rem;
-}
-
-.day-header {
- display: flex;
- justify-content: space-between;
- align-items: center;
- margin-bottom: 0.4rem;
-}
-
-.day-header h5 {
- margin: 0;
- font-size: 0.9rem;
- font-weight: 500;
-}
-
-.day-closed-toggle {
- display: flex;
- align-items: center;
-}
-
-.day-closed-toggle label {
- font-size: 0.85rem;
-}
-
-.time-inputs {
- display: flex;
- align-items: center;
- gap: 0.3rem;
-}
-
-.time-field {
- flex: 1;
- min-width: 100px;
-}
-
-.time-field label {
- font-size: 0.85rem;
- margin-bottom: 0.2rem;
- display: block;
-}
-
-.time-separator {
- margin: 0 0.3rem;
- padding-top: 1.3rem;
- font-weight: bold;
- font-size: 0.9rem;
-}
-
-.closed-message {
- padding: 0.4rem;
- text-align: center;
- background-color: var(--red-100);
- color: var(--red-700);
- border-radius: 4px;
- font-size: 0.85rem;
-}
-
-.business-hours-actions {
- text-align: center;
- margin-top: 1rem;
-}
-
-.section-title {
- color: var(--text-color-secondary);
- font-size: 0.95rem;
- margin-bottom: 0.6rem;
- font-weight: 500;
-}
-
-.day-requirements {
- background-color: var(--surface-ground);
- border-radius: 4px;
- padding: 0.7rem;
- margin-bottom: 0.7rem;
-}
-
-.day-title {
- margin: 0 0 0.5rem 0;
- font-size: 0.9rem;
- font-weight: 500;
- color: var(--text-color);
-}
-
-.requirement-item {
- display: flex;
- align-items: center;
- gap: 0.5rem;
- margin-bottom: 0.5rem;
- padding: 0.5rem;
- background-color: white;
- border-radius: 4px;
- box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-
-.time-range {
- display: flex;
- align-items: center;
- flex: 3;
-}
-
-.time-dropdown {
- flex: 1;
- min-width: 90px;
- font-size: 0.85rem;
-}
-
-.staff-count {
- display: flex;
- align-items: center;
- flex: 1;
- min-width: 80px;
-}
-
-.staff-input {
- width: 60px;
-}
-
-.staff-unit {
- margin-left: 0.3rem;
- font-size: 0.85rem;
-}
-
-.remove-button {
- flex: 0 0 auto;
-}
-
-.add-requirement {
- margin-top: 0.4rem;
- display: flex;
- justify-content: center;
-}
-
-.time-band-add-button {
- display: flex;
- justify-content: center;
- padding: 0.3rem;
- width: 100%;
- margin-top: 0.3rem;
- font-size: 0.85rem;
-}
-
-.closed-day-message {
- padding: 0.5rem;
- text-align: center;
- background-color: var(--red-50);
- color: var(--red-600);
- border-radius: 4px;
- font-size: 0.85rem;
- font-style: italic;
-}
-
-.specific-dates {
- margin-top: 0.5rem;
-}
-
-.date-picker {
- display: flex;
- align-items: center;
- gap: 0.5rem;
- margin-bottom: 1rem;
-}
-
-.selected-dates {
- display: flex;
- flex-wrap: wrap;
- gap: 0.5rem;
- margin-top: 1rem;
-}
-
-.date-tag {
- background-color: var(--surface-200);
- padding: 0.3rem 0.5rem;
- border-radius: 4px;
- display: flex;
- align-items: center;
- gap: 0.5rem;
- font-size: 0.85rem;
-}
-
-.no-dates {
- color: var(--text-color-secondary);
- font-style: italic;
- font-size: 0.9rem;
-}
-
-.detail-section {
- padding: 0.5rem;
-}
-
-.detail-item {
- display: flex;
- margin-bottom: 0.8rem;
-}
-
-.detail-label {
- font-weight: 600;
- width: 6rem;
- flex-shrink: 0;
-}
-
-.detail-value {
- flex: 1;
-}
-
-.day-req-section {
- margin-bottom: 1rem;
-}
-
-.day-req-section h5 {
- margin-top: 0;
- margin-bottom: 0.5rem;
- font-size: 0.95rem;
- border-bottom: 1px solid var(--surface-200);
- padding-bottom: 0.3rem;
-}
-
-.requirements-list {
- margin-left: 1rem;
-}
-
-.requirement-row {
- display: flex;
- justify-content: space-between;
- margin-bottom: 0.5rem;
-}
-
-.req-time {
- font-weight: 500;
-}
-
-.req-count {
- color: var(--text-color-secondary);
-}
-
-.no-requirements {
- color: var(--text-color-secondary);
- font-style: italic;
- font-size: 0.9rem;
- margin-left: 1rem;
-}
-
-.closed-dates-list {
- margin-top: 0.5rem;
-}
-
-.closed-dates {
- display: flex;
- flex-wrap: wrap;
- gap: 0.5rem;
-}
-
-.no-closed-dates {
- color: var(--text-color-secondary);
- font-style: italic;
- font-size: 0.9rem;
-}
-
-.special-closed-days {
- margin-top: 0.3rem;
- font-size: 0.85rem;
- color: var(--red-700);
-}
-
-.special-closed-label {
- font-weight: 500;
- margin-right: 0.3rem;
-}
-
-.special-closed-days-list {
- display: flex;
- flex-wrap: wrap;
- gap: 0.5rem;
- margin-top: 0.5rem;
-}
-
-.special-date-tag {
- background-color: var(--red-100);
- padding: 0.3rem 0.7rem;
- border-radius: 4px;
- font-size: 0.9rem;
- color: var(--red-700);
-}
-
-.no-special-days {
- color: var(--text-color-secondary);
- font-style: italic;
- font-size: 0.9rem;
- margin-top: 0.5rem;
-}
-
-.ml-2 {
- margin-left: 0.5rem;
-}
-
-.mr-2 {
- margin-right: 0.5rem;
-}
-
-.mb-2 {
- margin-bottom: 0.5rem;
-}
-
-.mt-3 {
- margin-top: 1rem;
-}
-
-.mt-4 {
- margin-top: 1.5rem;
-}
-
-.p-button {
- white-space: nowrap;
-}
-
-.staff-input .p-inputnumber-buttons-stacked .p-button.p-inputnumber-button {
- height: 1.1rem;
-}
-
-.staff-input .p-inputnumber-input {
- font-size: 0.85rem;
- padding: 0.3rem 0.5rem;
- width: 3rem;
-}
-
-@media (max-width: 992px) {
- .p-datatable .p-datatable-tbody > tr > td .store-actions {
-   flex-direction: column;
-   align-items: flex-start;
- }
-
- .p-datatable .p-datatable-tbody > tr > td .p-button {
-   margin-bottom: 0.25rem;
- }
-}
-
-@media (max-width: 768px) {
- .requirement-item {
-   flex-direction: column;
-   align-items: stretch;
- }
-
- .time-range {
-   margin-bottom: 0.5rem;
- }
-
- .staff-count {
-   justify-content: flex-start;
-   margin-bottom: 0.5rem;
- }
-}
-</style>

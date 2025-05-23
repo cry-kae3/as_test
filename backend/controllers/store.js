@@ -1,4 +1,5 @@
 const { sequelize, Store, StoreClosedDay, StoreStaffRequirement, BusinessHours, User } = require('../models');
+const { Op } = require('sequelize');
 
 exports.getAllStores = async (req, res) => {
     try {
@@ -186,11 +187,22 @@ exports.createStore = async (req, res) => {
             ownerId = req.user.parent_user_id;
         }
 
+        const existingStore = await Store.findOne({
+            where: sequelize.where(
+                sequelize.fn('LOWER', sequelize.col('name')),
+                sequelize.fn('LOWER', name.trim())
+            )
+        });
+
+        if (existingStore) {
+            return res.status(400).json({ message: '同じ名前の店舗が既に存在します' });
+        }
+
         console.log('店舗作成 - owner_id設定:', ownerId);
 
         const result = await sequelize.transaction(async (t) => {
             const store = await Store.create({
-                name,
+                name: name.trim(),
                 address,
                 phone,
                 email,
@@ -290,9 +302,27 @@ exports.updateStore = async (req, res) => {
             return res.status(404).json({ message: '店舗が見つかりません' });
         }
 
+        if (name && name.trim()) {
+            const existingStore = await Store.findOne({
+                where: {
+                    [Op.and]: [
+                        sequelize.where(
+                            sequelize.fn('LOWER', sequelize.col('name')),
+                            sequelize.fn('LOWER', name.trim())
+                        ),
+                        { id: { [Op.ne]: id } }
+                    ]
+                }
+            });
+
+            if (existingStore) {
+                return res.status(400).json({ message: '同じ名前の店舗が既に存在します' });
+            }
+        }
+
         await sequelize.transaction(async (t) => {
             await store.update({
-                name: name || store.name,
+                name: name ? name.trim() : store.name,
                 address: address !== undefined ? address : store.address,
                 phone: phone !== undefined ? phone : store.phone,
                 email: email !== undefined ? email : store.email,
