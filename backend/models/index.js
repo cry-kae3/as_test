@@ -13,6 +13,7 @@ const ShiftAssignment = require('./ShiftAssignment')(sequelize, DataTypes);
 const ShiftChangeLog = require('./ShiftChangeLog')(sequelize, DataTypes);
 const UserChangeLog = require('./UserChangeLog')(sequelize, DataTypes);
 const BusinessHours = require('./BusinessHours')(sequelize, DataTypes);
+const SystemSetting = require('./SystemSetting')(sequelize, DataTypes);
 
 Store.hasMany(StoreClosedDay, { foreignKey: 'store_id', as: 'closedDays' });
 StoreClosedDay.belongsTo(Store, { foreignKey: 'store_id' });
@@ -72,6 +73,9 @@ User.belongsTo(User, { foreignKey: 'parent_user_id', as: 'parent' });
 User.hasMany(Store, { foreignKey: 'owner_id', as: 'ownedStores' });
 Store.belongsTo(User, { foreignKey: 'owner_id', as: 'owner' });
 
+User.hasOne(SystemSetting, { foreignKey: 'user_id', as: 'systemSetting' });
+SystemSetting.belongsTo(User, { foreignKey: 'user_id' });
+
 module.exports = {
     sequelize,
     User,
@@ -85,5 +89,6 @@ module.exports = {
     Shift,
     ShiftAssignment,
     ShiftChangeLog,
-    UserChangeLog
+    UserChangeLog,
+    SystemSetting
 };

@@ -170,6 +170,12 @@ export default {
         roles: ["admin", "owner", "staff"]
       },
       {
+        label: "システム設定",
+        icon: "pi pi-fw pi-cog",
+        to: "/system-settings",
+        roles: ["admin", "owner"]
+      },
+      {
         label: "ユーザー管理",
         icon: "pi pi-fw pi-user-plus",
         to: "/users",
@@ -348,7 +354,6 @@ export default {
   },
 };
 </script>
-
 
 <style>
 body{

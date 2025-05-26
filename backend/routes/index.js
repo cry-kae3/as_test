@@ -1,21 +1,20 @@
 const express = require('express');
 const router = express.Router();
 
-// ルートの読み込み
 const authRoutes = require('./auth');
 const storeRoutes = require('./store');
 const staffRoutes = require('./staff');
 const shiftRoutes = require('./shift');
 const adminRoutes = require('./admin');
+const systemSettingsRoutes = require('./systemSettings');
 
-// 各ルートを使用
 router.use('/auth', authRoutes);
 router.use('/stores', storeRoutes);
 router.use('/staff', staffRoutes);
 router.use('/shifts', shiftRoutes);
 router.use('/admin', adminRoutes);
+router.use('/system-settings', systemSettingsRoutes);
 
-// APIのルートエンドポイントの状態を確認
 router.get('/', (req, res) => {
     res.json({ message: 'AIS API' });
 });

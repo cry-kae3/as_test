@@ -4,13 +4,14 @@ const {
     ShiftChangeLog,
     Staff,
     Store,
+    SystemSetting,
     sequelize
 } = require('../models');
 const { Op } = require('sequelize');
 const moment = require('moment-timezone');
 const shiftGeneratorService = require('../services/shiftGenerator');
+const { getShiftPeriodByClosingDay } = require('../services/dateUtils');
 
-// シフト一覧の取得
 const getAllShifts = async (req, res) => {
     try {
         const { store_id, year, month, status } = req.query;
@@ -51,7 +52,6 @@ const getAllShifts = async (req, res) => {
     }
 };
 
-// 特定のシフト情報の取得
 const getShiftById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -73,18 +73,15 @@ const getShiftById = async (req, res) => {
     }
 };
 
-// 特定の年月のシフト情報の取得
 const getShiftByYearMonth = async (req, res) => {
     try {
         const { year, month } = req.params;
         const { store_id } = req.query;
 
-        // 店舗IDが指定されていない場合はエラー
         if (!store_id) {
             return res.status(400).json({ message: '店舗IDを指定してください' });
         }
 
-        // シフトの検索
         const shift = await Shift.findOne({
             where: {
                 store_id,
@@ -97,9 +94,25 @@ const getShiftByYearMonth = async (req, res) => {
             return res.status(404).json({ message: 'シフトが見つかりません' });
         }
 
-        // シフト割り当ての取得
+        let userId = req.user.id;
+        if (req.user.role === 'staff' && req.user.parent_user_id) {
+            userId = req.user.parent_user_id;
+        }
+
+        const systemSetting = await SystemSetting.findOne({
+            where: { user_id: userId }
+        });
+
+        const closingDay = systemSetting ? systemSetting.closing_day : 25;
+        const shiftPeriod = getShiftPeriodByClosingDay(parseInt(year), parseInt(month), closingDay);
+
         const assignments = await ShiftAssignment.findAll({
-            where: { shift_id: shift.id },
+            where: {
+                shift_id: shift.id,
+                date: {
+                    [Op.between]: [shiftPeriod.startDate, shiftPeriod.endDate]
+                }
+            },
             include: [
                 {
                     model: Staff,
@@ -112,7 +125,6 @@ const getShiftByYearMonth = async (req, res) => {
             ]
         });
 
-        // 日付ごとにグループ化
         const shiftsByDate = {};
         for (const assignment of assignments) {
             const date = moment(assignment.date).format('YYYY-MM-DD');
@@ -137,7 +149,6 @@ const getShiftByYearMonth = async (req, res) => {
             });
         }
 
-        // スタッフごとの合計時間を計算
         const staffTotalHours = {};
         for (const assignment of assignments) {
             const staffId = assignment.staff_id;
@@ -151,12 +162,10 @@ const getShiftByYearMonth = async (req, res) => {
                 };
             }
 
-            // 勤務時間の計算（休憩時間を除く）
             const startTime = moment(assignment.start_time, 'HH:mm:ss');
             const endTime = moment(assignment.end_time, 'HH:mm:ss');
             let duration = moment.duration(endTime.diff(startTime)).asHours();
 
-            // 休憩時間があれば差し引く
             if (assignment.break_start_time && assignment.break_end_time) {
                 const breakStart = moment(assignment.break_start_time, 'HH:mm:ss');
                 const breakEnd = moment(assignment.break_end_time, 'HH:mm:ss');
@@ -167,13 +176,15 @@ const getShiftByYearMonth = async (req, res) => {
             staffTotalHours[staffId].total_hours += duration;
         }
 
-        // 結果の整形
         const result = {
             id: shift.id,
             store_id: shift.store_id,
             year: parseInt(year),
             month: parseInt(month),
             status: shift.status,
+            closing_day: closingDay,
+            period_start: shiftPeriod.startDate,
+            period_end: shiftPeriod.endDate,
             shifts: Object.values(shiftsByDate),
             summary: {
                 totalHoursByStaff: Object.values(staffTotalHours).map(item => ({
@@ -190,34 +201,39 @@ const getShiftByYearMonth = async (req, res) => {
     }
 };
 
-// シフトの自動生成
 const generateShift = async (req, res) => {
     try {
         const { store_id, year, month } = req.body;
 
-        // 入力チェック
         if (!store_id || !year || !month) {
             return res.status(400).json({ message: '店舗ID、年、月は必須です' });
         }
 
-        // シフトの自動生成
-        const shiftData = await shiftGeneratorService.generateShift(store_id, year, month);
+        let userId = req.user.id;
+        if (req.user.role === 'staff' && req.user.parent_user_id) {
+            userId = req.user.parent_user_id;
+        }
 
-        // シフトの検証
+        const systemSetting = await SystemSetting.findOne({
+            where: { user_id: userId }
+        });
+
+        const closingDay = systemSetting ? systemSetting.closing_day : 25;
+
+        const shiftData = await shiftGeneratorService.generateShift(store_id, year, month, closingDay);
+
         const validation = await shiftGeneratorService.validateShift(shiftData, store_id, year, month);
 
-        // 警告をシフトデータに追加
         shiftData.summary.staffingWarnings = validation.warnings;
 
-        // シフトデータを保存
         const shift = await shiftGeneratorService.saveShift(shiftData, store_id, year, month);
 
-        // シフトデータにシフトIDを追加
         shiftData.id = shift.id;
         shiftData.store_id = store_id;
         shiftData.year = parseInt(year);
         shiftData.month = parseInt(month);
         shiftData.status = shift.status;
+        shiftData.closing_day = closingDay;
 
         res.status(200).json(shiftData);
     } catch (error) {
@@ -226,18 +242,15 @@ const generateShift = async (req, res) => {
     }
 };
 
-// シフトの検証
 const validateShift = async (req, res) => {
     try {
         const { year, month } = req.params;
         const { store_id } = req.query;
 
-        // 店舗IDが指定されていない場合はエラー
         if (!store_id) {
             return res.status(400).json({ message: '店舗IDを指定してください' });
         }
 
-        // シフトの検索
         const shift = await Shift.findOne({
             where: {
                 store_id,
@@ -250,9 +263,25 @@ const validateShift = async (req, res) => {
             return res.status(404).json({ message: 'シフトが見つかりません' });
         }
 
-        // シフト割り当ての取得
+        let userId = req.user.id;
+        if (req.user.role === 'staff' && req.user.parent_user_id) {
+            userId = req.user.parent_user_id;
+        }
+
+        const systemSetting = await SystemSetting.findOne({
+            where: { user_id: userId }
+        });
+
+        const closingDay = systemSetting ? systemSetting.closing_day : 25;
+        const shiftPeriod = getShiftPeriodByClosingDay(parseInt(year), parseInt(month), closingDay);
+
         const assignments = await ShiftAssignment.findAll({
-            where: { shift_id: shift.id },
+            where: {
+                shift_id: shift.id,
+                date: {
+                    [Op.between]: [shiftPeriod.startDate, shiftPeriod.endDate]
+                }
+            },
             include: [
                 {
                     model: Staff,
@@ -265,7 +294,6 @@ const validateShift = async (req, res) => {
             ]
         });
 
-        // 日付ごとにグループ化
         const shiftsByDate = {};
         for (const assignment of assignments) {
             const date = moment(assignment.date).format('YYYY-MM-DD');
@@ -287,12 +315,10 @@ const validateShift = async (req, res) => {
             });
         }
 
-        // シフトデータの作成
         const shiftData = {
             shifts: Object.values(shiftsByDate)
         };
 
-        // シフトの検証
         const validation = await shiftGeneratorService.validateShift(shiftData, store_id, year, month);
 
         res.status(200).json(validation);
@@ -302,18 +328,15 @@ const validateShift = async (req, res) => {
     }
 };
 
-// シフトの確定
 const confirmShift = async (req, res) => {
     try {
         const { year, month } = req.params;
         const { store_id } = req.body;
 
-        // 店舗IDが指定されていない場合はエラー
         if (!store_id) {
             return res.status(400).json({ message: '店舗IDを指定してください' });
         }
 
-        // シフトの検索
         const shift = await Shift.findOne({
             where: {
                 store_id,
@@ -326,11 +349,9 @@ const confirmShift = async (req, res) => {
             return res.status(404).json({ message: 'シフトが見つかりません' });
         }
 
-        // シフトの検証
         const shiftData = await getShiftByYearMonth(year, month, store_id);
         const validation = await shiftGeneratorService.validateShift(shiftData, store_id, year, month);
 
-        // 警告がある場合は確定できない
         if (validation.warnings.length > 0) {
             return res.status(400).json({
                 message: 'シフトに人員不足の警告があるため確定できません',
@@ -338,7 +359,6 @@ const confirmShift = async (req, res) => {
             });
         }
 
-        // シフトの確定
         await shiftGeneratorService.confirmShift(shift.id);
 
         res.status(200).json({ message: 'シフトを確定しました' });
@@ -348,18 +368,15 @@ const confirmShift = async (req, res) => {
     }
 };
 
-// シフト割り当ての作成
 const createShiftAssignment = async (req, res) => {
     try {
         const { year, month } = req.params;
         const { store_id, date, staff_id, start_time, end_time, break_start_time, break_end_time, notes } = req.body;
 
-        // 入力チェック
         if (!store_id || !date || !staff_id || !start_time || !end_time) {
             return res.status(400).json({ message: '店舗ID、日付、スタッフID、開始時間、終了時間は必須です' });
         }
 
-        // シフトの検索
         const shift = await Shift.findOne({
             where: {
                 store_id,
@@ -372,18 +389,15 @@ const createShiftAssignment = async (req, res) => {
             return res.status(404).json({ message: 'シフトが見つかりません' });
         }
 
-        // 確定済みのシフトは編集不可
         if (shift.status === 'confirmed') {
             return res.status(400).json({ message: '確定済みのシフトは編集できません' });
         }
 
-        // スタッフの存在確認
         const staff = await Staff.findByPk(staff_id);
         if (!staff) {
             return res.status(404).json({ message: '指定されたスタッフが存在しません' });
         }
 
-        // シフト割り当ての作成
         const assignment = await ShiftAssignment.create({
             shift_id: shift.id,
             staff_id,
@@ -395,7 +409,6 @@ const createShiftAssignment = async (req, res) => {
             notes
         });
 
-        // 変更ログの記録
         await ShiftChangeLog.create({
             shift_assignment_id: assignment.id,
             user_id: req.user.id,
@@ -411,7 +424,6 @@ const createShiftAssignment = async (req, res) => {
             }
         });
 
-        // スタッフ情報を含めて返す
         const createdAssignment = await ShiftAssignment.findByPk(assignment.id, {
             include: [
                 { model: Staff, attributes: ['id', 'first_name', 'last_name', 'position'] }
@@ -438,13 +450,11 @@ const createShiftAssignment = async (req, res) => {
     }
 };
 
-// シフト割り当ての更新
 const updateShiftAssignment = async (req, res) => {
     try {
         const { year, month, assignmentId } = req.params;
         const { staff_id, start_time, end_time, break_start_time, break_end_time, notes } = req.body;
 
-        // シフト割り当ての存在確認
         const assignment = await ShiftAssignment.findByPk(assignmentId, {
             include: [
                 { model: Shift }
@@ -455,17 +465,14 @@ const updateShiftAssignment = async (req, res) => {
             return res.status(404).json({ message: 'シフト割り当てが見つかりません' });
         }
 
-        // シフト年月の確認
         if (assignment.Shift.year != year || assignment.Shift.month != month) {
             return res.status(400).json({ message: '指定されたシフト割り当ては、このシフトに属していません' });
         }
 
-        // 確定済みのシフトは編集不可
         if (assignment.Shift.status === 'confirmed') {
             return res.status(400).json({ message: '確定済みのシフトは編集できません' });
         }
 
-        // スタッフの存在確認
         if (staff_id) {
             const staff = await Staff.findByPk(staff_id);
             if (!staff) {
@@ -473,7 +480,6 @@ const updateShiftAssignment = async (req, res) => {
             }
         }
 
-        // 変更前のデータを保存
         const previousData = {
             staff_id: assignment.staff_id,
             start_time: moment(assignment.start_time, 'HH:mm:ss').format('HH:mm'),
@@ -483,7 +489,6 @@ const updateShiftAssignment = async (req, res) => {
             notes: assignment.notes
         };
 
-        // シフト割り当ての更新
         await assignment.update({
             staff_id: staff_id || assignment.staff_id,
             start_time: start_time || assignment.start_time,
@@ -493,7 +498,6 @@ const updateShiftAssignment = async (req, res) => {
             notes: notes !== undefined ? notes : assignment.notes
         });
 
-        // 変更ログの記録
         await ShiftChangeLog.create({
             shift_assignment_id: assignment.id,
             user_id: req.user.id,
@@ -509,7 +513,6 @@ const updateShiftAssignment = async (req, res) => {
             }
         });
 
-        // 更新されたシフト割り当てを取得
         const updatedAssignment = await ShiftAssignment.findByPk(assignment.id, {
             include: [
                 { model: Staff, attributes: ['id', 'first_name', 'last_name', 'position'] }
@@ -536,12 +539,10 @@ const updateShiftAssignment = async (req, res) => {
     }
 };
 
-// シフト割り当ての削除
 const deleteShiftAssignment = async (req, res) => {
     try {
         const { year, month, assignmentId } = req.params;
 
-        // シフト割り当ての存在確認
         const assignment = await ShiftAssignment.findByPk(assignmentId, {
             include: [
                 { model: Shift },
@@ -553,17 +554,14 @@ const deleteShiftAssignment = async (req, res) => {
             return res.status(404).json({ message: 'シフト割り当てが見つかりません' });
         }
 
-        // シフト年月の確認
         if (assignment.Shift.year != year || assignment.Shift.month != month) {
             return res.status(400).json({ message: '指定されたシフト割り当ては、このシフトに属していません' });
         }
 
-        // 確定済みのシフトは編集不可
         if (assignment.Shift.status === 'confirmed') {
             return res.status(400).json({ message: '確定済みのシフトは編集できません' });
         }
 
-        // 変更前のデータを保存
         const previousData = {
             staff_id: assignment.staff_id,
             staff_name: `${assignment.Staff.last_name} ${assignment.Staff.first_name}`,
@@ -575,12 +573,10 @@ const deleteShiftAssignment = async (req, res) => {
             notes: assignment.notes
         };
 
-        // シフト割り当ての削除
         await assignment.destroy();
 
-        // 変更ログの記録
         await ShiftChangeLog.create({
-            shift_assignment_id: null, // 削除されたため参照先なし
+            shift_assignment_id: null,
             user_id: req.user.id,
             change_type: 'delete',
             previous_data: previousData,
@@ -594,18 +590,15 @@ const deleteShiftAssignment = async (req, res) => {
     }
 };
 
-// シフト変更履歴の取得
 const getShiftChangeLogs = async (req, res) => {
     try {
         const { year, month } = req.params;
         const { store_id } = req.query;
 
-        // 店舗IDが指定されていない場合はエラー
         if (!store_id) {
             return res.status(400).json({ message: '店舗IDを指定してください' });
         }
 
-        // シフトの検索
         const shift = await Shift.findOne({
             where: {
                 store_id,
@@ -618,13 +611,11 @@ const getShiftChangeLogs = async (req, res) => {
             return res.status(404).json({ message: 'シフトが見つかりません' });
         }
 
-        // シフト割り当てIDの一覧を取得
         const assignments = await ShiftAssignment.findAll({
             where: { shift_id: shift.id },
             attributes: ['id']
         });
 
-        // 変更ログの取得
         const changeLogs = await ShiftChangeLog.findAll({
             where: {
                 [Op.or]: [
@@ -649,7 +640,6 @@ const getShiftChangeLogs = async (req, res) => {
             order: [['created_at', 'DESC']]
         });
 
-        // 結果の整形
         const result = changeLogs.map(log => ({
             id: log.id,
             user: log.User ? log.User.username : null,
@@ -678,4 +668,4 @@ module.exports = {
     updateShiftAssignment,
     deleteShiftAssignment,
     getShiftChangeLogs
-  };
+};
