@@ -349,11 +349,12 @@ export default {
 };
 </script>
 
-<style>
 
+<style>
 body{
   margin:0px;
 }
+
 .app-container {
   min-height: 100vh;
   display: flex;
@@ -364,6 +365,7 @@ body{
   display: flex;
   flex: 1;
   min-height: 100vh;
+  background-color: #f8f9fa;
 }
 
 .layout-sidebar {
@@ -475,13 +477,7 @@ body{
   flex: 1;
   padding: 0px;
   width: calc(100vw - 270px);
-  margin:auto;
-
-}
-
-.layout-wrapper{
-  background-color: #f8f9fa;
-
+  margin: auto;
 }
 
 .layout-footer {
@@ -518,6 +514,10 @@ body{
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
+.p-datatable {
+  font-size: 0.85rem;
+}
+
 .p-datatable .p-datatable-header {
   background-color: #f8f9fa;
   border: 1px solid #e9ecef;
@@ -530,6 +530,65 @@ body{
   border-width: 0 1px 1px 1px;
 }
 
+.p-datatable .p-datatable-thead > tr > th {
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+}
+
+.p-datatable .p-datatable-tbody > tr > td {
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.p-datatable .p-button {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.p-datatable .p-tag {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+}
+
+.p-datatable .p-inputtext {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.p-datatable .p-dropdown {
+  font-size: 0.8rem;
+}
+
+.p-datatable .p-dropdown .p-dropdown-label {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.p-datatable .p-column-filter {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.p-datatable .p-paginator {
+  font-size: 0.85rem;
+  padding: 0.5rem;
+}
+
+.p-datatable .p-paginator .p-paginator-pages .p-paginator-page {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.p-datatable-flex-scrollable {
+  height: auto !important;
+}
+
+.p-datatable .p-datatable-wrapper {
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+}
+
 .p-dialog .p-dialog-header {
   border-top-left-radius: 6px;
   border-top-right-radius: 6px;
@@ -538,6 +597,7 @@ body{
 .p-dialog .p-dialog-content {
   border-bottom-left-radius: 6px;
   border-bottom-right-radius: 6px;
+  border-radius: 0px !important;
 }
 
 .mr-2 {
@@ -584,6 +644,15 @@ body{
   gap: 0.5rem;
 }
 
+.grid {
+  margin-left: 0px !important;
+  margin-right: 0px !important;
+}
+
+.p-datatable .p-datatable-wrapper{
+  max-height: none;
+}
+
 @media (max-width: 768px) {
   .layout-sidebar {
     transform: translateX(-250px);
@@ -616,6 +685,16 @@ body{
   .col-12.md\:col-6 {
     flex: 0 0 100%;
   }
+
+  .p-datatable {
+    font-size: 0.8rem;
+  }
+
+  .p-datatable .p-datatable-thead > tr > th,
+  .p-datatable .p-datatable-tbody > tr > td {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.8rem;
+  }
 }
 
 @media (min-width: 769px) and (max-width: 992px) {
@@ -631,6 +710,18 @@ body{
 @media (min-width: 993px) {
   .col-12.md\:col-6.lg\:col-4 {
     flex: 0 0 33.33333%;
+  }
+}
+
+@media (max-width: 480px) {
+  .p-datatable {
+    font-size: 0.75rem;
+  }
+
+  .p-datatable .p-datatable-thead > tr > th,
+  .p-datatable .p-datatable-tbody > tr > td {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.75rem;
   }
 }
 
@@ -673,15 +764,4 @@ body{
   --red-600: #dc2626;
   --red-700: #b91c1c;
 }
-
-
-.p-dialog-content{
-  border-radius: 0px !important;
-}
-
-.grid{
-  margin-left:0px !important;
-  margin-right:0px !important;
-}
-
 </style>

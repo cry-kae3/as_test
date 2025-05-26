@@ -43,7 +43,6 @@
         stripedRows
         removableSort
         :scrollable="true"
-        scrollHeight="calc(100vh - 300px)"
       >
         <template #empty>
           <div class="text-center py-4">スタッフが見つかりません</div>
@@ -113,7 +112,7 @@
           </template>
         </Column>
 
-        <Column header="希望シフト" :style="{ minWidth: '150px' }">
+        <Column header="希望シフト" :style="{ minWidth: '400px' }">
           <template #body="{ data }">
             <div v-if="data.dayPreferences" class="day-preferences-summary">
               <span
