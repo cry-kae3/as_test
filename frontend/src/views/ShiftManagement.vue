@@ -52,6 +52,16 @@
         />
       </div>
 
+      <div class="view-controls">
+        <SelectButton
+          v-model="viewMode"
+          :options="viewModeOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="view-mode-selector"
+        />
+      </div>
+
       <div class="action-buttons">
         <Button
           v-if="!hasCurrentShift"
@@ -115,7 +125,7 @@
     </div>
 
     <div v-else class="shift-content">
-      <div class="shift-calendar" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
+      <div v-if="viewMode === 'calendar'" class="shift-calendar" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
         <div class="calendar-header">
           <div class="date-header">日付</div>
           <div class="day-header">曜日</div>
@@ -148,25 +158,91 @@
             class="shift-cell"
             @click="openShiftEditor(day, staff)"
             :class="{ 
-              'closed-day': day.isClosed,
               'editable': isEditMode && !isShiftConfirmed,
               'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
             }"
           >
-            <template v-if="!day.isClosed">
-              <div
-                v-if="getShiftForStaff(day.date, staff.id)"
-                class="shift-time"
-              >
-                {{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}
-                -
-                {{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}
+            <div
+              v-if="getShiftForStaff(day.date, staff.id)"
+              class="shift-time"
+            >
+              {{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}
+              -
+              {{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}
+            </div>
+            <div v-else class="no-shift">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="viewMode === 'gantt'" class="gantt-chart" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
+        <div class="gantt-header">
+          <div class="gantt-staff-header">スタッフ</div>
+          <div class="gantt-timeline-header">
+            <div
+              v-for="hour in timelineHours"
+              :key="hour"
+              class="gantt-hour-header"
+              :style="getTimeHeaderStyle()"
+            >
+              {{ hour }}:00
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-for="day in daysInMonth"
+          :key="day.date"
+          class="gantt-day-section"
+          :class="{ 
+            holiday: day.isHoliday, 
+            today: day.isToday,
+            past: isPastDate(day.date),
+            deadline: isDeadlineDate(day.date)
+          }"
+        >
+          <div class="gantt-day-header">
+            <span class="gantt-date">{{ day.day }}日</span>
+            <span class="gantt-day-label">{{ day.dayOfWeekLabel }}</span>
+            <span v-if="isDeadlineDate(day.date)" class="deadline-badge">締切</span>
+          </div>
+
+          <div class="gantt-day-content">
+            <div
+              v-for="staff in staffList"
+              :key="`gantt-${day.date}-${staff.id}`"
+              class="gantt-staff-row"
+            >
+              <div class="gantt-staff-name">
+                {{ staff.last_name }} {{ staff.first_name }}
               </div>
-              <div v-else class="no-shift">-</div>
-            </template>
-            <template v-else>
-              <div class="closed-label">休業日</div>
-            </template>
+              <div class="gantt-timeline" @click="openGanttShiftEditor(day, staff, $event)">
+                <div class="gantt-timeline-grid">
+                  <div
+                    v-for="hour in timelineHours"
+                    :key="`grid-${hour}`"
+                    class="gantt-hour-grid"
+                    :style="getTimeHeaderStyle()"
+                  ></div>
+                </div>
+                <div
+                  v-if="getShiftForStaff(day.date, staff.id)"
+                  class="gantt-shift-bar"
+                  :style="getGanttBarStyle(getShiftForStaff(day.date, staff.id))"
+                  :class="{ 
+                    'editable': isEditMode && !isShiftConfirmed,
+                    'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
+                  }"
+                  @click.stop="openShiftEditor(day, staff)"
+                >
+                  <span class="gantt-shift-text">
+                    {{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}
+                    -
+                    {{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -207,15 +283,7 @@
       :closable="!saving"
     >
       <div class="shift-editor-content">
-        <div v-if="shiftEditorDialog.isClosed" class="closed-day-message">
-          <Message severity="info">
-            <div class="message-content">
-              <i class="pi pi-info-circle mr-2"></i>
-              <span>この日は店舗の休業日です。</span>
-            </div>
-          </Message>
-        </div>
-        <div v-else-if="shiftEditorDialog.isConfirmed" class="confirmed-shift-message">
+        <div v-if="shiftEditorDialog.isConfirmed" class="confirmed-shift-message">
           <Message severity="warn">
             <div class="message-content">
               <i class="pi pi-exclamation-triangle mr-2"></i>
@@ -280,7 +348,7 @@
 
       <template #footer>
         <Button
-          v-if="!shiftEditorDialog.isClosed && !shiftEditorDialog.isConfirmed"
+          v-if="!shiftEditorDialog.isConfirmed"
           label="クリア"
           icon="pi pi-trash"
           class="p-button-danger"
@@ -295,7 +363,7 @@
           :disabled="saving"
         />
         <Button
-          v-if="!shiftEditorDialog.isClosed && !shiftEditorDialog.isConfirmed"
+          v-if="!shiftEditorDialog.isConfirmed"
           label="保存"
           icon="pi pi-check"
           class="p-button-primary"
@@ -366,6 +434,7 @@ import ConfirmDialog from "primevue/confirmdialog";
 import Toast from "primevue/toast";
 import Checkbox from "primevue/checkbox";
 import Textarea from "primevue/textarea";
+import SelectButton from "primevue/selectbutton";
 import api from '@/services/api';
 
 export default {
@@ -378,6 +447,7 @@ export default {
     Toast,
     Checkbox,
     Textarea,
+    SelectButton,
   },
   setup() {
     const store = useStore();
@@ -387,6 +457,7 @@ export default {
     const loading = ref(false);
     const saving = ref(false);
     const isEditMode = ref(false);
+    const viewMode = ref('calendar');
     const currentYear = ref(new Date().getFullYear());
     const currentMonth = ref(new Date().getMonth() + 1);
     const selectedStore = ref(null);
@@ -397,6 +468,19 @@ export default {
     const currentShift = ref(null);
     const systemSettings = ref({ closing_day: 25 });
 
+    const viewModeOptions = ref([
+      { label: 'カレンダー', value: 'calendar' },
+      { label: 'ガントチャート', value: 'gantt' }
+    ]);
+
+    const timelineHours = computed(() => {
+      const hours = [];
+      for (let hour = 0; hour <= 23; hour++) {
+        hours.push(hour);
+      }
+      return hours;
+    });
+
     const shiftEditorDialog = reactive({
       visible: false,
       title: "",
@@ -405,7 +489,6 @@ export default {
       startTime: "",
       endTime: "",
       isRestDay: false,
-      isClosed: false,
       isConfirmed: false,
       isPast: false,
       hasShift: false,
@@ -424,6 +507,65 @@ export default {
     const isShiftConfirmed = computed(() => {
       return currentShift.value && currentShift.value.status === "confirmed";
     });
+
+    const getTimeHeaderStyle = () => {
+      const hourWidth = 60;
+      return {
+        width: `${hourWidth}px`,
+        minWidth: `${hourWidth}px`
+      };
+    };
+
+    const getGanttBarStyle = (shift) => {
+      if (!shift) return {};
+      
+      const shiftStartTime = shift.start_time;
+      const shiftEndTime = shift.end_time;
+      
+      const startHourFloat = parseTimeToFloat(shiftStartTime);
+      const endHourFloat = parseTimeToFloat(shiftEndTime);
+      
+      const hourWidth = 60;
+      const left = startHourFloat * hourWidth;
+      const width = (endHourFloat - startHourFloat) * hourWidth;
+      
+      return {
+        left: `${left}px`,
+        width: `${width}px`
+      };
+    };
+
+    const parseTimeToFloat = (timeStr) => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours + minutes / 60;
+    };
+
+    const openGanttShiftEditor = (day, staff, event) => {
+      if (!isEditMode.value || isShiftConfirmed.value) return;
+      
+      const existingShift = getShiftForStaff(day.date, staff.id);
+      if (existingShift) return;
+      
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const hourWidth = 60;
+      
+      const clickedHour = Math.floor(clickX / hourWidth);
+      const startTime = `${clickedHour.toString().padStart(2, '0')}:00`;
+      const endTime = `${(clickedHour + 8).toString().padStart(2, '0')}:00`;
+      
+      shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${day.date}`;
+      shiftEditorDialog.date = day.date;
+      shiftEditorDialog.staff = staff;
+      shiftEditorDialog.startTime = startTime;
+      shiftEditorDialog.endTime = endTime;
+      shiftEditorDialog.isRestDay = false;
+      shiftEditorDialog.isConfirmed = isShiftConfirmed.value;
+      shiftEditorDialog.isPast = isPastDate(day.date);
+      shiftEditorDialog.hasShift = false;
+      shiftEditorDialog.changeReason = "";
+      shiftEditorDialog.visible = true;
+    };
 
     const fetchSystemSettings = async () => {
       try {
@@ -664,7 +806,6 @@ export default {
       shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${day.date}`;
       shiftEditorDialog.date = day.date;
       shiftEditorDialog.staff = staff;
-      shiftEditorDialog.isClosed = day.isClosed;
       shiftEditorDialog.isConfirmed = isShiftConfirmed.value;
       shiftEditorDialog.isPast = isPastDate(day.date);
       shiftEditorDialog.changeReason = "";
@@ -793,15 +934,12 @@ export default {
         const dayOfWeek = new Date(year, month - 1, day).getDay();
         const dayOfWeekLabel = ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek];
 
-        const isClosed = dayOfWeek === 0;
-
         days.push({
           date,
           day,
           dayOfWeek,
           dayOfWeekLabel,
           isHoliday: dayOfWeek === 0 || dayOfWeek === 6,
-          isClosed,
           isToday:
             today.getFullYear() === year &&
             today.getMonth() + 1 === month &&
@@ -986,7 +1124,6 @@ export default {
             .day-col { width: 40px; }
             .staff-col { width: 80px; }
             .holiday { background-color: #ffe6e6; }
-            .closed { background-color: #f0f0f0; color: #666; }
             .shift-time { font-size: 9px; }
           </style>
         </head>
@@ -1020,16 +1157,13 @@ export default {
 
         staffList.value.forEach(staff => {
           const shift = getShiftForStaff(day.date, staff.id);
-          const cellClass = day.isClosed ? 'closed' : '';
           
-          if (day.isClosed) {
-            printHtml += `<td class="${cellClass}">休業日</td>`;
-          } else if (shift) {
-            printHtml += `<td class="${cellClass}">
+          if (shift) {
+            printHtml += `<td>
               <div class="shift-time">${formatTime(shift.start_time)}-${formatTime(shift.end_time)}</div>
             </td>`;
           } else {
-            printHtml += `<td class="${cellClass}">-</td>`;
+            printHtml += `<td>-</td>`;
           }
         });
 
@@ -1256,6 +1390,9 @@ export default {
       loading,
       saving,
       isEditMode,
+      viewMode,
+      viewModeOptions,
+      timelineHours,
       currentYear,
       currentMonth,
       selectedStore,
@@ -1269,6 +1406,10 @@ export default {
       confirmShiftDialog,
       hasCurrentShift,
       isShiftConfirmed,
+      getTimeHeaderStyle,
+      getGanttBarStyle,
+      parseTimeToFloat,
+      openGanttShiftEditor,
       getStatusBannerClass,
       getStatusIcon,
       getStatusText,
@@ -1409,6 +1550,15 @@ export default {
   min-width: 200px;
 }
 
+.view-controls {
+  display: flex;
+  align-items: center;
+}
+
+.view-mode-selector {
+  min-width: 200px;
+}
+
 .action-buttons {
   display: flex;
   gap: 10px;
@@ -1543,11 +1693,13 @@ export default {
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  position: relative;
 }
 
-.shift-cell.closed-day {
-  background-color: #f5f5f5;
-  color: #999;
+.shift-cell:hover {
+  outline: 2px solid #2196f3;
+  outline-offset: -1px;
+  z-index: 2;
 }
 
 .shift-cell.editable {
@@ -1557,7 +1709,7 @@ export default {
 
 .shift-cell.editable:hover {
   background-color: #e8f5e8;
-  border: 1px solid #4caf50;
+  outline: 2px solid #4caf50;
 }
 
 .shift-cell.past-editable {
@@ -1566,7 +1718,7 @@ export default {
 
 .shift-cell.past-editable:hover {
   background-color: #ffe0b2;
-  border: 1px solid #ff9800;
+  outline: 2px solid #ff9800;
 }
 
 .shift-time {
@@ -1584,127 +1736,346 @@ export default {
   font-size: 14px;
 }
 
-.closed-label {
-  color: #999;
+.gantt-chart {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 800px;
+}
+
+.gantt-chart.edit-mode {
+  border: 2px solid #4caf50;
+}
+
+.gantt-chart.confirmed {
+  border: 2px solid #2196f3;
+  opacity: 0.9;
+}
+
+.gantt-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: white;
+  display: flex;
+  border-bottom: 2px solid #ddd;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.gantt-staff-header {
+  width: 150px;
+  min-width: 150px;
+  padding: 12px 8px;
+  text-align: center;
+  background: #f5f5f5;
+  border-right: 2px solid #ddd;
+  position: sticky;
+  left: 0;
+  z-index: 11;
+}
+
+.gantt-timeline-header {
+  display: flex;
+  background: #f5f5f5;
+}
+
+.gantt-hour-header {
+  text-align: center;
+  padding: 12px 4px;
+  border-right: 1px solid #ddd;
   font-size: 12px;
 }
 
-.shift-summary {
-  border-top: 2px solid #ddd;
-  background: #fafafa;
-}
-
-.summary-header {
-  display: flex;
-  font-weight: bold;
-  font-size: 14px;
-  background: #f0f0f0;
-}
-
-.empty-header {
-  padding: 12px 8px;
-  border-right: 1px solid #ddd;
-  min-width: 80px;
-  flex-shrink: 0;
-}
-
-.staff-total-header {
-  padding: 12px 8px;
-  text-align: center;
-  border-right: 1px solid #ddd;
-  min-width: 120px;
-  flex-shrink: 0;
-}
-
-.summary-row {
-  display: flex;
-}
-
-.empty-cell {
-  padding: 8px;
-  border-right: 1px solid #eee;
-  min-width: 80px;
-  flex-shrink: 0;
-}
-
-.staff-total-cell {
-  padding: 8px;
-  text-align: center;
-  border-right: 1px solid #eee;
-  min-width: 120px;
-  flex-shrink: 0;
-  font-weight: bold;
-  color: #333;
-  background: #fff;
-}
-
-.shift-editor-content {
-  padding: 10px 0;
-}
-
-.past-date-notice {
-  margin-bottom: 15px;
-}
-
-.confirm-shift-content {
-  padding: 10px 0;
-}
-
-.confirmation-details {
-  margin-bottom: 20px;
-}
-
-.detail-item {
-  padding: 8px 0;
+.gantt-day-section {
   border-bottom: 1px solid #eee;
 }
 
+.gantt-day-section.holiday {
+  background-color: #fff5f5;
+}
+
+.gantt-day-section.today {
+  background-color: #e3f2fd;
+}
+
+.gantt-day-section.past {
+  opacity: 0.7;
+}
+
+.gantt-day-section.deadline {
+  border-left: 4px solid #f44336;
+}
+
+.gantt-day-header {
+  display: flex;
+  align-items: center;
+  width: 150px;
+  min-width: 150px;
+  padding: 8px;
+  background: #fafafa;
+  border-right: 2px solid #ddd;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  gap: 5px;
+}
+
+.gantt-date {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.gantt-day-label {
+  font-size: 12px;
+  color: #666;
+}
+
+.gantt-day-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.gantt-staff-row {
+  display: flex;
+  border-bottom: 1px solid #f0f0f0;
+  min-height: 40px;
+}
+
+.gantt-staff-name {
+  width: 150px;
+  min-width: 150px;
+  padding: 8px;
+  background: white;
+  border-right: 2px solid #ddd;
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.gantt-timeline {
+  position: relative;
+  flex: 1;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.gantt-timeline:hover {
+  outline: 2px solid #2196f3;
+  outline-offset: -1px;
+  z-index: 2;
+}
+
+.gantt-timeline-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+}
+
+.gantt-hour-grid {
+ border-right: 1px solid #eee;
+ height: 100%;
+}
+
+.gantt-hour-grid:hover {
+ background-color: #f0f8ff;
+ outline: 1px solid #2196f3;
+ outline-offset: -1px;
+ z-index: 1;
+}
+
+.gantt-shift-bar {
+ position: absolute;
+ top: 2px;
+ bottom: 2px;
+ background: linear-gradient(135deg, #4caf50, #66bb6a);
+ border-radius: 4px;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ color: white;
+ font-size: 11px;
+ font-weight: bold;
+ border: 1px solid #4caf50;
+ box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+ cursor: pointer;
+ transition: all 0.2s;
+ z-index: 3;
+}
+
+.gantt-shift-bar:hover {
+ transform: translateY(-1px);
+ box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+ outline: 2px solid #2196f3;
+ outline-offset: 1px;
+}
+
+.gantt-shift-bar.editable {
+ background: linear-gradient(135deg, #66bb6a, #81c784);
+ border-color: #66bb6a;
+}
+
+.gantt-shift-bar.past-editable {
+ background: linear-gradient(135deg, #ff9800, #ffb74d);
+ border-color: #ff9800;
+}
+
+.gantt-shift-text {
+ padding: 0 4px;
+ white-space: nowrap;
+ overflow: hidden;
+ text-overflow: ellipsis;
+}
+
+.shift-summary {
+ border-top: 2px solid #ddd;
+ background: #fafafa;
+}
+
+.summary-header {
+ display: flex;
+ font-weight: bold;
+ font-size: 14px;
+ background: #f0f0f0;
+}
+
+.empty-header {
+ padding: 12px 8px;
+ border-right: 1px solid #ddd;
+ min-width: 80px;
+ flex-shrink: 0;
+}
+
+.staff-total-header {
+ padding: 12px 8px;
+ text-align: center;
+ border-right: 1px solid #ddd;
+ min-width: 120px;
+ flex-shrink: 0;
+}
+
+.summary-row {
+ display: flex;
+}
+
+.empty-cell {
+ padding: 8px;
+ border-right: 1px solid #eee;
+ min-width: 80px;
+ flex-shrink: 0;
+}
+
+.staff-total-cell {
+ padding: 8px;
+ text-align: center;
+ border-right: 1px solid #eee;
+ min-width: 120px;
+ flex-shrink: 0;
+ font-weight: bold;
+ color: #333;
+ background: #fff;
+}
+
+.shift-editor-content {
+ padding: 10px 0;
+}
+
+.past-date-notice {
+ margin-bottom: 15px;
+}
+
+.confirm-shift-content {
+ padding: 10px 0;
+}
+
+.confirmation-details {
+ margin-bottom: 20px;
+}
+
+.detail-item {
+ padding: 8px 0;
+ border-bottom: 1px solid #eee;
+}
+
 .detail-item:last-child {
-  border-bottom: none;
+ border-bottom: none;
 }
 
 .warning-message {
-  margin-top: 15px;
+ margin-top: 15px;
 }
 
 @media (max-width: 1200px) {
-  .toolbar {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
-  }
+ .toolbar {
+   flex-direction: column;
+   gap: 15px;
+   align-items: stretch;
+ }
 
-  .period-selector {
-    justify-content: center;
-  }
+ .period-selector {
+   justify-content: center;
+ }
 
-  .action-buttons {
-    justify-content: center;
-  }
+ .view-controls {
+   justify-content: center;
+ }
+
+ .action-buttons {
+   justify-content: center;
+ }
+
+ .gantt-staff-header,
+ .gantt-day-header,
+ .gantt-staff-name {
+   width: 120px;
+   min-width: 120px;
+ }
 }
 
 @media (max-width: 768px) {
-  .shift-management {
-    padding: 10px;
-  }
+ .shift-management {
+   padding: 10px;
+ }
 
-  .period-selector {
-    flex-direction: column;
-    gap: 10px;
-  }
+ .period-selector {
+   flex-direction: column;
+   gap: 10px;
+ }
 
-  .action-buttons {
-    flex-wrap: wrap;
-  }
+ .action-buttons {
+   flex-wrap: wrap;
+ }
 
-  .shift-status-banner {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
-  }
+ .shift-status-banner {
+   flex-direction: column;
+   gap: 10px;
+   text-align: center;
+ }
 
-  .status-actions {
-    width: 100%;
-  }
+ .status-actions {
+   width: 100%;
+ }
+
+ .gantt-chart {
+   max-height: 500px;
+ }
+
+ .gantt-staff-header,
+ .gantt-day-header,
+ .gantt-staff-name {
+   width: 100px;
+   min-width: 100px;
+   font-size: 12px;
+ }
+
+ .gantt-shift-text {
+   font-size: 10px;
+ }
 }
 </style>

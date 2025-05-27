@@ -1,22 +1,18 @@
-// main.js
 import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
 import store from './store';
 
-// PrimeVue
 import PrimeVue from 'primevue/config';
 import ToastService from 'primevue/toastservice';
 import ConfirmationService from 'primevue/confirmationservice';
 import DialogService from 'primevue/dialogservice';
 
-// PrimeVue CSS - インポート順序が重要です
-import 'primevue/resources/themes/lara-light-blue/theme.css';  // テーマ
-import 'primevue/resources/primevue.min.css';                 // コア
-import 'primeicons/primeicons.css';                           // アイコン
-import '/node_modules/primeflex/primeflex.css';               // Flexレイアウト
+import 'primevue/resources/themes/lara-light-blue/theme.css';
+import 'primevue/resources/primevue.min.css';
+import 'primeicons/primeicons.css';
+import '/node_modules/primeflex/primeflex.css';
 
-// PrimeVue コンポーネント
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Dropdown from 'primevue/dropdown';
@@ -50,11 +46,9 @@ import TriStateCheckbox from 'primevue/tristatecheckbox';
 
 const app = createApp(App);
 
-// ストアとルーターの登録
 app.use(store);
 app.use(router);
 
-// PrimeVueの登録
 app.use(PrimeVue, {
     ripple: true,
     inputStyle: 'filled',
@@ -69,7 +63,6 @@ app.use(ToastService);
 app.use(ConfirmationService);
 app.use(DialogService);
 
-// PrimeVueコンポーネントのグローバル登録
 app.component('Button', Button);
 app.component('InputText', InputText);
 app.component('Dropdown', Dropdown);
@@ -101,7 +94,6 @@ app.component('InputSwitch', InputSwitch);
 app.component('Password', Password);
 app.component('TriStateCheckbox', TriStateCheckbox);
 
-// 日付のフィルター
 app.config.globalProperties.$filters = {
     formatDate(value) {
         if (!value) return '';
