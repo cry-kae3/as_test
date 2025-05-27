@@ -127,40 +127,36 @@
     <div v-else class="shift-content">
       <div v-if="viewMode === 'calendar'" class="shift-calendar" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
         <div class="calendar-header">
-          <div class="date-header">日付</div>
-          <div class="day-header">曜日</div>
-          <div v-for="staff in staffList" :key="staff.id" class="staff-header">
-            {{ staff.last_name }} {{ staff.first_name }}
+          <div class="staff-header">スタッフ</div>
+          <div v-for="day in daysInMonth" :key="day.date" class="date-header">
+            <div class="date-number">{{ day.day }}</div>
+            <div class="day-label">{{ day.dayOfWeekLabel }}</div>
+            <div v-if="day.isNationalHoliday" class="holiday-badge">祝</div>
+            <div v-if="isDeadlineDate(day.date)" class="deadline-badge">締切</div>
           </div>
         </div>
 
         <div
-          v-for="day in daysInMonth"
-          :key="day.date"
-          :class="[
-            'calendar-row',
-            { 
+          v-for="staff in staffList"
+          :key="staff.id"
+          class="calendar-row"
+        >
+          <div class="staff-cell">
+            {{ staff.last_name }} {{ staff.first_name }}
+          </div>
+          <div
+            v-for="day in daysInMonth"
+            :key="`${staff.id}-${day.date}`"
+            class="shift-cell"
+            :class="{ 
               holiday: day.isHoliday, 
               today: day.isToday,
               past: isPastDate(day.date),
-              deadline: isDeadlineDate(day.date)
-            }
-          ]"
-        >
-          <div class="date-cell">
-            <span class="date-number">{{ day.day }}</span>
-            <span v-if="isDeadlineDate(day.date)" class="deadline-badge">締切</span>
-          </div>
-          <div class="day-cell">{{ day.dayOfWeekLabel }}</div>
-          <div
-            v-for="staff in staffList"
-            :key="`${day.date}-${staff.id}`"
-            class="shift-cell"
-            @click="openShiftEditor(day, staff)"
-            :class="{ 
+              deadline: isDeadlineDate(day.date),
               'editable': isEditMode && !isShiftConfirmed,
               'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
             }"
+            @click="openShiftEditor(day, staff)"
           >
             <div
               v-if="getShiftForStaff(day.date, staff.id)"
@@ -201,46 +197,47 @@
             deadline: isDeadlineDate(day.date)
           }"
         >
-          <div class="gantt-day-header">
-            <span class="gantt-date">{{ day.day }}日</span>
-            <span class="gantt-day-label">{{ day.dayOfWeekLabel }}</span>
-            <span v-if="isDeadlineDate(day.date)" class="deadline-badge">締切</span>
+          <div class="gantt-day-header-section">
+            <div class="gantt-day-title">
+              <span class="gantt-date">{{ day.day }}日</span>
+              <span class="gantt-day-label">{{ day.dayOfWeekLabel }}</span>
+              <span v-if="day.isNationalHoliday" class="holiday-badge">祝</span>
+              <span v-if="isDeadlineDate(day.date)" class="deadline-badge">締切</span>
+            </div>
           </div>
 
-          <div class="gantt-day-content">
-            <div
-              v-for="staff in staffList"
-              :key="`gantt-${day.date}-${staff.id}`"
-              class="gantt-staff-row"
-            >
-              <div class="gantt-staff-name">
-                {{ staff.last_name }} {{ staff.first_name }}
-              </div>
-              <div class="gantt-timeline" @click="openGanttShiftEditor(day, staff, $event)">
-                <div class="gantt-timeline-grid">
-                  <div
-                    v-for="hour in timelineHours"
-                    :key="`grid-${hour}`"
-                    class="gantt-hour-grid"
-                    :style="getTimeHeaderStyle()"
-                  ></div>
-                </div>
+          <div
+            v-for="staff in staffList"
+            :key="`gantt-${day.date}-${staff.id}`"
+            class="gantt-staff-row"
+          >
+            <div class="gantt-staff-name">
+              {{ staff.last_name }} {{ staff.first_name }}
+            </div>
+            <div class="gantt-timeline" @click="openGanttShiftEditor(day, staff, $event)">
+              <div class="gantt-timeline-grid">
                 <div
-                  v-if="getShiftForStaff(day.date, staff.id)"
-                  class="gantt-shift-bar"
-                  :style="getGanttBarStyle(getShiftForStaff(day.date, staff.id))"
-                  :class="{ 
-                    'editable': isEditMode && !isShiftConfirmed,
-                    'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
-                  }"
-                  @click.stop="openShiftEditor(day, staff)"
-                >
-                  <span class="gantt-shift-text">
-                    {{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}
-                    -
-                    {{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}
-                  </span>
-                </div>
+                  v-for="hour in timelineHours"
+                  :key="`grid-${hour}`"
+                  class="gantt-hour-grid"
+                  :style="getTimeHeaderStyle()"
+                ></div>
+              </div>
+              <div
+                v-if="getShiftForStaff(day.date, staff.id)"
+                class="gantt-shift-bar"
+                :style="getGanttBarStyle(getShiftForStaff(day.date, staff.id))"
+                :class="{ 
+                  'editable': isEditMode && !isShiftConfirmed,
+                  'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
+                }"
+                @click.stop="openShiftEditor(day, staff)"
+              >
+                <span class="gantt-shift-text">
+                  {{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}
+                  -
+                  {{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}
+                </span>
               </div>
             </div>
           </div>
@@ -249,25 +246,18 @@
 
       <div class="shift-summary">
         <div class="summary-header">
-          <div class="empty-header"></div>
-          <div class="empty-header"></div>
-          <div
-            v-for="staff in staffList"
-            :key="`total-${staff.id}`"
-            class="staff-total-header"
-          >
-            合計時間
-          </div>
+          <div class="summary-staff-header">スタッフ</div>
+          <div class="summary-total-header">合計時間</div>
         </div>
-
-        <div class="summary-row">
-          <div class="empty-cell"></div>
-          <div class="empty-cell"></div>
-          <div
-            v-for="staff in staffList"
-            :key="`hours-${staff.id}`"
-            class="staff-total-cell"
-          >
+        <div
+          v-for="staff in staffList"
+          :key="`summary-${staff.id}`"
+          class="summary-row"
+        >
+          <div class="summary-staff-cell">
+            {{ staff.last_name }} {{ staff.first_name }}
+          </div>
+          <div class="summary-total-cell">
             {{ calculateTotalHours(staff.id) }}時間
           </div>
         </div>
@@ -467,6 +457,7 @@ export default {
     const daysInMonth = ref([]);
     const currentShift = ref(null);
     const systemSettings = ref({ closing_day: 25 });
+    const holidays = ref([]);
 
     const viewModeOptions = ref([
       { label: 'カレンダー', value: 'calendar' },
@@ -507,6 +498,21 @@ export default {
     const isShiftConfirmed = computed(() => {
       return currentShift.value && currentShift.value.status === "confirmed";
     });
+
+    const fetchHolidays = async (year) => {
+      try {
+        const response = await fetch(`https://holidays-jp.github.io/api/v1/${year}/date.json`);
+        const data = await response.json();
+        holidays.value = Object.keys(data);
+      } catch (error) {
+        console.error('祝日データの取得に失敗:', error);
+        holidays.value = [];
+      }
+    };
+
+    const isHoliday = (date) => {
+      return holidays.value.includes(date);
+    };
 
     const getTimeHeaderStyle = () => {
       const hourWidth = 60;
@@ -939,7 +945,9 @@ export default {
           day,
           dayOfWeek,
           dayOfWeekLabel,
-          isHoliday: dayOfWeek === 0 || dayOfWeek === 6,
+          isHoliday: isHoliday(date) || dayOfWeek === 0 || dayOfWeek === 6,
+          isNationalHoliday: isHoliday(date),
+          isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
           isToday:
             today.getFullYear() === year &&
             today.getMonth() + 1 === month &&
@@ -957,6 +965,7 @@ export default {
       } else {
         currentMonth.value--;
       }
+      await fetchHolidays(currentYear.value);
       await loadShiftData();
     };
 
@@ -967,6 +976,7 @@ export default {
       } else {
         currentMonth.value++;
       }
+      await fetchHolidays(currentYear.value);
       await loadShiftData();
     };
 
@@ -1102,29 +1112,94 @@ export default {
           <meta charset="utf-8">
           <style>
             @media print {
-              @page { margin: 0.5cm; size: A4 landscape; }
-              body { font-family: Arial, sans-serif; font-size: 10px; }
+              @page { margin: 1cm; size: A4 landscape; }
+              body { font-family: Arial, sans-serif; font-size: 9px; }
             }
             body { font-family: Arial, sans-serif; font-size: 12px; }
-            .print-header { text-align: center; margin-bottom: 20px; }
-            .print-title { font-size: 18px; font-weight: bold; }
-            .print-period { font-size: 14px; margin-top: 5px; }
-            .print-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .print-header { 
+              text-align: center; 
+              margin-bottom: 20px; 
+              page-break-after: avoid;
+            }
+            .print-title { 
+              font-size: 16px; 
+              font-weight: bold; 
+              margin-bottom: 8px;
+            }
+            .print-period { 
+              font-size: 12px; 
+              color: #666;
+            }
+            .print-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-top: 10px;
+              page-break-inside: avoid;
+            }
             .print-table th, .print-table td { 
               border: 1px solid #333; 
-              padding: 3px; 
+              padding: 4px 2px; 
               text-align: center; 
-              font-size: 10px; 
+              font-size: 8px;
+              vertical-align: middle;
+              -webkit-print-color-adjust: exact;
+              color-adjust: exact;
             }
             .print-table th { 
               background-color: #f0f0f0; 
-              font-weight: bold; 
+              font-weight: bold;
+              font-size: 8px;
+              -webkit-print-color-adjust: exact;
+              color-adjust: exact;
             }
-            .date-col { width: 60px; }
-            .day-col { width: 40px; }
-            .staff-col { width: 80px; }
-            .holiday { background-color: #ffe6e6; }
-            .shift-time { font-size: 9px; }
+            .staff-col { 
+              width: 80px; 
+              text-align: left;
+              padding-left: 4px;
+              font-weight: bold;
+            }
+            .date-col { 
+              width: 35px;
+              font-weight: bold;
+            }
+            .shift-cell {
+              font-size: 7px;
+              line-height: 1.2;
+            }
+            .holiday { 
+              background-color: #ffe6e6; 
+              -webkit-print-color-adjust: exact;
+              color-adjust: exact;
+            }
+            .today { 
+              background-color: #e6f3ff; 
+              -webkit-print-color-adjust: exact;
+              color-adjust: exact;
+            }
+            .summary-section {
+              margin-top: 20px;
+              page-break-inside: avoid;
+            }
+            .summary-title {
+              font-size: 12px;
+              font-weight: bold;
+              margin-bottom: 10px;
+            }
+            .summary-table {
+              width: 50%;
+              border-collapse: collapse;
+            }
+            .summary-table th, .summary-table td {
+              border: 1px solid #333;
+              padding: 4px 8px;
+              font-size: 9px;
+            }
+            .summary-table th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+              -webkit-print-color-adjust: exact;
+              color-adjust: exact;
+            }
           </style>
         </head>
         <body>
@@ -1135,12 +1210,20 @@ export default {
           <table class="print-table">
             <thead>
               <tr>
-                <th class="date-col">日付</th>
-                <th class="day-col">曜日</th>
+                <th class="staff-col">スタッフ</th>
       `;
 
-      staffList.value.forEach(staff => {
-        printHtml += `<th class="staff-col">${staff.last_name} ${staff.first_name}</th>`;
+      daysInMonth.value.forEach(day => {
+        const holidayClass = day.isHoliday ? 'holiday' : '';
+        const todayClass = day.isToday ? 'today' : '';
+        const cellClass = `${holidayClass} ${todayClass}`.trim();
+        printHtml += `
+          <th class="date-col ${cellClass}">
+            <div>${day.day}</div>
+            <div style="font-size: 6px;">${day.dayOfWeekLabel}</div>
+            ${day.isNationalHoliday ? '<div style="font-size: 5px; color: red;">祝</div>' : ''}
+          </th>
+        `;
       });
 
       printHtml += `
@@ -1149,21 +1232,22 @@ export default {
             <tbody>
       `;
 
-      daysInMonth.value.forEach(day => {
-        const rowClass = day.isHoliday ? 'holiday' : '';
-        printHtml += `<tr class="${rowClass}">`;
-        printHtml += `<td>${day.day}</td>`;
-        printHtml += `<td>${day.dayOfWeekLabel}</td>`;
+      staffList.value.forEach(staff => {
+        printHtml += `<tr>`;
+        printHtml += `<td class="staff-col">${staff.last_name} ${staff.first_name}</td>`;
 
-        staffList.value.forEach(staff => {
+        daysInMonth.value.forEach(day => {
           const shift = getShiftForStaff(day.date, staff.id);
+          const holidayClass = day.isHoliday ? 'holiday' : '';
+          const todayClass = day.isToday ? 'today' : '';
+          const cellClass = `shift-cell ${holidayClass} ${todayClass}`.trim();
           
           if (shift) {
-            printHtml += `<td>
-              <div class="shift-time">${formatTime(shift.start_time)}-${formatTime(shift.end_time)}</div>
+            printHtml += `<td class="${cellClass}">
+              ${formatTime(shift.start_time)}<br>-<br>${formatTime(shift.end_time)}
             </td>`;
           } else {
-            printHtml += `<td>-</td>`;
+            printHtml += `<td class="${cellClass}">-</td>`;
           }
         });
 
@@ -1173,6 +1257,32 @@ export default {
       printHtml += `
             </tbody>
           </table>
+          
+          <div class="summary-section">
+            <div class="summary-title">月間勤務時間集計</div>
+            <table class="summary-table">
+              <thead>
+                <tr>
+                  <th>スタッフ</th>
+                  <th>合計時間</th>
+                </tr>
+              </thead>
+              <tbody>
+      `;
+
+      staffList.value.forEach(staff => {
+        printHtml += `
+          <tr>
+            <td>${staff.last_name} ${staff.first_name}</td>
+            <td>${calculateTotalHours(staff.id)}時間</td>
+          </tr>
+        `;
+      });
+
+      printHtml += `
+              </tbody>
+            </table>
+          </div>
         </body>
         </html>
       `;
@@ -1367,6 +1477,7 @@ export default {
     onMounted(async () => {
       try {
         await fetchSystemSettings();
+        await fetchHolidays(currentYear.value);
         
         const storeData = await store.dispatch("store/fetchStores");
         stores.value = storeData;
@@ -1599,6 +1710,7 @@ export default {
 
 .shift-calendar {
   overflow-x: auto;
+  background: white;
 }
 
 .shift-calendar.edit-mode {
@@ -1616,52 +1728,30 @@ export default {
   border-bottom: 2px solid #ddd;
   font-weight: bold;
   font-size: 14px;
-}
-
-.date-header,
-.day-header {
-  padding: 12px 8px;
-  text-align: center;
-  border-right: 1px solid #ddd;
-  min-width: 80px;
-  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .staff-header {
   padding: 12px 8px;
   text-align: center;
-  border-right: 1px solid #ddd;
+  border-right: 2px solid #ddd;
   min-width: 120px;
+  width: 120px;
   flex-shrink: 0;
+  background: #f5f5f5;
+  position: sticky;
+  left: 0;
+  z-index: 11;
 }
 
-.calendar-row {
-  display: flex;
-  border-bottom: 1px solid #eee;
-}
-
-.calendar-row.holiday {
-  background-color: #fff5f5;
-}
-
-.calendar-row.today {
-  background-color: #e3f2fd;
-}
-
-.calendar-row.past {
-  opacity: 0.7;
-}
-
-.calendar-row.deadline {
-  border-left: 4px solid #f44336;
-}
-
-.date-cell,
-.day-cell {
-  padding: 8px;
+.date-header {
+  padding: 8px 4px;
   text-align: center;
-  border-right: 1px solid #eee;
-  min-width: 80px;
+  border-right: 1px solid #ddd;
+  min-width: 60px;
+  width: 60px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1674,26 +1764,81 @@ export default {
   font-size: 14px;
 }
 
-.deadline-badge {
+.day-label {
+  font-size: 10px;
+  color: #666;
+}
+
+.holiday-badge {
   background: #f44336;
   color: white;
-  font-size: 10px;
-  padding: 2px 4px;
-  border-radius: 3px;
+  font-size: 8px;
+  padding: 1px 3px;
+  border-radius: 2px;
+  margin-top: 1px;
+}
+
+.deadline-badge {
+  background: #ff9800;
+  color: white;
+  font-size: 8px;
+  padding: 1px 3px;
+  border-radius: 2px;
+  margin-top: 1px;
+}
+
+.calendar-row {
+  display: flex;
+  border-bottom: 1px solid #eee;
+  min-height: 60px;
+  background: white;
 }
 
 .shift-cell {
-  padding: 8px;
+  padding: 8px 4px;
   text-align: center;
   border-right: 1px solid #eee;
-  min-width: 120px;
+  min-width: 60px;
+  width: 60px;
   flex-shrink: 0;
-  min-height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
   position: relative;
+  background: white;
+}
+
+.staff-cell {
+  padding: 8px;
+  text-align: left;
+  border-right: 2px solid #ddd;
+  min-width: 120px;
+  width: 120px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  background: #fafafa;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+}
+
+.shift-cell.holiday {
+  background-color: #fff5f5 !important;
+}
+
+.shift-cell.today {
+  background-color: #e3f2fd !important;
+}
+
+.shift-cell.past {
+  opacity: 0.7;
+}
+
+.shift-cell.deadline {
+  border-left: 3px solid #f44336;
 }
 
 .shift-cell:hover {
@@ -1704,36 +1849,38 @@ export default {
 
 .shift-cell.editable {
   cursor: pointer;
-  background-color: #f9f9f9;
+  background-color: #f9f9f9 !important;
 }
 
 .shift-cell.editable:hover {
-  background-color: #e8f5e8;
+  background-color: #e8f5e8 !important;
   outline: 2px solid #4caf50;
 }
 
 .shift-cell.past-editable {
-  background-color: #fff3e0;
+  background-color: #fff3e0 !important;
 }
 
 .shift-cell.past-editable:hover {
-  background-color: #ffe0b2;
+  background-color: #ffe0b2 !important;
   outline: 2px solid #ff9800;
 }
 
 .shift-time {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
   color: #333;
   background: #e8f5e8;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
   border: 1px solid #4caf50;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .no-shift {
   color: #ccc;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .gantt-chart {
@@ -1756,8 +1903,8 @@ export default {
   top: 0;
   z-index: 10;
   background: white;
-  display: flex;
   border-bottom: 2px solid #ddd;
+  display: flex;
   font-weight: bold;
   font-size: 14px;
 }
@@ -1781,9 +1928,10 @@ export default {
 
 .gantt-hour-header {
   text-align: center;
-  padding: 12px 4px;
+  padding: 8px 4px;
   border-right: 1px solid #ddd;
-  font-size: 12px;
+  font-size: 10px;
+  font-weight: bold;
 }
 
 .gantt-day-section {
@@ -1806,18 +1954,25 @@ export default {
   border-left: 4px solid #f44336;
 }
 
-.gantt-day-header {
-  display: flex;
-  align-items: center;
+.gantt-day-header-section {
+  background: #fafafa;
+  border-bottom: 1px solid #ddd;
+  padding: 8px 0;
+}
+
+.gantt-day-title {
   width: 150px;
   min-width: 150px;
-  padding: 8px;
-  background: #fafafa;
+  padding: 0 8px;
   border-right: 2px solid #ddd;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
   position: sticky;
   left: 0;
   z-index: 5;
-  gap: 5px;
+  background: #fafafa;
 }
 
 .gantt-date {
@@ -1830,7 +1985,7 @@ export default {
   color: #666;
 }
 
-.gantt-day-content {
+.gantt-staff-section {
   display: flex;
   flex-direction: column;
 }
@@ -1847,9 +2002,6 @@ export default {
   padding: 8px;
   background: white;
   border-right: 2px solid #ddd;
-  position: sticky;
-  left: 0;
-  z-index: 4;
   display: flex;
   align-items: center;
   font-size: 13px;
@@ -1879,203 +2031,245 @@ export default {
 }
 
 .gantt-hour-grid {
- border-right: 1px solid #eee;
- height: 100%;
+  border-right: 1px solid #eee;
+  height: 100%;
 }
 
 .gantt-hour-grid:hover {
- background-color: #f0f8ff;
- outline: 1px solid #2196f3;
- outline-offset: -1px;
- z-index: 1;
+  background-color: #f0f8ff;
+  outline: 1px solid #2196f3;
+  outline-offset: -1px;
+  z-index: 1;
 }
 
 .gantt-shift-bar {
- position: absolute;
- top: 2px;
- bottom: 2px;
- background: linear-gradient(135deg, #4caf50, #66bb6a);
- border-radius: 4px;
- display: flex;
- align-items: center;
- justify-content: center;
- color: white;
- font-size: 11px;
- font-weight: bold;
- border: 1px solid #4caf50;
- box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
- cursor: pointer;
- transition: all 0.2s;
- z-index: 3;
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  background: linear-gradient(135deg, #4caf50, #66bb6a);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  border: 1px solid #4caf50;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 3;
 }
 
 .gantt-shift-bar:hover {
- transform: translateY(-1px);
- box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
- outline: 2px solid #2196f3;
- outline-offset: 1px;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  outline: 2px solid #2196f3;
+  outline-offset: 1px;
 }
 
 .gantt-shift-bar.editable {
- background: linear-gradient(135deg, #66bb6a, #81c784);
- border-color: #66bb6a;
+  background: linear-gradient(135deg, #66bb6a, #81c784);
+  border-color: #66bb6a;
 }
 
 .gantt-shift-bar.past-editable {
- background: linear-gradient(135deg, #ff9800, #ffb74d);
- border-color: #ff9800;
+  background: linear-gradient(135deg, #ff9800, #ffb74d);
+  border-color: #ff9800;
 }
 
 .gantt-shift-text {
- padding: 0 4px;
- white-space: nowrap;
- overflow: hidden;
- text-overflow: ellipsis;
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 9px;
 }
 
 .shift-summary {
- border-top: 2px solid #ddd;
- background: #fafafa;
+  border-top: 2px solid #ddd;
+  background: #fafafa;
 }
 
 .summary-header {
- display: flex;
- font-weight: bold;
- font-size: 14px;
- background: #f0f0f0;
+  display: flex;
+  font-weight: bold;
+  font-size: 14px;
+  background: #f0f0f0;
+  border-bottom: 1px solid #ddd;
 }
 
-.empty-header {
- padding: 12px 8px;
- border-right: 1px solid #ddd;
- min-width: 80px;
- flex-shrink: 0;
+.summary-staff-header {
+  padding: 12px 8px;
+  border-right: 2px solid #ddd;
+  min-width: 120px;
+  width: 120px;
+  flex-shrink: 0;
+  background: #f0f0f0;
+  position: sticky;
+  left: 0;
+  z-index: 5;
 }
 
-.staff-total-header {
- padding: 12px 8px;
- text-align: center;
- border-right: 1px solid #ddd;
- min-width: 120px;
- flex-shrink: 0;
+.summary-total-header {
+  padding: 12px 8px;
+  text-align: center;
+  min-width: 100px;
 }
 
 .summary-row {
- display: flex;
+  display: flex;
+  border-bottom: 1px solid #eee;
 }
 
-.empty-cell {
- padding: 8px;
- border-right: 1px solid #eee;
- min-width: 80px;
- flex-shrink: 0;
+.summary-staff-cell {
+  padding: 8px;
+  border-right: 2px solid #ddd;
+  min-width: 120px;
+  width: 120px;
+  flex-shrink: 0;
+  font-weight: 500;
+  background: #fff;
+  position: sticky;
+  left: 0;
+  z-index: 4;
 }
 
-.staff-total-cell {
- padding: 8px;
- text-align: center;
- border-right: 1px solid #eee;
- min-width: 120px;
- flex-shrink: 0;
- font-weight: bold;
- color: #333;
- background: #fff;
+.summary-total-cell {
+  padding: 8px;
+  text-align: center;
+  font-weight: bold;
+  color: #333;
+  background: #fff;
+  min-width: 100px;
 }
 
 .shift-editor-content {
- padding: 10px 0;
+  padding: 10px 0;
 }
 
 .past-date-notice {
- margin-bottom: 15px;
+  margin-bottom: 15px;
 }
 
 .confirm-shift-content {
- padding: 10px 0;
+  padding: 10px 0;
 }
 
 .confirmation-details {
- margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 
 .detail-item {
- padding: 8px 0;
- border-bottom: 1px solid #eee;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
 }
 
 .detail-item:last-child {
- border-bottom: none;
+  border-bottom: none;
 }
 
 .warning-message {
- margin-top: 15px;
+  margin-top: 15px;
 }
 
 @media (max-width: 1200px) {
- .toolbar {
-   flex-direction: column;
-   gap: 15px;
-   align-items: stretch;
- }
+  .toolbar {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
 
- .period-selector {
-   justify-content: center;
- }
+  .period-selector {
+    justify-content: center;
+  }
 
- .view-controls {
-   justify-content: center;
- }
+  .view-controls {
+    justify-content: center;
+  }
 
- .action-buttons {
-   justify-content: center;
- }
+  .action-buttons {
+    justify-content: center;
+  }
 
- .gantt-staff-header,
- .gantt-day-header,
- .gantt-staff-name {
-   width: 120px;
-   min-width: 120px;
- }
+  .gantt-date-header,
+  .gantt-date-cell,
+  .gantt-staff-name {
+    width: 120px;
+    min-width: 120px;
+  }
+
+  .staff-header,
+  .staff-cell,
+  .summary-staff-header,
+  .summary-staff-cell {
+    width: 100px;
+    min-width: 100px;
+  }
 }
 
 @media (max-width: 768px) {
- .shift-management {
-   padding: 10px;
- }
+  .shift-management {
+    padding: 10px;
+  }
 
- .period-selector {
-   flex-direction: column;
-   gap: 10px;
- }
+  .period-selector {
+    flex-direction: column;
+    gap: 10px;
+  }
 
- .action-buttons {
-   flex-wrap: wrap;
- }
+  .action-buttons {
+    flex-wrap: wrap;
+  }
 
- .shift-status-banner {
-   flex-direction: column;
-   gap: 10px;
-   text-align: center;
- }
+  .shift-status-banner {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
 
- .status-actions {
-   width: 100%;
- }
+  .status-actions {
+    width: 100%;
+  }
 
- .gantt-chart {
-   max-height: 500px;
- }
+  .gantt-chart {
+    max-height: 500px;
+  }
 
- .gantt-staff-header,
- .gantt-day-header,
- .gantt-staff-name {
-   width: 100px;
-   min-width: 100px;
-   font-size: 12px;
- }
+  .gantt-date-header,
+  .gantt-date-cell,
+  .gantt-staff-name {
+    width: 100px;
+    min-width: 100px;
+    font-size: 12px;
+  }
 
- .gantt-shift-text {
-   font-size: 10px;
- }
+  .gantt-shift-text {
+    font-size: 8px;
+  }
+
+  .staff-header,
+  .staff-cell,
+  .summary-staff-header,
+  .summary-staff-cell {
+    width: 80px;
+    min-width: 80px;
+    font-size: 12px;
+  }
+
+  .shift-time {
+    font-size: 9px;
+    padding: 1px 2px;
+  }
+
+  .date-header {
+    min-width: 45px;
+    width: 45px;
+  }
+
+  .shift-cell {
+    min-width: 45px;
+    width: 45px;
+  }
 }
 </style>
