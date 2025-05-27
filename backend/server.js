@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -8,21 +7,22 @@ const { logUserChange } = require('./middleware/changeLogger');
 require('dotenv').config();
 
 const requiredEnvVars = [
-  'DATABASE_URL',
   'JWT_SECRET',
   'CLAUDE_API_KEY',
-  'PORT',
-  'NODE_ENV'
+  'PORT'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
-if (missingEnvVars.length > 0) process.exit(1);
+if (missingEnvVars.length > 0) {
+  console.error('Missing required environment variables:', missingEnvVars);
+  process.exit(1);
+}
 
 const { sequelize, User } = require('./models');
 const routes = require('./routes');
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors({
   exposedHeaders: ['Content-Length'],
@@ -32,14 +32,12 @@ app.use(cors({
 app.use(morgan('dev'));
 app.use(logUserChange);
 
-// リクエストのサイズ制限を増やす
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// ヘッダーサイズ制限を明示的に設定
 app.use((req, res, next) => {
   if (req.connection && typeof req.connection.setMaxHeadersCount === 'function') {
-    req.connection.setMaxHeadersCount(100); // デフォルトは40
+    req.connection.setMaxHeadersCount(100);
   }
   next();
 });
@@ -58,48 +56,40 @@ async function createInitialUsers() {
     const userCount = await User.count();
     if (userCount !== 0) return;
 
-    const adminEnvVars = [
-      'INITIAL_ADMIN_USERNAME',
-      'INITIAL_ADMIN_PASSWORD',
-      'INITIAL_ADMIN_EMAIL',
-      'INITIAL_ADMIN_ROLE'
-    ];
-    const missingAdminVars = adminEnvVars.filter(envVar => !process.env[envVar]);
-    if (missingAdminVars.length > 0) return;
-
-    const hashedPassword = await bcrypt.hash(process.env.INITIAL_ADMIN_PASSWORD, 10);
+    console.log('Creating initial admin user...');
+    const hashedPassword = await bcrypt.hash('admin123', 10);
     await User.create({
-      username: process.env.INITIAL_ADMIN_USERNAME,
+      username: 'admin',
       password: hashedPassword,
-      email: process.env.INITIAL_ADMIN_EMAIL,
-      role: process.env.INITIAL_ADMIN_ROLE
+      email: 'admin@example.com',
+      role: 'admin'
     });
+    console.log('Initial admin user created');
 
-    if (process.env.CREATE_MANAGER_USER === 'true') {
-      const managerEnvVars = [
-        'INITIAL_MANAGER_USERNAME',
-        'INITIAL_MANAGER_PASSWORD',
-        'INITIAL_MANAGER_EMAIL'
-      ];
-      const missingManagerVars = managerEnvVars.filter(envVar => !process.env[envVar]);
-      if (missingManagerVars.length > 0) return;
+    console.log('Creating test owner user...');
+    const ownerHashedPassword = await bcrypt.hash('owner123', 10);
+    await User.create({
+      username: 'owner1',
+      password: ownerHashedPassword,
+      email: 'owner1@example.com',
+      company_name: '株式会社テスト1',
+      role: 'owner'
+    });
+    console.log('Test owner user created');
 
-      const managerHashedPassword = await bcrypt.hash(process.env.INITIAL_MANAGER_PASSWORD, 10);
-      await User.create({
-        username: process.env.INITIAL_MANAGER_USERNAME,
-        password: managerHashedPassword,
-        email: process.env.INITIAL_MANAGER_EMAIL,
-        role: 'manager'
-      });
-    }
-  } catch (_) { }
+  } catch (error) {
+    console.error('Error creating initial users:', error);
+  }
 }
 
 async function startServer() {
   try {
+    console.log('Testing database connection...');
     await sequelize.authenticate();
+    console.log('Database connection successful');
 
     if (process.env.NODE_ENV === 'development') {
+      console.log('Syncing database...');
       const syncOptions = {};
       if (process.env.RESET_DB === 'true') {
         syncOptions.force = true;
@@ -107,6 +97,7 @@ async function startServer() {
         syncOptions.alter = true;
       }
       await sequelize.sync(syncOptions);
+      console.log('Database sync complete');
       await createInitialUsers();
     } else {
       await createInitialUsers();

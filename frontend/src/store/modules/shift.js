@@ -1,6 +1,5 @@
 import api from '@/services/api';
 
-// 初期状態
 const state = {
     shifts: [],
     currentShift: null,
@@ -12,7 +11,6 @@ const state = {
     generating: false
 };
 
-// ゲッター
 const getters = {
     allShifts: (state) => state.shifts,
     currentShift: (state) => state.currentShift,
@@ -24,9 +22,7 @@ const getters = {
     error: (state) => state.error
 };
 
-// アクション
 const actions = {
-    // シフト一覧の取得
     async fetchShifts({ commit }, params = {}) {
         commit('setLoading', true);
         commit('clearError');
@@ -51,7 +47,6 @@ const actions = {
         }
     },
 
-    // 特定のシフト情報の取得
     async fetchShiftById({ commit }, id) {
         commit('setLoading', true);
         commit('clearError');
@@ -69,7 +64,6 @@ const actions = {
         }
     },
 
-    // 特定の年月のシフト情報の取得
     async fetchShiftByYearMonth({ commit }, { year, month, storeId }) {
         commit('setLoading', true);
         commit('clearError');
@@ -87,7 +81,6 @@ const actions = {
             return response.data;
         } catch (error) {
             if (error.response && error.response.status === 404) {
-                // シフトが存在しない場合はnullを設定
                 commit('setCurrentShiftData', null);
                 commit('setCurrentShift', null);
                 return null;
@@ -101,7 +94,26 @@ const actions = {
         }
     },
 
-    // シフトの自動生成
+    async createShift({ commit }, shiftData) {
+        commit('setLoading', true);
+        commit('clearError');
+
+        try {
+            const response = await api.post('/shifts', shiftData);
+
+            commit('setCurrentShift', response.data);
+            commit('addShift', response.data);
+
+            return response.data;
+        } catch (error) {
+            const message = error.response?.data?.message || 'シフトの作成に失敗しました';
+            commit('setError', message);
+            throw error;
+        } finally {
+            commit('setLoading', false);
+        }
+    },
+
     async generateShift({ commit }, { storeId, year, month }) {
         commit('setGenerating', true);
         commit('clearError');
@@ -122,7 +134,6 @@ const actions = {
                 status: response.data.status
             });
 
-            // 警告を検証結果に設定
             if (response.data.summary && response.data.summary.staffingWarnings) {
                 commit('setValidationResults', {
                     isValid: response.data.summary.staffingWarnings.length === 0,
@@ -140,7 +151,6 @@ const actions = {
         }
     },
 
-    // シフトの検証
     async validateShift({ commit }, { year, month, storeId }) {
         commit('setLoading', true);
         commit('clearError');
@@ -158,7 +168,6 @@ const actions = {
         }
     },
 
-    // シフトの確定
     async confirmShift({ commit }, { year, month, storeId }) {
         commit('setLoading', true);
         commit('clearError');
@@ -166,7 +175,6 @@ const actions = {
         try {
             await api.post(`/shifts/${year}/${month}/confirm`, { store_id: storeId });
 
-            // シフトステータスを更新
             commit('updateShiftStatus', { year, month, storeId, status: 'confirmed' });
 
             return true;
@@ -179,7 +187,6 @@ const actions = {
         }
     },
 
-    // シフト割り当ての作成
     async createShiftAssignment({ commit }, { year, month, assignmentData }) {
         commit('setLoading', true);
         commit('clearError');
@@ -197,7 +204,6 @@ const actions = {
         }
     },
 
-    // シフト割り当ての更新
     async updateShiftAssignment({ commit }, { year, month, assignmentId, assignmentData }) {
         commit('setLoading', true);
         commit('clearError');
@@ -215,7 +221,6 @@ const actions = {
         }
     },
 
-    // シフト割り当ての削除
     async deleteShiftAssignment({ commit }, { year, month, assignmentId }) {
         commit('setLoading', true);
         commit('clearError');
@@ -233,7 +238,6 @@ const actions = {
         }
     },
 
-    // シフト変更履歴の取得
     async fetchShiftChangeLogs({ commit }, { year, month, storeId }) {
         commit('setLoading', true);
         commit('clearError');
@@ -252,7 +256,6 @@ const actions = {
     }
 };
 
-// ミューテーション
 const mutations = {
     setShifts(state, shifts) {
         state.shifts = shifts;
@@ -263,6 +266,19 @@ const mutations = {
     setCurrentShiftData(state, shiftData) {
         state.currentShiftData = shiftData;
     },
+    addShift(state, shift) {
+        const existingIndex = state.shifts.findIndex(s =>
+            s.store_id === shift.store_id &&
+            s.year === shift.year &&
+            s.month === shift.month
+        );
+
+        if (existingIndex !== -1) {
+            state.shifts.splice(existingIndex, 1, shift);
+        } else {
+            state.shifts.push(shift);
+        }
+    },
     setValidationResults(state, results) {
         state.validationResults = results;
     },
@@ -270,7 +286,6 @@ const mutations = {
         state.changeLogs = logs;
     },
     updateShiftStatus(state, { year, month, storeId, status }) {
-        // 現在のシフトのステータスを更新
         if (state.currentShift &&
             state.currentShift.year === parseInt(year) &&
             state.currentShift.month === parseInt(month) &&
@@ -282,7 +297,6 @@ const mutations = {
             state.currentShiftData.status = status;
         }
 
-        // シフト一覧も更新
         const index = state.shifts.findIndex(
             shift => shift.year === parseInt(year) &&
                 shift.month === parseInt(month) &&
@@ -296,32 +310,26 @@ const mutations = {
     addShiftAssignment(state, { date, assignment }) {
         if (!state.currentShiftData) return;
 
-        // 該当する日付のシフトを検索
         const dayShift = state.currentShiftData.shifts.find(shift => shift.date === date);
 
         if (dayShift) {
-            // 既存の日付に割り当てを追加
             dayShift.assignments.push(assignment);
         } else {
-            // 新しい日付のシフトを作成
             state.currentShiftData.shifts.push({
                 date,
                 assignments: [assignment]
             });
         }
 
-        // スタッフのシフト集計も更新
         const staffSummary = state.currentShiftData.summary.totalHoursByStaff.find(
             summary => summary.staff_id === assignment.staff_id
         );
 
         if (staffSummary) {
-            // 勤務時間を計算
             const startTime = new Date(`2000-01-01T${assignment.start_time}`);
             const endTime = new Date(`2000-01-01T${assignment.end_time}`);
-            let duration = (endTime - startTime) / (1000 * 60 * 60); // 時間に変換
+            let duration = (endTime - startTime) / (1000 * 60 * 60);
 
-            // 休憩時間があれば差し引く
             if (assignment.break_start_time && assignment.break_end_time) {
                 const breakStart = new Date(`2000-01-01T${assignment.break_start_time}`);
                 const breakEnd = new Date(`2000-01-01T${assignment.break_end_time}`);
@@ -331,7 +339,6 @@ const mutations = {
 
             staffSummary.total_hours += parseFloat(duration.toFixed(2));
         } else {
-            // 新しいスタッフの集計を追加
             const startTime = new Date(`2000-01-01T${assignment.start_time}`);
             const endTime = new Date(`2000-01-01T${assignment.end_time}`);
             let duration = (endTime - startTime) / (1000 * 60 * 60);
@@ -353,7 +360,6 @@ const mutations = {
     updateShiftAssignmentData(state, updatedAssignment) {
         if (!state.currentShiftData) return;
 
-        // 該当する割り当てを更新
         let found = false;
         let oldStaffId = null;
         let oldDuration = 0;
@@ -363,11 +369,9 @@ const mutations = {
             const index = dayShift.assignments.findIndex(a => a.id === updatedAssignment.id);
 
             if (index !== -1) {
-                // 古い情報を保存
                 const oldAssignment = dayShift.assignments[index];
                 oldStaffId = oldAssignment.staff_id;
 
-                // 古い勤務時間を計算
                 const oldStartTime = new Date(`2000-01-01T${oldAssignment.start_time}`);
                 const oldEndTime = new Date(`2000-01-01T${oldAssignment.end_time}`);
                 oldDuration = (oldEndTime - oldStartTime) / (1000 * 60 * 60);
@@ -379,7 +383,6 @@ const mutations = {
                     oldDuration -= oldBreakDuration;
                 }
 
-                // 新しい勤務時間を計算
                 const newStartTime = new Date(`2000-01-01T${updatedAssignment.start_time}`);
                 const newEndTime = new Date(`2000-01-01T${updatedAssignment.end_time}`);
                 newDuration = (newEndTime - newStartTime) / (1000 * 60 * 60);
@@ -391,7 +394,6 @@ const mutations = {
                     newDuration -= newBreakDuration;
                 }
 
-                // 割り当てを更新
                 dayShift.assignments.splice(index, 1, updatedAssignment);
                 found = true;
                 break;
@@ -399,9 +401,7 @@ const mutations = {
         }
 
         if (found && state.currentShiftData.summary) {
-            // スタッフのシフト集計も更新
             if (oldStaffId === updatedAssignment.staff_id) {
-                // 同じスタッフの場合は勤務時間の差分を更新
                 const staffSummary = state.currentShiftData.summary.totalHoursByStaff.find(
                     summary => summary.staff_id === updatedAssignment.staff_id
                 );
@@ -410,7 +410,6 @@ const mutations = {
                     staffSummary.total_hours = parseFloat((staffSummary.total_hours - oldDuration + newDuration).toFixed(2));
                 }
             } else {
-                // スタッフが変更された場合は両方のスタッフの集計を更新
                 const oldStaffSummary = state.currentShiftData.summary.totalHoursByStaff.find(
                     summary => summary.staff_id === oldStaffId
                 );
@@ -438,7 +437,6 @@ const mutations = {
     removeShiftAssignment(state, assignmentId) {
         if (!state.currentShiftData) return;
 
-        // 該当する割り当てを検索して削除
         let removedAssignment = null;
         let removedDate = null;
 
@@ -446,14 +444,11 @@ const mutations = {
             const index = dayShift.assignments.findIndex(a => a.id === assignmentId);
 
             if (index !== -1) {
-                // 削除前の情報を保存
                 removedAssignment = dayShift.assignments[index];
                 removedDate = dayShift.date;
 
-                // 割り当てを削除
                 dayShift.assignments.splice(index, 1);
 
-                // 割り当てがなくなった日付は削除
                 if (dayShift.assignments.length === 0) {
                     const dayIndex = state.currentShiftData.shifts.findIndex(s => s.date === dayShift.date);
                     if (dayIndex !== -1) {
@@ -466,13 +461,11 @@ const mutations = {
         }
 
         if (removedAssignment && state.currentShiftData.summary) {
-            // スタッフの集計も更新
             const staffSummary = state.currentShiftData.summary.totalHoursByStaff.find(
                 summary => summary.staff_id === removedAssignment.staff_id
             );
 
             if (staffSummary) {
-                // 削除された勤務時間を計算
                 const startTime = new Date(`2000-01-01T${removedAssignment.start_time}`);
                 const endTime = new Date(`2000-01-01T${removedAssignment.end_time}`);
                 let duration = (endTime - startTime) / (1000 * 60 * 60);
@@ -484,10 +477,8 @@ const mutations = {
                     duration -= breakDuration;
                 }
 
-                // 集計から時間を差し引く
                 staffSummary.total_hours = parseFloat((staffSummary.total_hours - duration).toFixed(2));
 
-                // 合計時間が0になったスタッフは集計から削除
                 if (staffSummary.total_hours <= 0) {
                     const summaryIndex = state.currentShiftData.summary.totalHoursByStaff.findIndex(
                         summary => summary.staff_id === removedAssignment.staff_id

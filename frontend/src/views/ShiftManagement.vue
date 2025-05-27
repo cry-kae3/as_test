@@ -353,6 +353,7 @@ import Message from "primevue/message";
 import ConfirmDialog from "primevue/confirmdialog";
 import Toast from "primevue/toast";
 import Checkbox from "primevue/checkbox";
+import api from '@/services/api';
 
 export default {
   name: "ShiftManagement",
@@ -380,6 +381,7 @@ export default {
     const shifts = ref([]);
     const daysInMonth = ref([]);
     const currentShift = ref(null);
+    const systemSettings = ref({ closing_day: 25 });
 
     const shiftEditorDialog = reactive({
       visible: false,
@@ -408,9 +410,32 @@ export default {
       return currentShift.value && currentShift.value.status === "confirmed";
     });
 
+    const fetchSystemSettings = async () => {
+      try {
+        const response = await api.get('/shifts/system-settings');
+        systemSettings.value = response.data;
+      } catch (error) {
+        console.error('システム設定取得エラー:', error);
+        systemSettings.value = { closing_day: 25 };
+      }
+    };
+
     const getDeadlineDate = () => {
-      const lastDay = new Date(currentYear.value, currentMonth.value, 0).getDate();
-      return `${currentYear.value}年${currentMonth.value}月${lastDay}日`;
+      const closingDay = systemSettings.value.closing_day || 25;
+      let deadlineYear = currentYear.value;
+      let deadlineMonth = currentMonth.value;
+      
+      if (currentMonth.value === 1) {
+        deadlineYear = currentYear.value - 1;
+        deadlineMonth = 12;
+      } else {
+        deadlineMonth = currentMonth.value - 1;
+      }
+      
+      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
+      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
+      
+      return `${deadlineYear}年${deadlineMonth}月${actualClosingDay}日`;
     };
 
     const getStatusBannerClass = () => {
@@ -419,7 +444,22 @@ export default {
       }
       
       const today = new Date();
-      const deadline = new Date(currentYear.value, currentMonth.value, 0);
+      const closingDay = systemSettings.value.closing_day || 25;
+      
+      let deadlineYear = currentYear.value;
+      let deadlineMonth = currentMonth.value;
+      
+      if (currentMonth.value === 1) {
+        deadlineYear = currentYear.value - 1;
+        deadlineMonth = 12;
+      } else {
+        deadlineMonth = currentMonth.value - 1;
+      }
+      
+      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
+      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
+      const deadline = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
+      
       const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
       
       if (daysUntilDeadline < 0) {
@@ -439,7 +479,22 @@ export default {
       }
       
       const today = new Date();
-      const deadline = new Date(currentYear.value, currentMonth.value, 0);
+      const closingDay = systemSettings.value.closing_day || 25;
+      
+      let deadlineYear = currentYear.value;
+      let deadlineMonth = currentMonth.value;
+      
+      if (currentMonth.value === 1) {
+        deadlineYear = currentYear.value - 1;
+        deadlineMonth = 12;
+      } else {
+        deadlineMonth = currentMonth.value - 1;
+      }
+      
+      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
+      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
+      const deadline = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
+      
       const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
       
       if (daysUntilDeadline < 0) {
@@ -457,7 +512,22 @@ export default {
       }
       
       const today = new Date();
-      const deadline = new Date(currentYear.value, currentMonth.value, 0);
+      const closingDay = systemSettings.value.closing_day || 25;
+      
+      let deadlineYear = currentYear.value;
+      let deadlineMonth = currentMonth.value;
+      
+      if (currentMonth.value === 1) {
+        deadlineYear = currentYear.value - 1;
+        deadlineMonth = 12;
+      } else {
+        deadlineMonth = currentMonth.value - 1;
+      }
+      
+      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
+      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
+      const deadline = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
+      
       const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
       
       if (daysUntilDeadline < 0) {
@@ -486,7 +556,22 @@ export default {
 
     const getConfirmButtonClass = () => {
       const today = new Date();
-      const deadline = new Date(currentYear.value, currentMonth.value, 0);
+      const closingDay = systemSettings.value.closing_day || 25;
+      
+      let deadlineYear = currentYear.value;
+      let deadlineMonth = currentMonth.value;
+      
+      if (currentMonth.value === 1) {
+        deadlineYear = currentYear.value - 1;
+        deadlineMonth = 12;
+      } else {
+        deadlineMonth = currentMonth.value - 1;
+      }
+      
+      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
+      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
+      const deadline = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
+      
       const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
       
       if (daysUntilDeadline <= 0) {
@@ -507,7 +592,20 @@ export default {
     };
 
     const isDeadlineDate = (date) => {
-      const deadlineDate = new Date(currentYear.value, currentMonth.value, 0);
+      const closingDay = systemSettings.value.closing_day || 25;
+      let deadlineYear = currentYear.value;
+      let deadlineMonth = currentMonth.value;
+      
+      if (currentMonth.value === 1) {
+        deadlineYear = currentYear.value - 1;
+        deadlineMonth = 12;
+      } else {
+        deadlineMonth = currentMonth.value - 1;
+      }
+      
+      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
+      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
+      const deadlineDate = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
       const checkDate = new Date(date);
       return deadlineDate.toDateString() === checkDate.toDateString();
     };
@@ -592,7 +690,11 @@ export default {
       confirmShiftDialog.processing = true;
 
       try {
-        await store.dispatch("shift/confirmShift", currentShift.value.id);
+        await store.dispatch("shift/confirmShift", {
+          year: currentYear.value,
+          month: currentMonth.value,
+          storeId: selectedStore.value.id
+        });
         await loadShiftData();
         confirmShiftDialog.visible = false;
         isEditMode.value = false;
@@ -628,22 +730,33 @@ export default {
         );
         staffList.value = staffData;
 
-        const shiftData = await store.dispatch("shift/fetchShifts", {
-          store_id: selectedStore.value.id,
-          year: currentYear.value,
-          month: currentMonth.value,
-        });
+        try {
+          const shiftData = await store.dispatch("shift/fetchShiftByYearMonth", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            storeId: selectedStore.value.id
+          });
 
-        if (shiftData && shiftData.length > 0) {
-          currentShift.value = shiftData[0];
-          const shiftDetails = await store.dispatch(
-            "shift/fetchShiftDetails",
-            currentShift.value.id
-          );
-          shifts.value = shiftDetails;
-        } else {
-          currentShift.value = null;
-          shifts.value = [];
+          if (shiftData) {
+            currentShift.value = {
+              id: shiftData.id,
+              store_id: shiftData.store_id,
+              year: shiftData.year,
+              month: shiftData.month,
+              status: shiftData.status
+            };
+            shifts.value = shiftData.shifts || [];
+          } else {
+            currentShift.value = null;
+            shifts.value = [];
+          }
+        } catch (error) {
+          if (error.response && error.response.status === 404) {
+            currentShift.value = null;
+            shifts.value = [];
+          } else {
+            throw error;
+          }
         }
 
         generateDaysInMonth();
@@ -693,26 +806,28 @@ export default {
       daysInMonth.value = days;
     };
 
-    const previousMonth = () => {
+    const previousMonth = async () => {
       if (currentMonth.value === 1) {
         currentYear.value--;
         currentMonth.value = 12;
       } else {
         currentMonth.value--;
       }
+      await loadShiftData();
     };
 
-    const nextMonth = () => {
+    const nextMonth = async () => {
       if (currentMonth.value === 12) {
         currentYear.value++;
         currentMonth.value = 1;
       } else {
         currentMonth.value++;
       }
+      await loadShiftData();
     };
 
-    const changeStore = () => {
-      
+    const changeStore = async () => {
+      await loadShiftData();
     };
 
     const createShift = async () => {
@@ -736,16 +851,14 @@ export default {
       try {
         loading.value = true;
         
-        const shiftData = {
+        await store.dispatch('shift/createShift', {
           store_id: selectedStore.value.id,
           year: currentYear.value,
           month: currentMonth.value,
           status: 'draft',
-        };
-
-        await store.dispatch('shift/createShift', shiftData);
-        await loadShiftData();
+        });
         
+        await loadShiftData();
         isEditMode.value = true;
         
         toast.add({
@@ -771,10 +884,8 @@ export default {
       try {
         loading.value = true;
         
-        await createEmptyShift();
-        
         const params = {
-          store_id: selectedStore.value.id,
+          storeId: selectedStore.value.id,
           year: currentYear.value,
           month: currentMonth.value,
         };
@@ -822,81 +933,180 @@ export default {
         toast.add({
           severity: "error",
           summary: "エラー",
-          detail: "ポップアップがブロックされています。",
+          detail: "ポップアップがブロックされました。ブラウザの設定を確認してください。",
           life: 3000,
         });
         return;
       }
 
       const printContent = generatePrintContent();
-
-      printWindow.document.open();
       printWindow.document.write(printContent);
       printWindow.document.close();
-
-      printWindow.onload = () => {
-        printWindow.print();
-      };
+      printWindow.focus();
+      printWindow.print();
     };
 
     const generatePrintContent = () => {
-      const storeName = selectedStore.value ? selectedStore.value.name : "";
-      const periodLabel = `${currentYear.value}年${currentMonth.value}月`;
-      const statusLabel = isShiftConfirmed.value ? "確定" : "下書き";
-
-      return `
+      const storeName = selectedStore.value ? selectedStore.value.name : '';
+      const period = `${currentYear.value}年${currentMonth.value}月`;
+      
+      let printHtml = `
         <!DOCTYPE html>
         <html>
         <head>
-          <title>シフト表 - ${storeName} ${periodLabel}</title>
+          <title>${storeName} - ${period} シフト表</title>
+          <meta charset="utf-8">
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
+            @media print {
+              @page { margin: 0.5cm; size: A4 landscape; }
+              body { font-family: Arial, sans-serif; font-size: 10px; }
+            }
+            body { font-family: Arial, sans-serif; font-size: 12px; }
             .print-header { text-align: center; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-            th { background-color: #f2f2f2; }
+            .print-title { font-size: 18px; font-weight: bold; }
+            .print-period { font-size: 14px; margin-top: 5px; }
+            .print-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .print-table th, .print-table td { 
+              border: 1px solid #333; 
+              padding: 3px; 
+              text-align: center; 
+              font-size: 10px; 
+            }
+            .print-table th { 
+              background-color: #f0f0f0; 
+              font-weight: bold; 
+            }
+            .date-col { width: 60px; }
+            .day-col { width: 40px; }
+            .staff-col { width: 80px; }
+            .holiday { background-color: #ffe6e6; }
+            .closed { background-color: #f0f0f0; color: #666; }
+            .shift-time { font-size: 9px; }
           </style>
         </head>
         <body>
           <div class="print-header">
-            <h1>シフト表</h1>
-            <p>店舗: ${storeName}</p>
-            <p>期間: ${periodLabel}</p>
-            <p>ステータス: ${statusLabel}</p>
+            <div class="print-title">${storeName} シフト表</div>
+            <div class="print-period">${period}</div>
           </div>
-          <p>印刷機能は実装中です</p>
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th class="date-col">日付</th>
+                <th class="day-col">曜日</th>
+      `;
+
+      staffList.value.forEach(staff => {
+        printHtml += `<th class="staff-col">${staff.last_name} ${staff.first_name}</th>`;
+      });
+
+      printHtml += `
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      daysInMonth.value.forEach(day => {
+        const rowClass = day.isHoliday ? 'holiday' : '';
+        printHtml += `<tr class="${rowClass}">`;
+        printHtml += `<td>${day.day}</td>`;
+        printHtml += `<td>${day.dayOfWeekLabel}</td>`;
+
+        staffList.value.forEach(staff => {
+          const shift = getShiftForStaff(day.date, staff.id);
+          const cellClass = day.isClosed ? 'closed' : '';
+          
+          if (day.isClosed) {
+            printHtml += `<td class="${cellClass}">休業日</td>`;
+          } else if (shift) {
+            printHtml += `<td class="${cellClass}">
+              <div class="shift-time">${formatTime(shift.start_time)}-${formatTime(shift.end_time)}</div>
+            </td>`;
+          } else {
+            printHtml += `<td class="${cellClass}">-</td>`;
+          }
+        });
+
+        printHtml += `</tr>`;
+      });
+
+      printHtml += `
+            </tbody>
+          </table>
         </body>
         </html>
       `;
+
+      return printHtml;
     };
 
     const saveShift = async () => {
-      if (!currentShift.value || !shiftEditorDialog.date || !shiftEditorDialog.staff) return;
+      if (!shiftEditorDialog.date || !shiftEditorDialog.staff) return;
+
+      if (shiftEditorDialog.isRestDay) {
+        await clearShift();
+        return;
+      }
+
+      if (!shiftEditorDialog.startTime || !shiftEditorDialog.endTime) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "開始時間と終了時間を入力してください",
+          life: 3000,
+        });
+        return;
+      }
+
+      const startTime = shiftEditorDialog.startTime;
+      const endTime = shiftEditorDialog.endTime;
+
+      if (startTime >= endTime) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "終了時間は開始時間より後にしてください",
+          life: 3000,
+        });
+        return;
+      }
 
       saving.value = true;
 
       try {
         const shiftData = {
-          shift_id: currentShift.value.id,
-          staff_id: shiftEditorDialog.staff.id,
+          store_id: selectedStore.value.id,
           date: shiftEditorDialog.date,
-          is_day_off: shiftEditorDialog.isRestDay,
+          staff_id: shiftEditorDialog.staff.id,
+          start_time: startTime,
+          end_time: endTime,
         };
 
-        if (!shiftEditorDialog.isRestDay) {
-          shiftData.start_time = shiftEditorDialog.startTime;
-          shiftData.end_time = shiftEditorDialog.endTime;
+        const existingShift = getShiftForStaff(shiftEditorDialog.date, shiftEditorDialog.staff.id);
+
+        if (existingShift) {
+          await store.dispatch("shift/updateShiftAssignment", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            assignmentId: existingShift.id,
+            ...shiftData,
+          });
+        } else {
+          await store.dispatch("shift/createShiftAssignment", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            ...shiftData,
+          });
         }
 
-        await store.dispatch("shift/saveShiftDetail", shiftData);
         await loadShiftData();
-        closeShiftEditor();
+        shiftEditorDialog.visible = false;
 
         toast.add({
           severity: "success",
           summary: "保存完了",
           detail: "シフトを保存しました",
-          life: 3000,
+          life: 2000,
         });
       } catch (error) {
         console.error("シフト保存エラー:", error);
@@ -912,26 +1122,33 @@ export default {
     };
 
     const clearShift = async () => {
-      if (!currentShift.value || !shiftEditorDialog.date || !shiftEditorDialog.staff) return;
+      if (!shiftEditorDialog.hasShift) {
+        shiftEditorDialog.visible = false;
+        return;
+      }
 
       saving.value = true;
 
       try {
-        await store.dispatch("shift/deleteShiftDetail", {
-          shift_id: currentShift.value.id,
-          staff_id: shiftEditorDialog.staff.id,
-          date: shiftEditorDialog.date,
-        });
+        const existingShift = getShiftForStaff(shiftEditorDialog.date, shiftEditorDialog.staff.id);
 
-        await loadShiftData();
-        closeShiftEditor();
+        if (existingShift) {
+          await store.dispatch("shift/deleteShiftAssignment", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            assignmentId: existingShift.id,
+          });
 
-        toast.add({
-          severity: "success",
-          summary: "削除完了",
-          detail: "シフトを削除しました",
-          life: 3000,
-        });
+          await loadShiftData();
+          shiftEditorDialog.visible = false;
+
+          toast.add({
+            severity: "success",
+            summary: "削除完了",
+            detail: "シフトを削除しました",
+            life: 2000,
+          });
+        }
       } catch (error) {
         console.error("シフト削除エラー:", error);
         toast.add({
@@ -946,88 +1163,56 @@ export default {
     };
 
     const getShiftForStaff = (date, staffId) => {
-      return shifts.value.find(
-        (shift) => shift.date === date && shift.staff_id === staffId
-      );
-    };
+      const dayShifts = shifts.value.find((s) => s.date === date);
+      if (!dayShifts) return null;
 
-    const calculateTotalHours = (staffId) => {
-      let totalMinutes = 0;
-
-      const staffShifts = shifts.value.filter(
-        (shift) => shift.staff_id === staffId && !shift.is_day_off
-      );
-
-      staffShifts.forEach((shift) => {
-        const startTime = parseTime(shift.start_time);
-        const endTime = parseTime(shift.end_time);
-
-        if (startTime && endTime) {
-          let minutes = endTime - startTime;
-
-          if (minutes < 0) {
-            minutes += 24 * 60;
-          }
-
-          totalMinutes += minutes;
-        }
-      });
-
-      return (totalMinutes / 60).toFixed(1);
-    };
-
-    const parseTime = (timeStr) => {
-      if (!timeStr) return null;
-
-      const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-      if (!match) return null;
-
-      const hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2], 10);
-
-      return hours * 60 + minutes;
+      return dayShifts.assignments.find((a) => a.staff_id === staffId);
     };
 
     const formatTime = (time) => {
       if (!time) return "";
-
-      if (typeof time === "string" && /^\d{2}:\d{2}$/.test(time)) {
-        return time;
-      }
-
-      return "";
+      return time.slice(0, 5);
     };
 
-    const fetchStores = async () => {
+    const calculateTotalHours = (staffId) => {
+      let totalHours = 0;
+
+      shifts.value.forEach((dayShift) => {
+        const assignment = dayShift.assignments.find((a) => a.staff_id === staffId);
+        if (assignment) {
+          const startTime = new Date(`2000-01-01 ${assignment.start_time}`);
+          const endTime = new Date(`2000-01-01 ${assignment.end_time}`);
+          const hours = (endTime - startTime) / (1000 * 60 * 60);
+          totalHours += hours;
+        }
+      });
+
+      return Math.round(totalHours * 10) / 10;
+    };
+
+    watch([currentYear, currentMonth], () => {
+      loadShiftData();
+    });
+
+    onMounted(async () => {
       try {
-        const storeList = await store.dispatch("store/fetchStores");
-        stores.value = storeList;
+        await fetchSystemSettings();
+        
+        const storeData = await store.dispatch("store/fetchStores");
+        stores.value = storeData;
+
+        if (storeData.length > 0) {
+          selectedStore.value = storeData[0];
+          await loadShiftData();
+        }
       } catch (error) {
-        console.error("店舗データの取得に失敗しました:", error);
+        console.error("初期化エラー:", error);
         toast.add({
           severity: "error",
           summary: "エラー",
-          detail: "店舗データの取得に失敗しました",
+          detail: "データの取得に失敗しました",
           life: 3000,
         });
-      }
-    };
-
-    onMounted(async () => {
-      await fetchStores();
-
-      const currentUser = store.getters["auth/currentUser"];
-      if (currentUser && currentUser.store_id && stores.value.length > 0) {
-        selectedStore.value =
-          stores.value.find((s) => s.id === currentUser.store_id) ||
-          stores.value[0];
-        await loadShiftData();
-      }
-    });
-
-    watch([selectedStore, currentYear, currentMonth], async () => {
-      if (selectedStore.value) {
-        await loadShiftData();
       }
     });
 
@@ -1043,15 +1228,16 @@ export default {
       shifts,
       daysInMonth,
       currentShift,
+      systemSettings,
       shiftEditorDialog,
       confirmShiftDialog,
       hasCurrentShift,
       isShiftConfirmed,
-      getDeadlineDate,
       getStatusBannerClass,
       getStatusIcon,
       getStatusText,
       getDeadlineInfo,
+      getDeadlineDate,
       canConfirm,
       getConfirmButtonClass,
       isPastDate,
@@ -1065,15 +1251,13 @@ export default {
       nextMonth,
       changeStore,
       createShift,
-      createEmptyShift,
-      generateAutomaticShift,
       regenerateShift,
       printShift,
       saveShift,
       clearShift,
       getShiftForStaff,
-      calculateTotalHours,
       formatTime,
+      calculateTotalHours,
     };
   },
 };
@@ -1081,97 +1265,106 @@ export default {
 
 <style scoped>
 .shift-management {
-  padding: 1rem;
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  color: #333;
 }
 
 .shift-status-banner {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
-  margin-bottom: 1.5rem;
+  padding: 15px 20px;
   border-radius: 8px;
-  border-left: 4px solid;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.status-normal {
-  background-color: #f0f9ff;
-  border-left-color: #0ea5e9;
-  color: #0c4a6e;
+.shift-status-banner.status-confirmed {
+  background: linear-gradient(135deg, #4caf50, #81c784);
+  color: white;
 }
 
-.status-warning {
-  background-color: #fffbeb;
-  border-left-color: #f59e0b;
-  color: #92400e;
+.shift-status-banner.status-normal {
+  background: linear-gradient(135deg, #2196f3, #64b5f6);
+  color: white;
 }
 
-.status-urgent {
-  background-color: #fef2f2;
-  border-left-color: #ef4444;
-  color: #991b1b;
+.shift-status-banner.status-warning {
+  background: linear-gradient(135deg, #ff9800, #ffb74d);
+  color: white;
 }
 
-.status-overdue {
-  background-color: #fdf2f8;
-  border-left-color: #ec4899;
-  color: #831843;
+.shift-status-banner.status-urgent {
+  background: linear-gradient(135deg, #f44336, #ef5350);
+  color: white;
 }
 
-.status-confirmed {
-  background-color: #f0fdf4;
-  border-left-color: #22c55e;
-  color: #166534;
+.shift-status-banner.status-overdue {
+  background: linear-gradient(135deg, #d32f2f, #f44336);
+  color: white;
 }
 
 .status-info {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 5px;
 }
 
 .status-main {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 1.1rem;
-  font-weight: 600;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: bold;
 }
 
 .deadline-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
+  gap: 5px;
+  font-size: 14px;
+  opacity: 0.9;
 }
 
 .status-actions {
-  display: flex;
-  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  background: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
 }
 
 .period-selector {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 15px;
 }
 
 .year-month-selector {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
 .period-label {
-  font-size: 1.25rem;
-  font-weight: 500;
-  margin: 0 0.5rem;
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
   min-width: 120px;
   text-align: center;
 }
@@ -1182,7 +1375,7 @@ export default {
 
 .action-buttons {
   display: flex;
-  gap: 0.5rem;
+  gap: 10px;
 }
 
 .loading-container {
@@ -1190,293 +1383,278 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem;
+  padding: 40px;
+  gap: 15px;
 }
 
 .loading-text {
-  margin-top: 1rem;
-  font-size: 1rem;
-  color: var(--text-color-secondary);
+  font-size: 16px;
+  color: #666;
 }
 
 .empty-message {
-  margin: 2rem 0;
+  padding: 40px;
+  text-align: center;
 }
 
 .message-content {
   display: flex;
   align-items: center;
+  justify-content: center;
+  font-size: 16px;
 }
 
 .shift-content {
-  margin-top: 1.5rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 }
 
 .shift-calendar {
-  background-color: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
+  overflow-x: auto;
 }
 
 .shift-calendar.edit-mode {
-  border-color: var(--primary-color);
+  border: 2px solid #4caf50;
 }
 
 .shift-calendar.confirmed {
-  border-color: var(--green-500);
+  border: 2px solid #2196f3;
+  opacity: 0.9;
 }
 
 .calendar-header {
   display: flex;
-  background-color: var(--surface-100);
-  border-bottom: 1px solid var(--surface-border);
-  font-weight: 600;
+  background: #f5f5f5;
+  border-bottom: 2px solid #ddd;
+  font-weight: bold;
+  font-size: 14px;
 }
 
 .date-header,
-.day-header,
-.staff-header {
-  padding: 0.75rem;
-  text-align: center;
-  border-right: 1px solid var(--surface-border);
-}
-
-.date-header {
-  width: 80px;
-}
-
 .day-header {
-  width: 60px;
+  padding: 12px 8px;
+  text-align: center;
+  border-right: 1px solid #ddd;
+  min-width: 80px;
+  flex-shrink: 0;
 }
 
 .staff-header {
-  flex: 1;
+  padding: 12px 8px;
+  text-align: center;
+  border-right: 1px solid #ddd;
   min-width: 120px;
+  flex-shrink: 0;
 }
 
 .calendar-row {
   display: flex;
-  border-bottom: 1px solid var(--surface-border);
+  border-bottom: 1px solid #eee;
 }
 
-.calendar-row.deadline {
-  background-color: #fff7ed;
-  border: 2px solid #f97316;
+.calendar-row.holiday {
+  background-color: #fff5f5;
+}
+
+.calendar-row.today {
+  background-color: #e3f2fd;
 }
 
 .calendar-row.past {
-  background-color: #f8f9fa;
   opacity: 0.7;
 }
 
-.date-cell,
-.day-cell,
-.shift-cell {
-  padding: 0.75rem;
-  text-align: center;
-  border-right: 1px solid var(--surface-border);
+.calendar-row.deadline {
+  border-left: 4px solid #f44336;
 }
 
-.date-cell {
-  width: 80px;
-  position: relative;
+.date-cell,
+.day-cell {
+  padding: 8px;
+  text-align: center;
+  border-right: 1px solid #eee;
+  min-width: 80px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .date-number {
-  display: block;
+  font-weight: bold;
+  font-size: 14px;
 }
 
 .deadline-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  background-color: #f97316;
+  background: #f44336;
   color: white;
-  font-size: 0.6rem;
-  padding: 0.1rem 0.3rem;
+  font-size: 10px;
+  padding: 2px 4px;
   border-radius: 3px;
 }
 
-.day-cell {
-  width: 60px;
+.shift-cell {
+  padding: 8px;
+  text-align: center;
+  border-right: 1px solid #eee;
+  min-width: 120px;
+  flex-shrink: 0;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
 }
 
-.shift-cell {
-  flex: 1;
-  min-width: 120px;
-  transition: background-color 0.2s;
+.shift-cell.closed-day {
+  background-color: #f5f5f5;
+  color: #999;
 }
 
 .shift-cell.editable {
   cursor: pointer;
+  background-color: #f9f9f9;
 }
 
 .shift-cell.editable:hover {
-  background-color: var(--surface-hover);
-}
-
-.shift-cell.closed-day {
-  background-color: var(--surface-50);
+  background-color: #e8f5e8;
+  border: 1px solid #4caf50;
 }
 
 .shift-time {
-  font-weight: 500;
-  color: var(--primary-color);
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+  background: #e8f5e8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #4caf50;
 }
 
 .no-shift {
-  color: var(--text-color-secondary);
+  color: #ccc;
+  font-size: 14px;
 }
 
 .closed-label {
-  color: var(--text-color-secondary);
-  font-style: italic;
-}
-
-.calendar-row.holiday {
-  background-color: rgba(255, 240, 245, 0.5);
-}
-
-.calendar-row.today {
-  background-color: rgba(240, 248, 255, 0.5);
+  color: #999;
+  font-size: 12px;
 }
 
 .shift-summary {
-  margin-top: 1.5rem;
-  background-color: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-top: 2px solid #ddd;
+  background: #fafafa;
 }
 
 .summary-header {
   display: flex;
-  background-color: var(--surface-100);
-  border-bottom: 1px solid var(--surface-border);
-  font-weight: 600;
-}
-
-.empty-header,
-.staff-total-header {
-  padding: 0.75rem;
-  text-align: center;
-  border-right: 1px solid var(--surface-border);
+  font-weight: bold;
+  font-size: 14px;
+  background: #f0f0f0;
 }
 
 .empty-header {
-  width: 80px;
+  padding: 12px 8px;
+  border-right: 1px solid #ddd;
+  min-width: 80px;
+  flex-shrink: 0;
 }
 
 .staff-total-header {
-  flex: 1;
+  padding: 12px 8px;
+  text-align: center;
+  border-right: 1px solid #ddd;
   min-width: 120px;
+  flex-shrink: 0;
 }
 
 .summary-row {
   display: flex;
 }
 
-.empty-cell,
-.staff-total-cell {
-  padding: 0.75rem;
-  text-align: center;
-  border-right: 1px solid var(--surface-border);
-}
-
 .empty-cell {
-  width: 80px;
+  padding: 8px;
+  border-right: 1px solid #eee;
+  min-width: 80px;
+  flex-shrink: 0;
 }
 
 .staff-total-cell {
-  flex: 1;
+  padding: 8px;
+  text-align: center;
+  border-right: 1px solid #eee;
   min-width: 120px;
-  font-weight: 500;
+  flex-shrink: 0;
+  font-weight: bold;
+  color: #333;
+  background: #fff;
 }
 
 .shift-editor-content {
-  padding: 0.5rem 0;
-}
-
-.closed-day-message,
-.confirmed-shift-message,
-.past-date-message {
-  margin-bottom: 1rem;
+  padding: 10px 0;
 }
 
 .confirm-shift-content {
-  padding: 0.5rem 0;
+  padding: 10px 0;
 }
 
 .confirmation-details {
-  margin-bottom: 1rem;
+  margin-bottom: 20px;
 }
 
 .detail-item {
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
 }
 
 .warning-message {
-  margin-top: 1rem;
+  margin-top: 15px;
 }
 
 @media (max-width: 1200px) {
   .toolbar {
     flex-direction: column;
-    align-items: flex-start;
+    gap: 15px;
+    align-items: stretch;
   }
 
   .period-selector {
-    margin-bottom: 1rem;
-    width: 100%;
-    justify-content: space-between;
+    justify-content: center;
   }
 
   .action-buttons {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .action-buttons .p-button {
-    flex: 1;
+    justify-content: center;
   }
 }
 
 @media (max-width: 768px) {
-  .shift-status-banner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .status-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .shift-calendar {
-    overflow-x: auto;
-  }
-
-  .calendar-header,
-  .calendar-row,
-  .summary-header,
-  .summary-row {
-    min-width: 600px;
+  .shift-management {
+    padding: 10px;
   }
 
   .period-selector {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
+    gap: 10px;
   }
 
-  .store-selector {
+  .action-buttons {
+    flex-wrap: wrap;
+  }
+
+  .shift-status-banner {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .status-actions {
     width: 100%;
   }
 }

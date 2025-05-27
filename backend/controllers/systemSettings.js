@@ -36,7 +36,7 @@ const updateSystemSettings = async (req, res) => {
             userId = req.user.parent_user_id;
         }
 
-        const { closing_day, timezone, additional_settings } = req.body;
+        const { closing_day, additional_settings } = req.body;
 
         if (closing_day && (closing_day < 1 || closing_day > 31)) {
             return res.status(400).json({ message: '締め日は1-31の範囲で指定してください' });
@@ -48,7 +48,7 @@ const updateSystemSettings = async (req, res) => {
 
         const updateData = {};
         if (closing_day !== undefined) updateData.closing_day = closing_day;
-        if (timezone !== undefined) updateData.timezone = timezone;
+        updateData.timezone = 'Asia/Tokyo';
         if (additional_settings !== undefined) updateData.additional_settings = additional_settings;
 
         if (settings) {
@@ -57,7 +57,7 @@ const updateSystemSettings = async (req, res) => {
             settings = await SystemSetting.create({
                 user_id: userId,
                 closing_day: closing_day || 25,
-                timezone: timezone || 'Asia/Tokyo',
+                timezone: 'Asia/Tokyo',
                 additional_settings: additional_settings || {}
             });
         }

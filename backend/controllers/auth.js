@@ -112,6 +112,8 @@ const login = async (req, res) => {
     try {
         const { username, password } = req.body;
 
+        console.log('ログイン試行:', { username });
+
         if (!username || !password) {
             return res.status(400).json({ message: 'ユーザー名とパスワードは必須です' });
         }
@@ -121,12 +123,14 @@ const login = async (req, res) => {
         });
 
         if (!user) {
+            console.log('ユーザーが見つかりません:', username);
             return res.status(401).json({ message: 'ユーザー名またはパスワードが正しくありません' });
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
 
         if (!isPasswordValid) {
+            console.log('パスワードが正しくありません:', username);
             return res.status(401).json({ message: 'ユーザー名またはパスワードが正しくありません' });
         }
 
@@ -143,6 +147,8 @@ const login = async (req, res) => {
 
         const userWithoutPassword = { ...user.toJSON() };
         delete userWithoutPassword.password;
+
+        console.log('ログイン成功:', { id: user.id, username: user.username });
 
         res.status(200).json({
             token,

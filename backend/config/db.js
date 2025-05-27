@@ -1,4 +1,3 @@
-// backend/config/db.js
 const { Sequelize } = require('sequelize');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
@@ -6,7 +5,6 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 let sequelize;
 
 if (process.env.DB_HOST && process.env.DB_NAME) {
-    // データベース接続情報をログに出力（デバッグ用）
     console.log('Connecting to database with settings:', {
         host: process.env.DB_HOST,
         port: process.env.DB_PORT || 5432,
