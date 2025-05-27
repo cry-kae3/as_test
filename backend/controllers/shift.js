@@ -468,7 +468,7 @@ const confirmShift = async (req, res) => {
 const createShiftAssignment = async (req, res) => {
     try {
         const { year, month } = req.params;
-        const { store_id, staff_id, date, start_time, end_time, break_start_time, break_end_time, notes } = req.body;
+        const { store_id, staff_id, date, start_time, end_time, break_start_time, break_end_time, notes, change_reason } = req.body;
 
         if (!store_id || !staff_id || !date || !start_time || !end_time) {
             return res.status(400).json({ message: '必須フィールドが不足しています' });
@@ -501,7 +501,8 @@ const createShiftAssignment = async (req, res) => {
             notes
         });
 
-        await ShiftChangeLog.create({
+        const isPastDate = new Date(date) < new Date();
+        const logData = {
             shift_assignment_id: assignment.id,
             user_id: req.user.id,
             change_type: 'create',
@@ -514,8 +515,10 @@ const createShiftAssignment = async (req, res) => {
                 break_end_time,
                 notes
             },
-            change_reason: '新規シフト作成'
-        });
+            change_reason: isPastDate && change_reason ? change_reason : '新規シフト作成'
+        };
+
+        await ShiftChangeLog.create(logData);
 
         res.status(201).json(assignment);
     } catch (error) {
@@ -527,7 +530,7 @@ const createShiftAssignment = async (req, res) => {
 const updateShiftAssignment = async (req, res) => {
     try {
         const { year, month, assignmentId } = req.params;
-        const { store_id, staff_id, date, start_time, end_time, break_start_time, break_end_time, notes } = req.body;
+        const { store_id, staff_id, date, start_time, end_time, break_start_time, break_end_time, notes, change_reason } = req.body;
 
         const assignment = await ShiftAssignment.findByPk(assignmentId, {
             include: [
@@ -570,7 +573,8 @@ const updateShiftAssignment = async (req, res) => {
             notes
         });
 
-        await ShiftChangeLog.create({
+        const isPastDate = new Date(date) < new Date();
+        const logData = {
             shift_assignment_id: assignment.id,
             user_id: req.user.id,
             change_type: 'update',
@@ -584,8 +588,10 @@ const updateShiftAssignment = async (req, res) => {
                 break_end_time,
                 notes
             },
-            change_reason: 'シフト変更'
-        });
+            change_reason: isPastDate && change_reason ? change_reason : 'シフト変更'
+        };
+
+        await ShiftChangeLog.create(logData);
 
         res.status(200).json(assignment);
     } catch (error) {
@@ -597,6 +603,7 @@ const updateShiftAssignment = async (req, res) => {
 const deleteShiftAssignment = async (req, res) => {
     try {
         const { year, month, assignmentId } = req.params;
+        const { change_reason } = req.body;
 
         const assignment = await ShiftAssignment.findByPk(assignmentId, {
             include: [
@@ -628,13 +635,16 @@ const deleteShiftAssignment = async (req, res) => {
             notes: assignment.notes
         };
 
-        await ShiftChangeLog.create({
+        const isPastDate = new Date(assignment.date) < new Date();
+        const logData = {
             shift_assignment_id: assignment.id,
             user_id: req.user.id,
             change_type: 'delete',
             previous_data: previousData,
-            change_reason: 'シフト削除'
-        });
+            change_reason: isPastDate && change_reason ? change_reason : 'シフト削除'
+        };
+
+        await ShiftChangeLog.create(logData);
 
         await assignment.destroy();
 

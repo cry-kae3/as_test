@@ -9,7 +9,7 @@ require('dotenv').config();
 const requiredEnvVars = [
   'JWT_SECRET',
   'CLAUDE_API_KEY',
-  'PORT'
+  'API_PORT'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
@@ -22,7 +22,7 @@ const { sequelize, User } = require('./models');
 const routes = require('./routes');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const API_PORT = process.env.API_PORT || 3000;
 
 app.use(cors({
   exposedHeaders: ['Content-Length'],
@@ -103,8 +103,8 @@ async function startServer() {
       await createInitialUsers();
     }
 
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+    app.listen(API_PORT, () => {
+      console.log(`Server is running on port ${API_PORT}`);
     });
   } catch (error) {
     console.error('Server startup error:', error);

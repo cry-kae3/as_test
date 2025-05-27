@@ -275,9 +275,15 @@ const createStaff = async (req, res) => {
                 max_consecutive_days
             }, { transaction: t });
 
-            if (store_ids && store_ids.length > 0) {
-                await staff.setStores(store_ids, { transaction: t });
+            let storesToAssign = [];
+
+            if (store_ids && Array.isArray(store_ids) && store_ids.length > 0) {
+                storesToAssign = store_ids.includes(store_id) ? store_ids : [...store_ids, store_id];
+            } else {
+                storesToAssign = [store_id];
             }
+
+            await staff.setStores(storesToAssign, { transaction: t });
 
             if (day_preferences && day_preferences.length > 0) {
                 await StaffDayPreference.bulkCreate(
@@ -429,8 +435,17 @@ const updateStaff = async (req, res) => {
                 max_consecutive_days: max_consecutive_days !== undefined ? max_consecutive_days : staff.max_consecutive_days
             }, { transaction: t });
 
-            if (store_ids && store_ids.length > 0) {
-                await staff.setStores(store_ids, { transaction: t });
+            if (store_ids !== undefined) {
+                let storesToAssign = [];
+
+                if (store_ids && Array.isArray(store_ids) && store_ids.length > 0) {
+                    const finalStoreId = store_id || staff.store_id;
+                    storesToAssign = store_ids.includes(finalStoreId) ? store_ids : [...store_ids, finalStoreId];
+                } else {
+                    storesToAssign = [store_id || staff.store_id];
+                }
+
+                await staff.setStores(storesToAssign, { transaction: t });
             }
 
             if (day_preferences !== undefined) {

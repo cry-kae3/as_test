@@ -42,7 +42,7 @@ Staff.hasMany(StaffDayPreference, { foreignKey: 'staff_id', as: 'dayPreferences'
 StaffDayPreference.belongsTo(Staff, { foreignKey: 'staff_id' });
 
 Staff.hasMany(StaffDayOffRequest, { foreignKey: 'staff_id', as: 'dayOffRequests' });
-StaffDayOffRequest.belongsTo(Staff, { foreignKey: 'staff_id' });
+StaffDayOffRequest.belongsTo(Staff, { foreignKey: 'staff_id', as: 'staff' });
 
 Store.hasMany(Shift, { foreignKey: 'store_id', as: 'shifts' });
 Shift.belongsTo(Store, { foreignKey: 'store_id' });

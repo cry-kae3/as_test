@@ -149,7 +149,8 @@
             @click="openShiftEditor(day, staff)"
             :class="{ 
               'closed-day': day.isClosed,
-              'editable': isEditMode && !isShiftConfirmed && !isPastDate(day.date)
+              'editable': isEditMode && !isShiftConfirmed,
+              'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
             }"
           >
             <template v-if="!day.isClosed">
@@ -222,15 +223,16 @@
             </div>
           </Message>
         </div>
-        <div v-else-if="shiftEditorDialog.isPast" class="past-date-message">
-          <Message severity="warn">
-            <div class="message-content">
-              <i class="pi pi-exclamation-triangle mr-2"></i>
-              <span>過去の日付は編集できません。</span>
-            </div>
-          </Message>
-        </div>
         <div v-else>
+          <div v-if="shiftEditorDialog.isPast" class="past-date-notice">
+            <Message severity="warn">
+              <div class="message-content">
+                <i class="pi pi-exclamation-triangle mr-2"></i>
+                <span>過去の日付を編集しています。変更は履歴に記録されます。</span>
+              </div>
+            </Message>
+          </div>
+
           <div class="field">
             <label for="shift-start-time">開始時間</label>
             <InputMask
@@ -263,12 +265,22 @@
               <label for="staff-rest-day" class="ml-2">休日として設定</label>
             </div>
           </div>
+
+          <div v-if="shiftEditorDialog.isPast" class="field">
+            <label for="change-reason">変更理由</label>
+            <Textarea
+              id="change-reason"
+              v-model="shiftEditorDialog.changeReason"
+              rows="3"
+              placeholder="過去の日付を変更する理由を入力してください（急な体調不良、シフト交代など）"
+            />
+          </div>
         </div>
       </div>
 
       <template #footer>
         <Button
-          v-if="!shiftEditorDialog.isClosed && !shiftEditorDialog.isConfirmed && !shiftEditorDialog.isPast"
+          v-if="!shiftEditorDialog.isClosed && !shiftEditorDialog.isConfirmed"
           label="クリア"
           icon="pi pi-trash"
           class="p-button-danger"
@@ -283,7 +295,7 @@
           :disabled="saving"
         />
         <Button
-          v-if="!shiftEditorDialog.isClosed && !shiftEditorDialog.isConfirmed && !shiftEditorDialog.isPast"
+          v-if="!shiftEditorDialog.isClosed && !shiftEditorDialog.isConfirmed"
           label="保存"
           icon="pi pi-check"
           class="p-button-primary"
@@ -353,6 +365,7 @@ import Message from "primevue/message";
 import ConfirmDialog from "primevue/confirmdialog";
 import Toast from "primevue/toast";
 import Checkbox from "primevue/checkbox";
+import Textarea from "primevue/textarea";
 import api from '@/services/api';
 
 export default {
@@ -364,6 +377,7 @@ export default {
     ConfirmDialog,
     Toast,
     Checkbox,
+    Textarea,
   },
   setup() {
     const store = useStore();
@@ -395,6 +409,7 @@ export default {
       isConfirmed: false,
       isPast: false,
       hasShift: false,
+      changeReason: "",
     });
 
     const confirmShiftDialog = reactive({
@@ -617,9 +632,9 @@ export default {
         severity: 'info',
         summary: isEditMode.value ? '編集モード開始' : '編集モード終了',
         detail: isEditMode.value 
-          ? 'シフトセルをクリックして編集できます' 
+          ? 'シフトセルをクリックして編集できます（過去の日付も編集可能）' 
           : '編集モードを終了しました',
-        life: 2000,
+        life: 3000,
       });
     };
 
@@ -644,16 +659,6 @@ export default {
         return;
       }
 
-      if (isPastDate(day.date)) {
-        toast.add({
-          severity: 'warn',
-          summary: '編集不可',
-          detail: '過去の日付は編集できません',
-          life: 2000,
-        });
-        return;
-      }
-
       const shift = getShiftForStaff(day.date, staff.id);
 
       shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${day.date}`;
@@ -662,6 +667,7 @@ export default {
       shiftEditorDialog.isClosed = day.isClosed;
       shiftEditorDialog.isConfirmed = isShiftConfirmed.value;
       shiftEditorDialog.isPast = isPastDate(day.date);
+      shiftEditorDialog.changeReason = "";
 
       if (shift) {
         shiftEditorDialog.startTime = shift.start_time;
@@ -1071,6 +1077,16 @@ export default {
         return;
       }
 
+      if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "過去の日付を編集する場合は変更理由を入力してください",
+          life: 3000,
+        });
+        return;
+      }
+
       saving.value = true;
 
       try {
@@ -1080,6 +1096,7 @@ export default {
           staff_id: shiftEditorDialog.staff.id,
           start_time: startTime,
           end_time: endTime,
+          change_reason: shiftEditorDialog.isPast ? shiftEditorDialog.changeReason : null,
         };
 
         const existingShift = getShiftForStaff(shiftEditorDialog.date, shiftEditorDialog.staff.id);
@@ -1102,11 +1119,15 @@ export default {
         await loadShiftData();
         shiftEditorDialog.visible = false;
 
+        const successMessage = shiftEditorDialog.isPast 
+          ? "過去のシフトを変更しました（変更履歴に記録されます）" 
+          : "シフトを保存しました";
+
         toast.add({
           severity: "success",
           summary: "保存完了",
-          detail: "シフトを保存しました",
-          life: 2000,
+          detail: successMessage,
+          life: 3000,
         });
       } catch (error) {
         console.error("シフト保存エラー:", error);
@@ -1127,6 +1148,16 @@ export default {
         return;
       }
 
+      if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "過去の日付を編集する場合は変更理由を入力してください",
+          life: 3000,
+        });
+        return;
+      }
+
       saving.value = true;
 
       try {
@@ -1137,16 +1168,21 @@ export default {
             year: currentYear.value,
             month: currentMonth.value,
             assignmentId: existingShift.id,
+            change_reason: shiftEditorDialog.isPast ? shiftEditorDialog.changeReason : null,
           });
 
           await loadShiftData();
           shiftEditorDialog.visible = false;
 
+          const successMessage = shiftEditorDialog.isPast 
+            ? "過去のシフトを削除しました（変更履歴に記録されます）" 
+            : "シフトを削除しました";
+
           toast.add({
             severity: "success",
             summary: "削除完了",
-            detail: "シフトを削除しました",
-            life: 2000,
+            detail: successMessage,
+            life: 3000,
           });
         }
       } catch (error) {
@@ -1524,6 +1560,15 @@ export default {
   border: 1px solid #4caf50;
 }
 
+.shift-cell.past-editable {
+  background-color: #fff3e0;
+}
+
+.shift-cell.past-editable:hover {
+  background-color: #ffe0b2;
+  border: 1px solid #ff9800;
+}
+
 .shift-time {
   font-size: 12px;
   font-weight: bold;
@@ -1595,6 +1640,10 @@ export default {
 
 .shift-editor-content {
   padding: 10px 0;
+}
+
+.past-date-notice {
+  margin-bottom: 15px;
 }
 
 .confirm-shift-content {
