@@ -1,4 +1,4 @@
-const { Shift, ShiftAssignment, Store, Staff, SystemSetting } = require('../models');
+const { Shift, ShiftAssignment, Store, Staff, SystemSetting, ShiftChangeLog } = require('../models');
 const { Op } = require('sequelize');
 const shiftGeneratorService = require('../services/shiftGenerator');
 
@@ -501,6 +501,22 @@ const createShiftAssignment = async (req, res) => {
             notes
         });
 
+        await ShiftChangeLog.create({
+            shift_assignment_id: assignment.id,
+            user_id: req.user.id,
+            change_type: 'create',
+            new_data: {
+                staff_id,
+                date,
+                start_time,
+                end_time,
+                break_start_time,
+                break_end_time,
+                notes
+            },
+            change_reason: '新規シフト作成'
+        });
+
         res.status(201).json(assignment);
     } catch (error) {
         console.error('シフト割り当て作成エラー:', error);
@@ -534,6 +550,16 @@ const updateShiftAssignment = async (req, res) => {
             return res.status(400).json({ message: '確定済みのシフトは編集できません' });
         }
 
+        const previousData = {
+            staff_id: assignment.staff_id,
+            date: assignment.date,
+            start_time: assignment.start_time,
+            end_time: assignment.end_time,
+            break_start_time: assignment.break_start_time,
+            break_end_time: assignment.break_end_time,
+            notes: assignment.notes
+        };
+
         await assignment.update({
             staff_id,
             date,
@@ -542,6 +568,23 @@ const updateShiftAssignment = async (req, res) => {
             break_start_time,
             break_end_time,
             notes
+        });
+
+        await ShiftChangeLog.create({
+            shift_assignment_id: assignment.id,
+            user_id: req.user.id,
+            change_type: 'update',
+            previous_data: previousData,
+            new_data: {
+                staff_id,
+                date,
+                start_time,
+                end_time,
+                break_start_time,
+                break_end_time,
+                notes
+            },
+            change_reason: 'シフト変更'
         });
 
         res.status(200).json(assignment);
@@ -575,6 +618,24 @@ const deleteShiftAssignment = async (req, res) => {
             return res.status(400).json({ message: '確定済みのシフトは編集できません' });
         }
 
+        const previousData = {
+            staff_id: assignment.staff_id,
+            date: assignment.date,
+            start_time: assignment.start_time,
+            end_time: assignment.end_time,
+            break_start_time: assignment.break_start_time,
+            break_end_time: assignment.break_end_time,
+            notes: assignment.notes
+        };
+
+        await ShiftChangeLog.create({
+            shift_assignment_id: assignment.id,
+            user_id: req.user.id,
+            change_type: 'delete',
+            previous_data: previousData,
+            change_reason: 'シフト削除'
+        });
+
         await assignment.destroy();
 
         res.status(200).json({ message: 'シフト割り当てを削除しました' });
@@ -605,7 +666,20 @@ const getShiftChangeLogs = async (req, res) => {
             return res.status(404).json({ message: 'シフトが見つかりません' });
         }
 
-        res.status(200).json([]);
+        const changeLogs = await ShiftChangeLog.findAll({
+            include: [
+                {
+                    model: ShiftAssignment,
+                    where: {
+                        shift_id: shift.id
+                    },
+                    required: false
+                }
+            ],
+            order: [['created_at', 'DESC']]
+        });
+
+        res.status(200).json(changeLogs);
     } catch (error) {
         console.error('シフト変更ログ取得エラー:', error);
         res.status(500).json({ message: 'シフト変更ログの取得中にエラーが発生しました' });

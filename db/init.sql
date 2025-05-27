@@ -251,6 +251,28 @@ INSERT INTO staff (store_id, first_name, last_name, furigana, gender, position, 
 (5, '大輔', '小林', 'コバヤシ ダイスケ', '男性', '副店長', '正社員', 150, 130, 8, 5, NOW(), NOW()),
 (5, '愛', '加藤', 'カトウ アイ', '女性', '一般スタッフ', 'パート', 95, 55, 6, 4, NOW(), NOW());
 
+INSERT INTO staff_stores (staff_id, store_id, "createdAt", "updatedAt") VALUES
+(1, 1, NOW(), NOW()),
+(1, 2, NOW(), NOW()),
+(2, 1, NOW(), NOW()),
+(2, 3, NOW(), NOW()),
+(3, 2, NOW(), NOW()),
+(3, 3, NOW(), NOW()),
+(4, 2, NOW(), NOW()),
+(4, 4, NOW(), NOW()),
+(5, 3, NOW(), NOW()),
+(5, 4, NOW(), NOW()),
+(6, 3, NOW(), NOW()),
+(6, 5, NOW(), NOW()),
+(7, 4, NOW(), NOW()),
+(7, 5, NOW(), NOW()),
+(8, 4, NOW(), NOW()),
+(8, 6, NOW(), NOW()),
+(9, 5, NOW(), NOW()),
+(9, 6, NOW(), NOW()),
+(10, 5, NOW(), NOW()),
+(10, 6, NOW(), NOW());
+
 INSERT INTO staff_day_preferences (staff_id, day_of_week, available, preferred_start_time, preferred_end_time, break_start_time, break_end_time, "createdAt", "updatedAt") VALUES
 (1, 0, false, NULL, NULL, NULL, NULL, NOW(), NOW()),
 (1, 1, true, '09:00', '18:00', '12:00', '13:00', NOW(), NOW()),
@@ -318,7 +340,7 @@ INSERT INTO staff_day_preferences (staff_id, day_of_week, available, preferred_s
 (10, 0, true, '12:00', '18:00', '15:00', '16:00', NOW(), NOW()),
 (10, 1, true, '12:00', '18:00', '15:00', '16:00', NOW(), NOW()),
 (10, 2, true, '12:00', '18:00', '15:00', '16:00', NOW(), NOW()),
-(10, 3, false, NULL, NULL, NULL, NULL, NOW(), NOW()),
+(10, 3, false, NULL, NULL, NULL, NULL, NULL, NOW(), NOW()),
 (10, 4, true, '12:00', '18:00', '15:00', '16:00', NOW(), NOW()),
 (10, 5, true, '12:00', '18:00', '15:00', '16:00', NOW(), NOW()),
 (10, 6, true, '12:00', '18:00', '15:00', '16:00', NOW(), NOW());
