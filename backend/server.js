@@ -9,7 +9,10 @@ require('dotenv').config();
 const requiredEnvVars = [
   'JWT_SECRET',
   'CLAUDE_API_KEY',
-  'API_PORT'
+  'API_PORT',
+  'INITIAL_ADMIN_USERNAME',
+  'INITIAL_ADMIN_PASSWORD',
+  'INITIAL_ADMIN_EMAIL'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
@@ -22,7 +25,7 @@ const { sequelize, User } = require('./models');
 const routes = require('./routes');
 
 const app = express();
-const API_PORT = process.env.API_PORT || 3000;
+const API_PORT = process.env.API_PORT;
 
 app.use(cors({
   exposedHeaders: ['Content-Length'],
@@ -57,25 +60,27 @@ async function createInitialUsers() {
     if (userCount !== 0) return;
 
     console.log('Creating initial admin user...');
-    const hashedPassword = await bcrypt.hash('admin123', 10);
+    const hashedPassword = await bcrypt.hash(process.env.INITIAL_ADMIN_PASSWORD, 10);
     await User.create({
-      username: 'admin',
+      username: process.env.INITIAL_ADMIN_USERNAME,
       password: hashedPassword,
-      email: 'admin@example.com',
-      role: 'admin'
+      email: process.env.INITIAL_ADMIN_EMAIL,
+      role: process.env.INITIAL_ADMIN_ROLE
     });
     console.log('Initial admin user created');
 
-    console.log('Creating test owner user...');
-    const ownerHashedPassword = await bcrypt.hash('owner123', 10);
-    await User.create({
-      username: 'owner1',
-      password: ownerHashedPassword,
-      email: 'owner1@example.com',
-      company_name: '株式会社テスト1',
-      role: 'owner'
-    });
-    console.log('Test owner user created');
+    if (process.env.CREATE_NORMAL_USER === 'true') {
+      console.log('Creating initial owner user...');
+      const ownerHashedPassword = await bcrypt.hash(process.env.INITIAL_USER_PASSWORD, 10);
+      await User.create({
+        username: process.env.INITIAL_USER_USERNAME,
+        password: ownerHashedPassword,
+        email: process.env.INITIAL_USER_EMAIL,
+        company_name: process.env.INITIAL_USER_COMPANY,
+        role: process.env.INITIAL_USER_ROLE
+      });
+      console.log('Initial owner user created');
+    }
 
   } catch (error) {
     console.error('Error creating initial users:', error);
