@@ -1,46 +1,56 @@
 <template>
   <div class="shift-management">
-    <h1 class="page-title">シフト管理</h1>
-
-    <div class="shift-status-banner" :class="getStatusBannerClass()">
-      <div class="status-info">
-        <div class="status-main">
-          <i :class="getStatusIcon()"></i>
-          <span class="status-text">{{ getStatusText() }}</span>
+    <div class="header-section">
+      <h1 class="page-title">シフト管理</h1>
+      
+      <div class="shift-status-banner" :class="getStatusBannerClass()">
+        <div class="status-info">
+          <div class="status-main">
+            <div class="status-icon-wrapper">
+              <i :class="getStatusIcon()"></i>
+            </div>
+            <div class="status-content">
+              <span class="status-text">{{ getStatusText() }}</span>
+              <span class="deadline-info" v-if="getDeadlineInfo()">
+                <i class="pi pi-clock"></i>
+                {{ getDeadlineInfo() }}
+              </span>
+            </div>
+          </div>
         </div>
-        <div class="deadline-info" v-if="getDeadlineInfo()">
-          <i class="pi pi-clock"></i>
-          <span>{{ getDeadlineInfo() }}</span>
+        <div class="status-actions" v-if="canConfirm()">
+          <Button
+            label="今すぐ確定"
+            icon="pi pi-check-circle"
+            class="confirm-button"
+            :class="getConfirmButtonClass()"
+            @click="confirmShift"
+          />
         </div>
-      </div>
-      <div class="status-actions" v-if="canConfirm()">
-        <Button
-          label="今すぐ確定"
-          icon="pi pi-check-circle"
-          class="p-button-sm"
-          :class="getConfirmButtonClass()"
-          @click="confirmShift"
-        />
       </div>
     </div>
 
-    <div class="toolbar">
-      <div class="period-selector">
-        <div class="year-month-selector">
+    <div class="control-panel">
+      <div class="period-controls">
+        <div class="month-navigator">
           <Button
             icon="pi pi-chevron-left"
-            class="p-button-rounded p-button-text"
+            class="nav-button"
             @click="previousMonth"
             :disabled="loading"
           />
-          <span class="period-label">{{ currentYear }}年 {{ currentMonth }}月</span>
+          <div class="period-display">
+            <span class="year">{{ currentYear }}</span>
+            <span class="month">{{ currentMonth }}月</span>
+          </div>
           <Button
             icon="pi pi-chevron-right"
-            class="p-button-rounded p-button-text"
+            class="nav-button"
             @click="nextMonth"
             :disabled="loading"
           />
         </div>
+        
         <Dropdown
           v-model="selectedStore"
           :options="stores"
@@ -53,21 +63,26 @@
       </div>
 
       <div class="view-controls">
-        <SelectButton
-          v-model="viewMode"
-          :options="viewModeOptions"
-          optionLabel="label"
-          optionValue="value"
-          class="view-mode-selector"
-        />
+        <div class="view-mode-tabs">
+          <button 
+            v-for="option in viewModeOptions"
+            :key="option.value"
+            class="view-tab"
+            :class="{ active: viewMode === option.value }"
+            @click="viewMode = option.value"
+          >
+            <i :class="option.value === 'calendar' ? 'pi pi-table' : 'pi pi-chart-bar'"></i>
+            {{ option.label }}
+          </button>
+        </div>
       </div>
 
-      <div class="action-buttons">
+      <div class="action-controls">
         <Button
           v-if="!hasCurrentShift"
           label="シフト作成"
           icon="pi pi-plus"
-          class="p-button-primary"
+          class="create-button"
           @click="createShift"
           :disabled="loading || !selectedStore"
         />
@@ -76,7 +91,7 @@
           <Button
             :label="isEditMode ? '編集終了' : 'シフト編集'"
             :icon="isEditMode ? 'pi pi-check' : 'pi pi-pencil'"
-            :class="isEditMode ? 'p-button-success' : 'p-button-secondary'"
+            :class="isEditMode ? 'edit-button active' : 'edit-button'"
             @click="toggleEditMode"
             :disabled="loading"
           />
@@ -84,7 +99,7 @@
           <Button
             label="AI再生成"
             icon="pi pi-refresh"
-            class="p-button-secondary"
+            class="regenerate-button"
             @click="regenerateShift"
             :disabled="loading"
           />
@@ -94,171 +109,223 @@
           v-if="hasCurrentShift"
           label="印刷"
           icon="pi pi-print"
-          class="p-button-outlined"
+          class="print-button"
           @click="printShift"
           :disabled="loading"
         />
       </div>
     </div>
 
-    <div v-if="loading" class="loading-container">
+    <div v-if="loading" class="loading-state">
       <ProgressSpinner />
-      <span class="loading-text">読み込み中...</span>
+      <span class="loading-text">データを読み込み中...</span>
     </div>
 
-    <div v-else-if="!selectedStore" class="empty-message">
-      <Message severity="info">
-        <div class="message-content">
-          <i class="pi pi-info-circle mr-2"></i>
-          <span>店舗を選択してください。</span>
-        </div>
-      </Message>
+    <div v-else-if="!selectedStore" class="empty-state">
+      <div class="empty-icon">
+        <i class="pi pi-building"></i>
+      </div>
+      <h3>店舗を選択してください</h3>
+      <p>シフトを表示するには店舗を選択する必要があります</p>
     </div>
 
-    <div v-else-if="!hasCurrentShift" class="empty-message">
-      <Message severity="info">
-        <div class="message-content">
-          <i class="pi pi-info-circle mr-2"></i>
-          <span>選択した期間のシフトはまだ作成されていません。</span>
-        </div>
-      </Message>
+    <div v-else-if="!hasCurrentShift" class="empty-state">
+      <div class="empty-icon">
+        <i class="pi pi-calendar-plus"></i>
+      </div>
+      <h3>シフトがありません</h3>
+      <p>{{ currentYear }}年{{ currentMonth }}月のシフトはまだ作成されていません</p>
+      <Button
+        label="シフトを作成"
+        icon="pi pi-plus"
+        class="create-button"
+        @click="createShift"
+      />
     </div>
 
     <div v-else class="shift-content">
-      <div v-if="viewMode === 'calendar'" class="shift-calendar" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
-        <div class="calendar-header">
-          <div class="staff-header">スタッフ</div>
-          <div v-for="day in daysInMonth" :key="day.date" class="date-header">
-            <div class="date-number">{{ day.day }}</div>
-            <div class="day-label">{{ day.dayOfWeekLabel }}</div>
-            <div v-if="day.isNationalHoliday" class="holiday-badge">祝</div>
-            <div v-if="isDeadlineDate(day.date)" class="deadline-badge">締切</div>
-          </div>
-        </div>
-
-        <div
-          v-for="staff in staffList"
-          :key="staff.id"
-          class="calendar-row"
-        >
-          <div class="staff-cell">
-            {{ staff.last_name }} {{ staff.first_name }}
-          </div>
-          <div
-            v-for="day in daysInMonth"
-            :key="`${staff.id}-${day.date}`"
-            class="shift-cell"
-            :class="{ 
-              holiday: day.isHoliday, 
-              today: day.isToday,
-              past: isPastDate(day.date),
-              deadline: isDeadlineDate(day.date),
-              'editable': isEditMode && !isShiftConfirmed,
-              'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
-            }"
-            @click="openShiftEditor(day, staff)"
-          >
-            <div
-              v-if="getShiftForStaff(day.date, staff.id)"
-              class="shift-time"
-            >
-              {{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}
-              -
-              {{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}
+      <div v-if="viewMode === 'calendar'" class="modern-calendar" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
+        <div class="calendar-container">
+          <div class="calendar-header">
+            <div class="staff-column-header">
+              <span>スタッフ</span>
             </div>
-            <div v-else class="no-shift">-</div>
+            <div class="dates-header">
+              <div 
+                v-for="day in daysInMonth" 
+                :key="day.date" 
+                class="date-cell-header"
+                :class="{
+                  'is-weekend': day.isWeekend,
+                  'is-holiday': day.isNationalHoliday,
+                  'is-today': day.isToday,
+                  'is-deadline': isDeadlineDate(day.date)
+                }"
+              >
+                <div class="date-number">{{ day.day }}</div>
+                <div class="date-weekday">{{ day.dayOfWeekLabel }}</div>
+                <div v-if="day.isNationalHoliday" class="holiday-indicator">祝</div>
+                <div v-if="isDeadlineDate(day.date)" class="deadline-indicator">締切</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="calendar-body">
+            <div
+              v-for="staff in staffList"
+              :key="staff.id"
+              class="staff-row"
+            >
+              <div class="staff-info">
+                <div class="staff-avatar">
+                  {{ staff.first_name.charAt(0) }}
+                </div>
+                <div class="staff-details">
+                  <span class="staff-name">{{ staff.last_name }} {{ staff.first_name }}</span>
+                  <span class="staff-role">{{ staff.position || '一般' }}</span>
+                </div>
+              </div>
+              
+              <div class="shift-cells">
+                <div
+                  v-for="day in daysInMonth"
+                  :key="`${staff.id}-${day.date}`"
+                  class="shift-cell"
+                  :class="{ 
+                    'is-weekend': day.isWeekend,
+                    'is-holiday': day.isNationalHoliday,
+                    'is-today': day.isToday,
+                    'is-past': isPastDate(day.date),
+                    'is-deadline': isDeadlineDate(day.date),
+                    'is-editable': isEditMode && !isShiftConfirmed,
+                    'has-shift': getShiftForStaff(day.date, staff.id),
+                    'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
+                  }"
+                  @click="openShiftEditor(day, staff)"
+                >
+                  <div
+                    v-if="getShiftForStaff(day.date, staff.id)"
+                    class="shift-time-card"
+                  >
+                    <div class="shift-start">{{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}</div>
+                    <div class="shift-separator">-</div>
+                    <div class="shift-end">{{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}</div>
+                  </div>
+                  <div v-else class="no-shift">
+                    <span v-if="isEditMode && !isShiftConfirmed">+</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div v-if="viewMode === 'gantt'" class="gantt-chart" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
+      <div v-if="viewMode === 'gantt'" class="modern-gantt" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
         <div class="gantt-header">
-          <div class="gantt-staff-header">スタッフ</div>
+          <div class="gantt-staff-header">
+            <span>スタッフ</span>
+          </div>
           <div class="gantt-timeline-header">
             <div
               v-for="hour in timelineHours"
               :key="hour"
-              class="gantt-hour-header"
+              class="gantt-hour-cell"
               :style="getTimeHeaderStyle()"
             >
-              {{ hour }}:00
+              {{ hour.toString().padStart(2, '0') }}:00
             </div>
           </div>
         </div>
 
-        <div
-          v-for="day in daysInMonth"
-          :key="day.date"
-          class="gantt-day-section"
-          :class="{ 
-            holiday: day.isHoliday, 
-            today: day.isToday,
-            past: isPastDate(day.date),
-            deadline: isDeadlineDate(day.date)
-          }"
-        >
-          <div class="gantt-day-header-section">
-            <div class="gantt-day-title">
-              <span class="gantt-date">{{ day.day }}日</span>
-              <span class="gantt-day-label">{{ day.dayOfWeekLabel }}</span>
-              <span v-if="day.isNationalHoliday" class="holiday-badge">祝</span>
-              <span v-if="isDeadlineDate(day.date)" class="deadline-badge">締切</span>
-            </div>
-          </div>
-
+        <div class="gantt-body">
           <div
-            v-for="staff in staffList"
-            :key="`gantt-${day.date}-${staff.id}`"
-            class="gantt-staff-row"
+            v-for="day in daysInMonth"
+            :key="day.date"
+            class="gantt-day-section"
+            :class="{ 
+              'is-weekend': day.isWeekend,
+              'is-holiday': day.isNationalHoliday,
+              'is-today': day.isToday,
+              'is-past': isPastDate(day.date),
+              'is-deadline': isDeadlineDate(day.date)
+            }"
           >
-            <div class="gantt-staff-name">
-              {{ staff.last_name }} {{ staff.first_name }}
-            </div>
-            <div class="gantt-timeline" @click="openGanttShiftEditor(day, staff, $event)">
-              <div class="gantt-timeline-grid">
-                <div
-                  v-for="hour in timelineHours"
-                  :key="`grid-${hour}`"
-                  class="gantt-hour-grid"
-                  :style="getTimeHeaderStyle()"
-                ></div>
+            <div class="gantt-day-header">
+              <div class="day-info">
+                <span class="day-number">{{ day.day }}日</span>
+                <span class="day-weekday">{{ day.dayOfWeekLabel }}</span>
+                <div class="day-badges">
+                  <span v-if="day.isNationalHoliday" class="holiday-badge">祝</span>
+                  <span v-if="isDeadlineDate(day.date)" class="deadline-badge">締切</span>
+                </div>
               </div>
+            </div>
+
+            <div class="gantt-staff-rows">
               <div
-                v-if="getShiftForStaff(day.date, staff.id)"
-                class="gantt-shift-bar"
-                :style="getGanttBarStyle(getShiftForStaff(day.date, staff.id))"
-                :class="{ 
-                  'editable': isEditMode && !isShiftConfirmed,
-                  'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
-                }"
-                @click.stop="openShiftEditor(day, staff)"
+                v-for="staff in staffList"
+                :key="`gantt-${day.date}-${staff.id}`"
+                class="gantt-staff-row"
               >
-                <span class="gantt-shift-text">
-                  {{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}
-                  -
-                  {{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}
-                </span>
+                <div class="gantt-staff-info">
+                  <div class="staff-avatar-small">
+                    {{ staff.first_name.charAt(0) }}
+                  </div>
+                  <span class="staff-name-small">{{ staff.last_name }} {{ staff.first_name }}</span>
+                </div>
+                
+                <div class="gantt-timeline" @click="openGanttShiftEditor(day, staff, $event)">
+                  <div class="gantt-grid">
+                    <div
+                      v-for="hour in timelineHours"
+                      :key="`grid-${hour}`"
+                      class="gantt-hour-line"
+                      :style="getTimeHeaderStyle()"
+                    ></div>
+                  </div>
+                  
+                  <div
+                    v-if="getShiftForStaff(day.date, staff.id)"
+                    class="gantt-shift-block"
+                    :style="getGanttBarStyle(getShiftForStaff(day.date, staff.id))"
+                    :class="{ 
+                      'is-editable': isEditMode && !isShiftConfirmed,
+                      'is-past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
+                    }"
+                    @click.stop="openShiftEditor(day, staff)"
+                  >
+                    <span class="shift-time-text">
+                      {{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}
+                      -
+                      {{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="shift-summary">
-        <div class="summary-header">
-          <div class="summary-staff-header">スタッフ</div>
-          <div class="summary-total-header">合計時間</div>
-        </div>
-        <div
-          v-for="staff in staffList"
-          :key="`summary-${staff.id}`"
-          class="summary-row"
-        >
-          <div class="summary-staff-cell">
-            {{ staff.last_name }} {{ staff.first_name }}
-          </div>
-          <div class="summary-total-cell">
-            {{ calculateTotalHours(staff.id) }}時間
+      <div class="shift-summary-panel">
+        <h3 class="summary-title">月間勤務時間</h3>
+        <div class="summary-grid">
+          <div
+            v-for="staff in staffList"
+            :key="`summary-${staff.id}`"
+            class="summary-card"
+          >
+            <div class="summary-staff">
+              <div class="staff-avatar-small">
+                {{ staff.first_name.charAt(0) }}
+              </div>
+              <span class="staff-name">{{ staff.last_name }} {{ staff.first_name }}</span>
+            </div>
+            <div class="summary-hours">
+              <span class="hours-number">{{ calculateTotalHours(staff.id) }}</span>
+              <span class="hours-unit">時間</span>
+            </div>
           </div>
         </div>
       </div>
@@ -268,142 +335,137 @@
       v-model:visible="shiftEditorDialog.visible"
       :header="shiftEditorDialog.title"
       :modal="true"
-      class="p-fluid"
-      :style="{ width: '450px' }"
+      class="modern-dialog"
+      :style="{ width: '500px' }"
       :closable="!saving"
     >
-      <div class="shift-editor-content">
-        <div v-if="shiftEditorDialog.isConfirmed" class="confirmed-shift-message">
-          <Message severity="warn">
-            <div class="message-content">
-              <i class="pi pi-exclamation-triangle mr-2"></i>
-              <span>シフトは確定済みです。</span>
-            </div>
-          </Message>
+      <div class="shift-editor-form">
+        <div v-if="shiftEditorDialog.isConfirmed" class="status-alert confirmed">
+          <i class="pi pi-info-circle"></i>
+          <span>シフトは確定済みです。編集はできません。</span>
         </div>
+        
         <div v-else>
-          <div v-if="shiftEditorDialog.isPast" class="past-date-notice">
-            <Message severity="warn">
-              <div class="message-content">
-                <i class="pi pi-exclamation-triangle mr-2"></i>
-                <span>過去の日付を編集しています。変更は履歴に記録されます。</span>
-              </div>
-            </Message>
+          <div v-if="shiftEditorDialog.isPast" class="status-alert warning">
+            <i class="pi pi-exclamation-triangle"></i>
+            <span>過去の日付を編集しています。変更は履歴に記録されます。</span>
           </div>
 
-          <div class="field">
-            <label for="shift-start-time">開始時間</label>
+          <div class="form-group">
+            <label class="form-label">開始時間</label>
             <InputMask
-              id="shift-start-time"
               v-model="shiftEditorDialog.startTime"
               mask="99:99"
-              placeholder="00:00"
-              slotChar="0"
+              placeholder="09:00"
+              class="form-input"
             />
           </div>
 
-          <div class="field">
-            <label for="shift-end-time">終了時間</label>
+          <div class="form-group">
+            <label class="form-label">終了時間</label>
             <InputMask
-              id="shift-end-time"
               v-model="shiftEditorDialog.endTime"
               mask="99:99"
-              placeholder="00:00"
-              slotChar="0"
+              placeholder="18:00"
+              class="form-input"
             />
           </div>
 
-          <div class="field">
-            <div class="p-field-checkbox">
-              <Checkbox
-                id="staff-rest-day"
-                v-model="shiftEditorDialog.isRestDay"
-                binary
-              />
-              <label for="staff-rest-day" class="ml-2">休日として設定</label>
-            </div>
+          <div class="form-group checkbox-group">
+            <Checkbox
+              v-model="shiftEditorDialog.isRestDay"
+              binary
+              class="form-checkbox"
+            />
+            <label class="checkbox-label">休日として設定</label>
           </div>
 
-          <div v-if="shiftEditorDialog.isPast" class="field">
-            <label for="change-reason">変更理由</label>
+          <div v-if="shiftEditorDialog.isPast" class="form-group">
+            <label class="form-label">変更理由</label>
             <Textarea
-              id="change-reason"
               v-model="shiftEditorDialog.changeReason"
               rows="3"
-              placeholder="過去の日付を変更する理由を入力してください（急な体調不良、シフト交代など）"
+              placeholder="変更理由を入力してください"
+              class="form-textarea"
             />
           </div>
         </div>
       </div>
 
       <template #footer>
-        <Button
-          v-if="!shiftEditorDialog.isConfirmed"
-          label="クリア"
-          icon="pi pi-trash"
-          class="p-button-danger"
-          @click="clearShift"
-          :disabled="saving || !shiftEditorDialog.hasShift"
-        />
-        <Button
-          label="キャンセル"
-          icon="pi pi-times"
-          class="p-button-text"
-          @click="closeShiftEditor"
-          :disabled="saving"
-        />
-        <Button
-          v-if="!shiftEditorDialog.isConfirmed"
-          label="保存"
-          icon="pi pi-check"
-          class="p-button-primary"
-          @click="saveShift"
-          :loading="saving"
-        />
+        <div class="dialog-actions">
+          <Button
+            v-if="!shiftEditorDialog.isConfirmed"
+            label="削除"
+            icon="pi pi-trash"
+            class="delete-button"
+            @click="clearShift"
+            :disabled="saving || !shiftEditorDialog.hasShift"
+          />
+          <Button
+            label="キャンセル"
+            icon="pi pi-times"
+            class="cancel-button"
+            @click="closeShiftEditor"
+            :disabled="saving"
+          />
+          <Button
+            v-if="!shiftEditorDialog.isConfirmed"
+            label="保存"
+            icon="pi pi-check"
+            class="save-button"
+            @click="saveShift"
+            :loading="saving"
+          />
+        </div>
       </template>
     </Dialog>
 
     <Dialog
       v-model:visible="confirmShiftDialog.visible"
-      header="シフト確定の確認"
+      header="シフト確定"
       :modal="true"
-      class="p-fluid"
+      class="modern-dialog"
       :style="{ width: '450px' }"
     >
-      <div class="confirm-shift-content">
-        <div class="confirmation-details">
-          <div class="detail-item">
-            <strong>対象期間:</strong> {{ currentYear }}年{{ currentMonth }}月
+      <div class="confirm-content">
+        <div class="confirm-details">
+          <div class="detail-row">
+            <span class="detail-label">対象期間</span>
+            <span class="detail-value">{{ currentYear }}年{{ currentMonth }}月</span>
           </div>
-          <div class="detail-item">
-            <strong>店舗:</strong> {{ selectedStore?.name }}
+          <div class="detail-row">
+            <span class="detail-label">店舗</span>
+            <span class="detail-value">{{ selectedStore?.name }}</span>
           </div>
-          <div class="detail-item">
-            <strong>締切日:</strong> {{ getDeadlineDate() }}
+          <div class="detail-row">
+            <span class="detail-label">締切日</span>
+            <span class="detail-value">{{ getDeadlineDate() }}</span>
           </div>
         </div>
         
-        <div class="warning-message">
-          <Message severity="warn">
-            確定後は編集できなくなります。スタッフへの通知も送信されます。
-          </Message>
+        <div class="status-alert warning">
+          <i class="pi pi-exclamation-triangle"></i>
+          <span>確定後は編集できなくなります。スタッフへの通知も送信されます。</span>
         </div>
       </div>
 
       <template #footer>
-        <Button
-          label="キャンセル"
-          icon="pi pi-times"
-          class="p-button-text"
-          @click="confirmShiftDialog.visible = false"
-        />
-        <Button
-          label="確定する"
-          icon="pi pi-check"
-          class="p-button-primary"
-          @click="executeShiftConfirmation"
-          :loading="confirmShiftDialog.processing"
-        />
+        <div class="dialog-actions">
+          <Button
+            label="キャンセル"
+            icon="pi pi-times"
+            class="cancel-button"
+            @click="confirmShiftDialog.visible = false"
+          />
+          <Button
+            label="確定する"
+            icon="pi pi-check"
+            class="confirm-button"
+            @click="executeShiftConfirmation"
+            :loading="confirmShiftDialog.processing"
+          />
+        </div>
       </template>
     </Dialog>
 
@@ -738,11 +800,11 @@ export default {
       const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
       
       if (daysUntilDeadline <= 0) {
-        return 'p-button-danger';
+        return 'urgent';
       } else if (daysUntilDeadline <= 3) {
-        return 'p-button-warning';
+        return 'warning';
       } else {
-        return 'p-button-success';
+        return 'normal';
       }
     };
 
@@ -1553,475 +1615,854 @@ export default {
 
 <style scoped>
 .shift-management {
-  padding: 20px;
-  max-width: 1400px;
-  margin: 0 auto;
+  min-height: 100vh;
+  background: #fafafa;
+  padding: 1.5rem;
+}
+
+.header-section {
+  margin-bottom: 2rem;
 }
 
 .page-title {
-  font-size: 24px;
-  font-weight: bold;
-  margin-bottom: 20px;
-  color: #333;
+  font-size: 2rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 2rem;
+  letter-spacing: -0.025em;
 }
 
 .shift-status-banner {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1.5rem;
 }
 
 .shift-status-banner.status-confirmed {
-  background: linear-gradient(135deg, #4caf50, #81c784);
-  color: white;
+  border-left: 4px solid #059669;
+  background: #f0fdf4;
 }
 
 .shift-status-banner.status-normal {
-  background: linear-gradient(135deg, #2196f3, #64b5f6);
-  color: white;
+  border-left: 4px solid #2563eb;
+  background: #eff6ff;
 }
 
 .shift-status-banner.status-warning {
-  background: linear-gradient(135deg, #ff9800, #ffb74d);
-  color: white;
+  border-left: 4px solid #d97706;
+  background: #fffbeb;
 }
 
 .shift-status-banner.status-urgent {
-  background: linear-gradient(135deg, #f44336, #ef5350);
-  color: white;
+  border-left: 4px solid #dc2626;
+  background: #fef2f2;
 }
 
 .shift-status-banner.status-overdue {
-  background: linear-gradient(135deg, #d32f2f, #f44336);
-  color: white;
-}
-
-.status-info {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  border-left: 4px solid #b91c1c;
+  background: #fef2f2;
 }
 
 .status-main {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: bold;
+  gap: 1rem;
+}
+
+.status-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  color: #6b7280;
+}
+
+.status-confirmed .status-icon-wrapper {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.status-normal .status-icon-wrapper {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.status-warning .status-icon-wrapper {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-urgent .status-icon-wrapper {
+  background: #fecaca;
+  color: #dc2626;
+}
+
+.status-overdue .status-icon-wrapper {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.status-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #111827;
+}
+
+.status-text {
+  font-size: 1rem;
+  font-weight: 500;
 }
 
 .deadline-info {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 14px;
-  opacity: 0.9;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #6b7280;
 }
 
-.status-actions {
-  flex-shrink: 0;
-}
-
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: white;
-  padding: 15px 20px;
+.confirm-button {
+  padding: 0.5rem 1rem;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  border: none;
+  transition: all 0.2s ease;
 }
 
-.period-selector {
+.confirm-button.urgent {
+  background: #dc2626;
+  color: white;
+}
+
+.confirm-button.warning {
+  background: #d97706;
+  color: white;
+}
+
+.confirm-button.normal {
+  background: #2563eb;
+  color: white;
+}
+
+.confirm-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.control-panel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 2rem;
+}
+
+.period-controls {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 1.5rem;
 }
 
-.year-month-selector {
+.month-navigator {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.75rem;
+  background: #f9fafb;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
-.period-label {
-  font-size: 18px;
-  font-weight: bold;
-  color: #333;
-  min-width: 120px;
-  text-align: center;
+.nav-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.nav-button:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: white;
+}
+
+.period-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100px;
+}
+
+.year {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.month {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
 }
 
 .store-selector {
   min-width: 200px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
 }
 
 .view-controls {
   display: flex;
-  align-items: center;
-}
-
-.view-mode-selector {
-  min-width: 200px;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  padding: 40px;
-  gap: 15px;
+}
+
+.view-mode-tabs {
+  display: flex;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 0.25rem;
+  border: 1px solid #e5e7eb;
+}
+
+.view-tab {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.view-tab:hover {
+  color: #374151;
+}
+
+.view-tab.active {
+  background: white;
+  color: #2563eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.action-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.create-button, .edit-button, .regenerate-button, .print-button {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  border: 1px solid #d1d5db;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.create-button {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.create-button:hover {
+  background: #1d4ed8;
+}
+
+.edit-button {
+  background: white;
+  color: #6b7280;
+}
+
+.edit-button:hover {
+  background: #f9fafb;
+  color: #374151;
+}
+
+.edit-button.active {
+  background: #059669;
+  color: white;
+  border-color: #059669;
+}
+
+.regenerate-button {
+  background: white;
+  color: #6b7280;
+}
+
+.regenerate-button:hover {
+  background: #f9fafb;
+  color: #374151;
+}
+
+.print-button {
+  background: white;
+  color: #6b7280;
+}
+
+.print-button:hover {
+  background: #f9fafb;
+  color: #374151;
+}
+
+.loading-state, .empty-state {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 4rem 2rem;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .loading-text {
-  font-size: 16px;
-  color: #666;
+  font-size: 1.1rem;
+  color: #64748b;
+  font-weight: 500;
 }
 
-.empty-message {
-  padding: 40px;
-  text-align: center;
-}
-
-.message-content {
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 2rem;
+  border-radius: 50%;
+  background: #f8fafc;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 2rem;
+  color: #cbd5e1;
+}
+
+.empty-state h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: #64748b;
+  font-size: 0.95rem;
+  margin-bottom: 2rem;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
 }
 
 .shift-content {
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.shift-calendar {
-  overflow-x: auto;
-  background: white;
+.modern-calendar {
+  position: relative;
 }
 
-.shift-calendar.edit-mode {
-  border: 2px solid #4caf50;
+.modern-calendar.edit-mode::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #10b981;
+  z-index: 10;
 }
 
-.shift-calendar.confirmed {
-  border: 2px solid #2196f3;
-  opacity: 0.9;
+.modern-calendar.confirmed::before {
+  background: #3b82f6;
 }
 
 .calendar-header {
   display: flex;
-  background: #f5f5f5;
-  border-bottom: 2px solid #ddd;
-  font-weight: bold;
-  font-size: 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 9;
 }
 
-.staff-header {
-  padding: 12px 8px;
-  text-align: center;
-  border-right: 2px solid #ddd;
-  min-width: 120px;
-  width: 120px;
-  flex-shrink: 0;
-  background: #f5f5f5;
-  position: sticky;
-  left: 0;
-  z-index: 11;
-}
-
-.date-header {
-  padding: 8px 4px;
-  text-align: center;
-  border-right: 1px solid #ddd;
-  min-width: 60px;
-  width: 60px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.date-number {
-  font-weight: bold;
-  font-size: 14px;
-}
-
-.day-label {
-  font-size: 10px;
-  color: #666;
-}
-
-.holiday-badge {
-  background: #f44336;
+.staff-column-header {
+  min-width: 200px;
+  width: 200px;
+  padding: 1.5rem 1rem;
+  background: #1e293b;
   color: white;
-  font-size: 8px;
-  padding: 1px 3px;
-  border-radius: 2px;
-  margin-top: 1px;
-}
-
-.deadline-badge {
-  background: #ff9800;
-  color: white;
-  font-size: 8px;
-  padding: 1px 3px;
-  border-radius: 2px;
-  margin-top: 1px;
-}
-
-.calendar-row {
-  display: flex;
-  border-bottom: 1px solid #eee;
-  min-height: 60px;
-  background: white;
-}
-
-.shift-cell {
-  padding: 8px 4px;
-  text-align: center;
-  border-right: 1px solid #eee;
-  min-width: 60px;
-  width: 60px;
-  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
-  position: relative;
-  background: white;
+  position: sticky;
+  left: 0;
+  z-index: 10;
 }
 
-.staff-cell {
-  padding: 8px;
-  text-align: left;
-  border-right: 2px solid #ddd;
-  min-width: 120px;
-  width: 120px;
-  flex-shrink: 0;
+.calendar-container {
+  overflow-x: auto;
+}
+
+.date-cell-header {
+  min-width: 80px;
+  width: 80px;
+  padding: 1rem 0.5rem;
+  text-align: center;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.date-cell-header:hover {
+  background: #f8fafc;
+}
+
+.date-cell-header.is-today {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+.date-cell-header.is-weekend {
+  background: #fef3c7;
+}
+
+.date-cell-header.is-holiday {
+  background: #fecaca;
+}
+
+.date-cell-header.is-deadline::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  background: #ef4444;
+  border-radius: 1px;
+}
+
+.date-number {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.date-weekday {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.holiday-indicator, .deadline-indicator {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  color: white;
+  font-weight: 500;
+}
+
+.holiday-indicator {
+  background: #ef4444;
+}
+
+.deadline-indicator {
+  background: #f59e0b;
+}
+
+.dates-header {
+  display: flex;
+  flex: 1;
+}
+
+.staff-row {
+  display: flex;
+  border-bottom: 1px solid #f1f5f9;
+  transition: all 0.2s ease;
+}
+
+.staff-row:hover {
+  background: #f8fafc;
+}
+
+.staff-info {
+  min-width: 200px;
+  width: 200px;
+  padding: 1.2rem 1rem;
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  font-weight: 500;
-  background: #fafafa;
+  gap: 0.75rem;
   position: sticky;
   left: 0;
   z-index: 5;
 }
 
-.shift-cell.holiday {
-  background-color: #fff5f5 !important;
+.staff-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
-.shift-cell.today {
-  background-color: #e3f2fd !important;
+.staff-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
-.shift-cell.past {
-  opacity: 0.7;
+.staff-name {
+  font-weight: 500;
+  color: #1e293b;
+  font-size: 0.85rem;
 }
 
-.shift-cell.deadline {
-  border-left: 3px solid #f44336;
+.staff-role {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 400;
 }
 
-.shift-cell:hover {
-  outline: 2px solid #2196f3;
-  outline-offset: -1px;
-  z-index: 2;
+.shift-cells {
+  display: flex;
+  flex: 1;
 }
 
-.shift-cell.editable {
+.shift-cell {
+  min-width: 80px;
+  width: 80px;
+  min-height: 70px;
+  border-right: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.2s ease;
+  cursor: default;
+}
+
+.shift-cell.is-today {
+  background: #eff6ff;
+}
+
+.shift-cell.is-weekend {
+  background: #fffbeb;
+}
+
+.shift-cell.is-holiday {
+  background: #fef2f2;
+}
+
+.shift-cell.is-past {
+  opacity: 0.6;
+}
+
+.shift-cell.is-deadline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ef4444;
+}
+
+.shift-cell.is-editable {
   cursor: pointer;
-  background-color: #f9f9f9 !important;
+  background: #f0fdf4;
 }
 
-.shift-cell.editable:hover {
-  background-color: #e8f5e8 !important;
-  outline: 2px solid #4caf50;
+.shift-cell.is-editable:hover {
+  background: #dcfce7;
+  transform: scale(1.02);
 }
 
 .shift-cell.past-editable {
-  background-color: #fff3e0 !important;
+  background: #fffbeb;
 }
 
 .shift-cell.past-editable:hover {
-  background-color: #ffe0b2 !important;
-  outline: 2px solid #ff9800;
+  background: #fef3c7;
 }
 
-.shift-time {
-  font-size: 10px;
-  font-weight: bold;
-  color: #333;
-  background: #e8f5e8;
-  padding: 2px 4px;
-  border-radius: 3px;
-  border: 1px solid #4caf50;
-  line-height: 1.2;
-  text-align: center;
+.shift-time-card {
+  background: #10b981;
+  color: white;
+  padding: 0.5rem 0.4rem;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  font-weight: 500;
+  font-size: 0.7rem;
+  min-width: 50px;
+  transition: all 0.2s ease;
+}
+
+.shift-time-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
+}
+
+.shift-start, .shift-end {
+  font-weight: 600;
+}
+
+.shift-separator {
+  font-size: 0.6rem;
+  opacity: 0.8;
 }
 
 .no-shift {
-  color: #ccc;
-  font-size: 12px;
+  color: #cbd5e1;
+  font-size: 1.2rem;
+  font-weight: 300;
+  transition: all 0.2s ease;
 }
 
-.gantt-chart {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: 800px;
+.shift-cell.is-editable .no-shift {
+  color: #10b981;
+  font-weight: 500;
 }
 
-.gantt-chart.edit-mode {
-  border: 2px solid #4caf50;
+.modern-gantt {
+  position: relative;
 }
 
-.gantt-chart.confirmed {
-  border: 2px solid #2196f3;
-  opacity: 0.9;
+.modern-gantt.edit-mode::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #4ecdc4, #44a08d);
+  z-index: 10;
+}
+
+.modern-gantt.confirmed::before {
+  background: linear-gradient(90deg, #667eea, #764ba2);
 }
 
 .gantt-header {
+  display: flex;
+  background: linear-gradient(135deg, #f8f9ff, #e8f0fe);
+  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
   position: sticky;
   top: 0;
-  z-index: 10;
-  background: white;
-  border-bottom: 2px solid #ddd;
-  display: flex;
-  font-weight: bold;
-  font-size: 14px;
+  z-index: 9;
 }
 
 .gantt-staff-header {
-  width: 150px;
-  min-width: 150px;
-  padding: 12px 8px;
-  text-align: center;
-  background: #f5f5f5;
-  border-right: 2px solid #ddd;
+  min-width: 200px;
+  width: 200px;
+  padding: 1.5rem 1rem;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: sticky;
   left: 0;
-  z-index: 11;
+  z-index: 10;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
 }
 
 .gantt-timeline-header {
   display: flex;
-  background: #f5f5f5;
+  flex: 1;
 }
 
-.gantt-hour-header {
+.gantt-hour-cell {
   text-align: center;
-  padding: 8px 4px;
-  border-right: 1px solid #ddd;
-  font-size: 10px;
-  font-weight: bold;
+  padding: 1rem 0.5rem;
+  border-right: 1px solid rgba(102, 126, 234, 0.1);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.02);
+}
+
+.gantt-body {
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .gantt-day-section {
-  border-bottom: 1px solid #eee;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
 }
 
-.gantt-day-section.holiday {
-  background-color: #fff5f5;
+.gantt-day-section.is-today {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.03), rgba(118, 75, 162, 0.03));
 }
 
-.gantt-day-section.today {
-  background-color: #e3f2fd;
+.gantt-day-section.is-weekend {
+  background: rgba(255, 152, 0, 0.02);
 }
 
-.gantt-day-section.past {
-  opacity: 0.7;
+.gantt-day-section.is-holiday {
+  background: rgba(244, 67, 54, 0.02);
 }
 
-.gantt-day-section.deadline {
-  border-left: 4px solid #f44336;
+.gantt-day-header {
+  padding: 1rem;
+  background: rgba(248, 249, 255, 0.8);
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
 }
 
-.gantt-day-header-section {
-  background: #fafafa;
-  border-bottom: 1px solid #ddd;
-  padding: 8px 0;
-}
-
-.gantt-day-title {
-  width: 150px;
-  min-width: 150px;
-  padding: 0 8px;
-  border-right: 2px solid #ddd;
+.day-info {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  position: sticky;
-  left: 0;
-  z-index: 5;
-  background: #fafafa;
+  gap: 1rem;
 }
 
-.gantt-date {
-  font-weight: bold;
-  font-size: 14px;
+.day-number {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #333;
 }
 
-.gantt-day-label {
-  font-size: 12px;
+.day-weekday {
+  font-size: 0.9rem;
   color: #666;
+  font-weight: 500;
 }
 
-.gantt-staff-section {
+.day-badges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.holiday-badge, .deadline-badge {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+}
+
+.holiday-badge {
+  background: linear-gradient(135deg, #ff4757, #ff3742);
+}
+
+.deadline-badge {
+  background: linear-gradient(135deg, #ff9f43, #feca57);
+}
+
+.gantt-staff-rows {
   display: flex;
   flex-direction: column;
 }
 
 .gantt-staff-row {
   display: flex;
-  border-bottom: 1px solid #f0f0f0;
-  min-height: 40px;
+  min-height: 60px;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.05);
+  transition: all 0.3s ease;
 }
 
-.gantt-staff-name {
-  width: 150px;
-  min-width: 150px;
-  padding: 8px;
-  background: white;
-  border-right: 2px solid #ddd;
+.gantt-staff-row:hover {
+  background: rgba(102, 126, 234, 0.02);
+}
+
+.gantt-staff-info {
+  min-width: 200px;
+  width: 200px;
+  padding: 1rem;
+  background: rgba(248, 249, 255, 0.6);
+  border-right: 1px solid rgba(102, 126, 234, 0.1);
   display: flex;
   align-items: center;
-  font-size: 13px;
+  gap: 0.75rem;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.03);
+}
+
+.staff-avatar-small {
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.staff-name-small {
   font-weight: 500;
+  color: #333;
+  font-size: 0.85rem;
 }
 
 .gantt-timeline {
   position: relative;
   flex: 1;
-  min-height: 40px;
   cursor: pointer;
+  transition: all 0.3s ease;
 }
 
 .gantt-timeline:hover {
-  outline: 2px solid #2196f3;
-  outline-offset: -1px;
-  z-index: 2;
+  background: rgba(76, 220, 196, 0.05);
 }
 
-.gantt-timeline-grid {
+.gantt-grid {
   position: absolute;
   top: 0;
   left: 0;
@@ -2030,246 +2471,336 @@ export default {
   display: flex;
 }
 
-.gantt-hour-grid {
-  border-right: 1px solid #eee;
+.gantt-hour-line {
+  border-right: 1px solid rgba(102, 126, 234, 0.05);
   height: 100%;
+  transition: all 0.3s ease;
 }
 
-.gantt-hour-grid:hover {
-  background-color: #f0f8ff;
-  outline: 1px solid #2196f3;
-  outline-offset: -1px;
-  z-index: 1;
+.gantt-hour-line:hover {
+  background: rgba(102, 126, 234, 0.05);
 }
 
-.gantt-shift-bar {
+.gantt-shift-block {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
-  background: linear-gradient(135deg, #4caf50, #66bb6a);
-  border-radius: 4px;
+  top: 8px;
+  bottom: 8px;
+  background: linear-gradient(135deg, #4ecdc4, #44a08d);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 10px;
-  font-weight: bold;
-  border: 1px solid #4caf50;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(76, 220, 196, 0.3);
+  transition: all 0.3s ease;
   cursor: pointer;
-  transition: all 0.2s;
   z-index: 3;
 }
 
-.gantt-shift-bar:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  outline: 2px solid #2196f3;
-  outline-offset: 1px;
+.gantt-shift-block:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(76, 220, 196, 0.4);
 }
 
-.gantt-shift-bar.editable {
+.gantt-shift-block.is-editable {
   background: linear-gradient(135deg, #66bb6a, #81c784);
-  border-color: #66bb6a;
 }
 
-.gantt-shift-bar.past-editable {
+.gantt-shift-block.is-past-editable {
   background: linear-gradient(135deg, #ff9800, #ffb74d);
-  border-color: #ff9800;
 }
 
-.gantt-shift-text {
-  padding: 0 4px;
+.shift-time-text {
+  font-size: 0.8rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 9px;
+  padding: 0 0.5rem;
 }
 
-.shift-summary {
-  border-top: 2px solid #ddd;
+.calendar-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.shift-summary-panel {
+  padding: 1.5rem;
   background: #fafafa;
+  border-top: 1px solid #e5e7eb;
 }
 
-.summary-header {
+.summary-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 1rem;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.summary-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1rem;
   display: flex;
-  font-weight: bold;
-  font-size: 14px;
-  background: #f0f0f0;
-  border-bottom: 1px solid #ddd;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
 }
 
-.summary-staff-header {
-  padding: 12px 8px;
-  border-right: 2px solid #ddd;
-  min-width: 120px;
-  width: 120px;
-  flex-shrink: 0;
-  background: #f0f0f0;
-  position: sticky;
-  left: 0;
-  z-index: 5;
+.summary-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.summary-total-header {
-  padding: 12px 8px;
+.summary-staff {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.summary-hours {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  min-width: 100px;
 }
 
-.summary-row {
+.hours-number {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.hours-unit {
+  font-size: 0.7rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.staff-avatar-small {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #2563eb;
+  color: white;
   display: flex;
-  border-bottom: 1px solid #eee;
-}
-
-.summary-staff-cell {
-  padding: 8px;
-  border-right: 2px solid #ddd;
-  min-width: 120px;
-  width: 120px;
-  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
   font-weight: 500;
-  background: #fff;
-  position: sticky;
-  left: 0;
-  z-index: 4;
+  font-size: 0.7rem;
 }
 
-.summary-total-cell {
-  padding: 8px;
-  text-align: center;
-  font-weight: bold;
+.staff-name-small {
+  font-weight: 500;
+  color: #111827;
+  font-size: 0.75rem;
+}
+
+.modern-dialog .p-dialog-content {
+  border-radius: 20px;
+}
+
+.shift-editor-form {
+  padding: 1rem 0;
+}
+
+.status-alert {
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+}
+
+.status-alert.confirmed {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.1), rgba(100, 181, 246, 0.1));
+  color: #1976d2;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+}
+
+.status-alert.warning {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.1), rgba(255, 183, 77, 0.1));
+  color: #f57c00;
+  border: 1px solid rgba(255, 152, 0, 0.2);
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
   color: #333;
-  background: #fff;
-  min-width: 100px;
+  font-size: 0.9rem;
 }
 
-.shift-editor-content {
-  padding: 10px 0;
+.form-input, .form-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: rgba(248, 249, 255, 0.5);
 }
 
-.past-date-notice {
-  margin-bottom: 15px;
+.form-input:focus, .form-textarea:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  background: white;
 }
 
-.confirm-shift-content {
-  padding: 10px 0;
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.confirmation-details {
-  margin-bottom: 20px;
+.form-checkbox {
+  width: 20px;
+  height: 20px;
 }
 
-.detail-item {
-  padding: 8px 0;
-  border-bottom: 1px solid #eee;
+.checkbox-label {
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
 }
 
-.detail-item:last-child {
+.dialog-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  padding-top: 1rem;
+}
+
+.delete-button, .cancel-button, .save-button, .confirm-button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  border: none;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.delete-button {
+  background: linear-gradient(135deg, #ff4757, #ff3742);
+  color: white;
+}
+
+.cancel-button {
+  background: #f8f9fa;
+  color: #666;
+  border: 2px solid #e9ecef;
+}
+
+.save-button, .confirm-button {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+}
+
+.delete-button:hover, .cancel-button:hover, .save-button:hover, .confirm-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.confirm-content {
+  padding: 1rem 0;
+}
+
+.confirm-details {
+  margin-bottom: 1.5rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.detail-row:last-child {
   border-bottom: none;
 }
 
-.warning-message {
-  margin-top: 15px;
+.detail-label {
+  font-weight: 600;
+  color: #666;
 }
 
-@media (max-width: 1200px) {
-  .toolbar {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
+.detail-value {
+  font-weight: 500;
+  color: #333;
+}
+
+@media (max-width: 1024px) {
+  .control-panel {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    text-align: center;
   }
 
-  .period-selector {
+  .action-controls {
     justify-content: center;
+    flex-wrap: wrap;
   }
 
-  .view-controls {
-    justify-content: center;
-  }
-
-  .action-buttons {
-    justify-content: center;
-  }
-
-  .gantt-date-header,
-  .gantt-date-cell,
-  .gantt-staff-name {
-    width: 120px;
-    min-width: 120px;
-  }
-
-  .staff-header,
-  .staff-cell,
-  .summary-staff-header,
-  .summary-staff-cell {
-    width: 100px;
-    min-width: 100px;
+  .summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 768px) {
   .shift-management {
-    padding: 10px;
+    padding: 1rem;
   }
 
-  .period-selector {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .action-buttons {
-    flex-wrap: wrap;
+  .page-title {
+    font-size: 1.5rem;
   }
 
   .shift-status-banner {
     flex-direction: column;
-    gap: 10px;
+    gap: 1rem;
     text-align: center;
   }
 
-  .status-actions {
-    width: 100%;
+  .staff-column-header, .staff-info {
+    min-width: 120px;
+    width: 120px;
   }
 
-  .gantt-chart {
-    max-height: 500px;
+  .date-cell-header, .shift-cell {
+    min-width: 48px;
+    width: 48px;
   }
 
-  .gantt-date-header,
-  .gantt-date-cell,
-  .gantt-staff-name {
-    width: 100px;
-    min-width: 100px;
-    font-size: 12px;
+  .staff-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.7rem;
   }
 
-  .gantt-shift-text {
-    font-size: 8px;
+  .staff-name {
+    font-size: 0.75rem;
   }
 
-  .staff-header,
-  .staff-cell,
-  .summary-staff-header,
-  .summary-staff-cell {
-    width: 80px;
-    min-width: 80px;
-    font-size: 12px;
-  }
-
-  .shift-time {
-    font-size: 9px;
-    padding: 1px 2px;
-  }
-
-  .date-header {
-    min-width: 45px;
-    width: 45px;
-  }
-
-  .shift-cell {
-    min-width: 45px;
-    width: 45px;
+  .shift-time-card {
+    padding: 0.3rem 0.2rem;
+    font-size: 0.6rem;
+    min-width: 36px;
   }
 }
 </style>
