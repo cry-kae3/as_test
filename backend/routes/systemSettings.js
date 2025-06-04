@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const systemSettingsController = require('../controllers/systemSettings');
-const { authenticateJWT, isOwnerOrAdmin } = require('../middleware/auth');
+const { authenticateSession, isOwnerOrAdmin } = require('../middleware/auth');
 
-router.use(authenticateJWT);
+router.use(authenticateSession);
 router.use(isOwnerOrAdmin);
 
 router.get('/', systemSettingsController.getSystemSettings);

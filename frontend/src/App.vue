@@ -1,7 +1,6 @@
 <template>
   <div class="app-container">
     <Toast />
-    <ConfirmDialog />
 
     <div v-if="isAuthenticated" class="layout-wrapper">
       <div class="layout-sidebar" :class="{ active: menuActive }" style="display: block !important; visibility: visible !important;">
@@ -90,7 +89,7 @@
 </template>
 
 <script>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch, nextTick } from "vue";
 import { useStore } from "vuex";
 import { useRouter } from "vue-router";
 import axios from 'axios';
@@ -133,14 +132,6 @@ export default {
         user = { ...user, role: 'owner' };
       }
         
-      console.log('effectiveUser計算:', {
-        isImpersonating: isImpersonating.value,
-        impersonatedUser: impersonatedUser.value,
-        currentUser: currentUser.value,
-        result: user,
-        resultRole: user?.role
-      });
-      
       return user;
     });
 
@@ -190,40 +181,25 @@ export default {
     ]);
 
     const filteredMenuItems = computed(() => {
-      console.log('filteredMenuItems計算中', {
-        isAuthenticated: isAuthenticated.value,
-        effectiveUser: effectiveUser.value,
-        effectiveUserRole: effectiveUser.value?.role,
-        isImpersonating: isImpersonating.value,
-        impersonatedUser: impersonatedUser.value,
-        currentUser: currentUser.value
-      });
-      
       if (!isAuthenticated.value) {
-        console.log('認証されていません');
         return [];
       }
       
       if (!effectiveUser.value) {
-        console.log('effectiveUserがnull');
         return [];
       }
       
       const userRole = effectiveUser.value.role;
-      console.log('userRole:', userRole, typeof userRole);
       
       if (!userRole) {
-        console.log('userRoleがない');
         return [];
       }
       
       const filtered = menuItems.value.filter(item => {
         const hasAccess = item.roles.includes(userRole);
-        console.log(`メニュー${item.label}: roles=${item.roles}, userRole=${userRole}, hasAccess=${hasAccess}`);
         return hasAccess;
       });
       
-      console.log('フィルター済みメニュー:', filtered);
       return filtered;
     });
 
@@ -258,22 +234,15 @@ export default {
     const switchUser = () => {
       if (!selectedUser.value || !currentUser.value) return;
 
-      console.log('ユーザー切替:', selectedUser.value);
       store.dispatch("auth/startImpersonating", selectedUser.value);
       
       setTimeout(() => {
-        console.log('切り替え後の状態:', {
-          isImpersonating: isImpersonating.value,
-          impersonatedUser: impersonatedUser.value,
-          effectiveUser: effectiveUser.value
-        });
       }, 100);
       
       router.push("/");
     };
 
     const stopImpersonating = () => {
-      console.log('なりすまし停止');
       store.dispatch("auth/stopImpersonating");
       selectedUser.value = null;
     };
@@ -299,31 +268,35 @@ export default {
     );
 
     watch(
-      [isImpersonating, impersonatedUser, currentUser, effectiveUser],
-      (newValues, oldValues) => {
-        console.log('Watchが発火:', {
-          newValues: {
-            isImpersonating: newValues[0],
-            impersonatedUser: newValues[1],
-            currentUser: newValues[2],
-            effectiveUser: newValues[3]
-          },
-          oldValues: {
-            isImpersonating: oldValues[0],
-            impersonatedUser: oldValues[1],
-            currentUser: oldValues[2],
-            effectiveUser: oldValues[3]
+      () => store.getters["auth/isAuthenticated"],
+      async (newAuth, oldAuth) => {
+        if (newAuth && !oldAuth) {
+          await store.dispatch("auth/getCurrentUser");
+          await nextTick();
+          
+          if (isAdmin.value && !isImpersonating.value) {
+            await fetchUsers();
           }
-        });
-        console.log('filteredMenuItems長さ:', filteredMenuItems.value.length);
+        }
+      }
+    );
+
+    watch(
+      [isAdmin, isImpersonating],
+      async ([newIsAdmin, newIsImpersonating], [oldIsAdmin, oldIsImpersonating]) => {
+        if (newIsAdmin && !newIsImpersonating && 
+            (!oldIsAdmin || oldIsImpersonating)) {
+          await fetchUsers();
+        }
       },
-      { deep: true, immediate: true }
+      { immediate: false }
     );
     
     onMounted(async () => {
       try {
         if (isAuthenticated.value) {
           await store.dispatch("auth/getCurrentUser");
+          await nextTick();
           
           if (isAdmin.value && !isImpersonating.value) {
             await fetchUsers();

@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const shiftController = require('../controllers/shift');
-const { authenticateJWT, isAdmin, isManager } = require('../middleware/auth');
+const { authenticateSession, isAdmin, isManager } = require('../middleware/auth');
 
-router.use(authenticateJWT);
+router.use(authenticateSession);
 router.use(isManager);
 
 router.get('/', shiftController.getAllShifts);

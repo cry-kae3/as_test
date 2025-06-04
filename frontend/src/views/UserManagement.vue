@@ -201,9 +201,20 @@
           optionLabel="username"
           optionValue="id"
           placeholder="オーナーユーザーを選択"
-          :class="{ 'p-invalid': submitted && userDialog.user.role === 'staff' && !userDialog.user.parent_user_id }"
+          :class="{
+            'p-invalid':
+              submitted &&
+              userDialog.user.role === 'staff' &&
+              !userDialog.user.parent_user_id,
+          }"
         />
-        <small v-if="submitted && userDialog.user.role === 'staff' && !userDialog.user.parent_user_id" class="p-error"
+        <small
+          v-if="
+            submitted &&
+            userDialog.user.role === 'staff' &&
+            !userDialog.user.parent_user_id
+          "
+          class="p-error"
           >スタッフの場合、親ユーザー（オーナー）の指定は必須です</small
         >
       </div>
@@ -282,8 +293,10 @@ export default {
       try {
         const response = await store.dispatch("auth/fetchUsers");
         users.value = response;
-        
-        ownerUsers.value = response.filter(user => user.role === 'owner' && user.is_active);
+
+        ownerUsers.value = response.filter(
+          (user) => user.role === "owner" && user.is_active
+        );
       } catch (error) {
         console.error("ユーザー一覧取得エラー:", error);
         toast.add({
@@ -317,8 +330,8 @@ export default {
         user.role = "owner";
       }
 
-      userDialog.user = { 
-        ...user, 
+      userDialog.user = {
+        ...user,
         password: "",
         company_name: user.company_name || "",
         parent_user_id: user.parent_user_id || null,
@@ -335,7 +348,7 @@ export default {
     };
 
     const onRoleChange = () => {
-      if (userDialog.user.role !== 'staff') {
+      if (userDialog.user.role !== "staff") {
         userDialog.user.parent_user_id = null;
       }
     };
@@ -368,7 +381,7 @@ export default {
         errors.push("役割は必須です");
       }
 
-      if (userDialog.user.role === 'staff' && !userDialog.user.parent_user_id) {
+      if (userDialog.user.role === "staff" && !userDialog.user.parent_user_id) {
         errors.push("スタッフの場合、親ユーザー（オーナー）の指定は必須です");
       }
 
@@ -439,49 +452,16 @@ export default {
       }
     };
 
-    const confirmStopUser = (user) => {
-      confirm.require({
-        message: `${user.username} を停止してもよろしいですか？停止されたユーザーは即座にログアウトされ、ログインできなくなります。`,
-        header: "ユーザー停止の確認",
-        icon: "pi pi-exclamation-triangle",
-        acceptClass: "p-button-warning",
-        accept: () => stopUser(user),
-      });
-    };
-
-    const stopUser = async (user) => {
-      try {
-        await store.dispatch("auth/updateUser", {
-          ...user,
-          is_active: false
-        });
-
-        await fetchUsers();
-
-        toast.add({
-          severity: "success",
-          summary: "停止完了",
-          detail: `${user.username} を停止しました`,
-          life: 3000,
-        });
-      } catch (error) {
-        console.error("ユーザー停止エラー:", error);
-        toast.add({
-          severity: "error",
-          summary: "エラー",
-          detail: "ユーザーの停止に失敗しました",
-          life: 3000,
-        });
-      }
-    };
-
     const confirmActivateUser = (user) => {
       confirm.require({
         message: `${user.username} を有効化してもよろしいですか？`,
         header: "ユーザー有効化の確認",
         icon: "pi pi-question-circle",
         acceptClass: "p-button-success",
-        accept: () => activateUser(user),
+        accept: async () => {
+          await activateUser(user);
+        },
+        reject: () => {},
       });
     };
 
@@ -489,7 +469,7 @@ export default {
       try {
         await store.dispatch("auth/updateUser", {
           ...user,
-          is_active: true
+          is_active: true,
         });
 
         await fetchUsers();
@@ -511,13 +491,55 @@ export default {
       }
     };
 
+    const confirmStopUser = (user) => {
+      confirm.require({
+        message: `${user.username} を停止してもよろしいですか？停止されたユーザーは即座にログアウトされ、ログインできなくなります。`,
+        header: "ユーザー停止の確認",
+        icon: "pi pi-exclamation-triangle",
+        acceptClass: "p-button-warning",
+        accept: async () => {
+          await stopUser(user);
+        },
+        reject: () => {},
+      });
+    };
+
+    const stopUser = async (user) => {
+      try {
+        await store.dispatch("auth/updateUser", {
+          ...user,
+          is_active: false,
+        });
+
+        await fetchUsers();
+
+        toast.add({
+          severity: "success",
+          summary: "停止完了",
+          detail: `${user.username} を停止しました`,
+          life: 3000,
+        });
+      } catch (error) {
+        console.error("ユーザー停止エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "ユーザーの停止に失敗しました",
+          life: 3000,
+        });
+      }
+    };
+
     const confirmDeleteUser = (user) => {
       confirm.require({
         message: `${user.username} を完全に削除してもよろしいですか？この操作は取り消せません。`,
         header: "ユーザー削除の確認",
         icon: "pi pi-exclamation-triangle",
         acceptClass: "p-button-danger",
-        accept: () => deleteUser(user),
+        accept: async () => {
+          await deleteUser(user);
+        },
+        reject: () => {},
       });
     };
 

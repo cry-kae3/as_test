@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const storeController = require('../controllers/store');
-const { authenticateJWT, isAdmin, isManager, isOwnerOrAdmin } = require('../middleware/auth');
-const { StoreClosedDay, StoreStaffRequirement } = require('../models');
+const { authenticateSession, isAdmin, isManager, isOwnerOrAdmin } = require('../middleware/auth');
 
-router.use(authenticateJWT);
+router.use(authenticateSession);
 
 router.get('/', isManager, storeController.getAllStores);
 router.get('/:id', isManager, storeController.getStoreById);

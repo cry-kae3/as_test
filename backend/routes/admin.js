@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { User, UserChangeLog } = require('../models');
-const { authenticateJWT, isAdmin, isOwnerOrAdmin } = require('../middleware/auth');
+const { authenticateSession, isAdmin, isOwnerOrAdmin } = require('../middleware/auth');
 
-router.use(authenticateJWT);
+router.use(authenticateSession);
 router.use(isOwnerOrAdmin);
 
 router.get('/change-logs', async (req, res) => {
