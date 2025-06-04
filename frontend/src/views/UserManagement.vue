@@ -36,6 +36,14 @@
           />
         </template>
       </Column>
+      <Column field="is_active" header="状態" sortable>
+        <template #body="{ data }">
+          <Tag
+            :severity="data.is_active ? 'success' : 'danger'"
+            :value="data.is_active ? '有効' : '停止'"
+          />
+        </template>
+      </Column>
       <Column field="parent_user" header="親ユーザー" sortable>
         <template #body="{ data }">
           {{ data.parent_user_name || "なし" }}
@@ -46,13 +54,27 @@
           {{ formatDate(data.created_at) }}
         </template>
       </Column>
-      <Column header="操作" style="width: 8rem">
+      <Column header="操作" style="width: 12rem">
         <template #body="{ data }">
           <Button
             icon="pi pi-pencil"
             class="p-button-rounded p-button-text p-button-plain"
             @click="editUser(data)"
             title="編集"
+          />
+          <Button
+            v-if="data.is_active"
+            icon="pi pi-ban"
+            class="p-button-rounded p-button-text p-button-warning"
+            @click="confirmStopUser(data)"
+            title="停止"
+          />
+          <Button
+            v-else
+            icon="pi pi-check"
+            class="p-button-rounded p-button-text p-button-success"
+            @click="confirmActivateUser(data)"
+            title="有効化"
           />
           <Button
             icon="pi pi-trash"
@@ -153,6 +175,21 @@
         >
       </div>
 
+      <div class="field" v-if="!userDialog.isNew">
+        <label for="is_active">アカウント状態</label>
+        <div class="field-checkbox">
+          <Checkbox
+            id="is_active"
+            v-model="userDialog.user.is_active"
+            :binary="true"
+          />
+          <label for="is_active">アカウントを有効にする</label>
+        </div>
+        <small class="form-text text-muted">
+          無効にするとユーザーは即座にログアウトされ、ログインできなくなります
+        </small>
+      </div>
+
       <div v-if="userDialog.user.role === 'staff'" class="field">
         <label for="parent_user_id">
           親ユーザー（オーナー） <span class="required-mark">*</span>
@@ -199,11 +236,13 @@ import { useStore } from "vuex";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 import Password from "primevue/password";
+import Checkbox from "primevue/checkbox";
 
 export default {
   name: "UserManagement",
   components: {
     Password,
+    Checkbox,
   },
   setup() {
     const store = useStore();
@@ -227,6 +266,7 @@ export default {
         password: "",
         role: "",
         parent_user_id: null,
+        is_active: true,
       },
     });
 
@@ -243,7 +283,7 @@ export default {
         const response = await store.dispatch("auth/fetchUsers");
         users.value = response;
         
-        ownerUsers.value = response.filter(user => user.role === 'owner');
+        ownerUsers.value = response.filter(user => user.role === 'owner' && user.is_active);
       } catch (error) {
         console.error("ユーザー一覧取得エラー:", error);
         toast.add({
@@ -265,6 +305,7 @@ export default {
         password: "",
         role: "owner",
         parent_user_id: null,
+        is_active: true,
       };
       userDialog.isNew = true;
       userDialog.visible = true;
@@ -281,6 +322,7 @@ export default {
         password: "",
         company_name: user.company_name || "",
         parent_user_id: user.parent_user_id || null,
+        is_active: user.is_active !== undefined ? user.is_active : true,
       };
       userDialog.isNew = false;
       userDialog.visible = true;
@@ -397,9 +439,81 @@ export default {
       }
     };
 
+    const confirmStopUser = (user) => {
+      confirm.require({
+        message: `${user.username} を停止してもよろしいですか？停止されたユーザーは即座にログアウトされ、ログインできなくなります。`,
+        header: "ユーザー停止の確認",
+        icon: "pi pi-exclamation-triangle",
+        acceptClass: "p-button-warning",
+        accept: () => stopUser(user),
+      });
+    };
+
+    const stopUser = async (user) => {
+      try {
+        await store.dispatch("auth/updateUser", {
+          ...user,
+          is_active: false
+        });
+
+        await fetchUsers();
+
+        toast.add({
+          severity: "success",
+          summary: "停止完了",
+          detail: `${user.username} を停止しました`,
+          life: 3000,
+        });
+      } catch (error) {
+        console.error("ユーザー停止エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "ユーザーの停止に失敗しました",
+          life: 3000,
+        });
+      }
+    };
+
+    const confirmActivateUser = (user) => {
+      confirm.require({
+        message: `${user.username} を有効化してもよろしいですか？`,
+        header: "ユーザー有効化の確認",
+        icon: "pi pi-question-circle",
+        acceptClass: "p-button-success",
+        accept: () => activateUser(user),
+      });
+    };
+
+    const activateUser = async (user) => {
+      try {
+        await store.dispatch("auth/updateUser", {
+          ...user,
+          is_active: true
+        });
+
+        await fetchUsers();
+
+        toast.add({
+          severity: "success",
+          summary: "有効化完了",
+          detail: `${user.username} を有効化しました`,
+          life: 3000,
+        });
+      } catch (error) {
+        console.error("ユーザー有効化エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "ユーザーの有効化に失敗しました",
+          life: 3000,
+        });
+      }
+    };
+
     const confirmDeleteUser = (user) => {
       confirm.require({
-        message: `${user.username} を削除してもよろしいですか？`,
+        message: `${user.username} を完全に削除してもよろしいですか？この操作は取り消せません。`,
         header: "ユーザー削除の確認",
         icon: "pi pi-exclamation-triangle",
         acceptClass: "p-button-danger",
@@ -476,6 +590,8 @@ export default {
       hideDialog,
       onRoleChange,
       saveUser,
+      confirmStopUser,
+      confirmActivateUser,
       confirmDeleteUser,
       getRoleLabel,
       formatDate,
@@ -497,5 +613,17 @@ export default {
 
 .required-mark {
   color: var(--red-500);
+}
+
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-text {
+  font-size: 0.85rem;
+  color: var(--text-color-secondary);
+  margin-top: 0.25rem;
 }
 </style>

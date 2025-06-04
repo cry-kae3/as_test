@@ -48,11 +48,23 @@ module.exports = (sequelize, DataTypes) => {
                 model: 'users',
                 key: 'id'
             }
+        },
+        is_active: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: true,
+            allowNull: false
         }
     }, {
         tableName: 'users',
         timestamps: true
     });
+
+    User.associate = function (models) {
+        User.hasMany(models.Session, {
+            foreignKey: 'user_id',
+            as: 'sessions'
+        });
+    };
 
     return User;
 };

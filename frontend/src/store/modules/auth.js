@@ -1,17 +1,18 @@
 import api from '@/services/api';
 
 const state = {
-    token: localStorage.getItem('token') || null,
+    sessionToken: localStorage.getItem('sessionToken') || null,
     currentUser: JSON.parse(localStorage.getItem('currentUser')) || null,
     loading: false,
     error: null,
     isImpersonating: false,
     impersonatedUser: null,
-    originalUser: null
+    originalUser: null,
+    sessionExpiresAt: localStorage.getItem('sessionExpiresAt') || null
 };
 
 const getters = {
-    isAuthenticated: state => !!state.token,
+    isAuthenticated: state => !!state.sessionToken,
     currentUser: state => state.currentUser,
     isAdmin: state => state.currentUser && state.currentUser.role === 'admin',
     isOwner: state => state.currentUser && state.currentUser.role === 'owner',
@@ -21,32 +22,27 @@ const getters = {
     isImpersonating: state => state.isImpersonating,
     impersonatedUser: state => state.impersonatedUser,
     originalUser: state => state.originalUser,
+    sessionExpiresAt: state => state.sessionExpiresAt,
     effectiveUser: state => {
-        // なりすまし中は被なりすましユーザーを返す
         if (state.isImpersonating && state.impersonatedUser) {
             return state.impersonatedUser;
         }
-        // 通常時は現在のユーザーを返す
         return state.currentUser;
     },
     effectiveUserRole: (state, getters) => {
         const user = getters.effectiveUser;
         if (!user) return null;
 
-        // manager または customer を owner に正規化
         if (user.role === 'manager' || user.role === 'customer') {
             return 'owner';
         }
 
         return user.role;
     },
-    // 表示に使用するユーザー情報
     displayUser: (state, getters) => {
         return getters.effectiveUser;
     },
-    // 権限チェック用のヘルパー
     hasAdminAccess: (state, getters) => {
-        // 管理者、または管理者によるなりすまし
         return getters.effectiveUserRole === 'admin' ||
             (state.originalUser && state.originalUser.role === 'admin');
     },
@@ -90,10 +86,11 @@ const actions = {
             return user;
         } catch (error) {
             console.error('ユーザー情報取得エラー:', error);
-            commit('setToken', null);
+            commit('setSessionToken', null);
             commit('setCurrentUser', null);
-            localStorage.removeItem('token');
+            localStorage.removeItem('sessionToken');
             localStorage.removeItem('currentUser');
+            localStorage.removeItem('sessionExpiresAt');
             return null;
         } finally {
             commit('setLoading', false);
@@ -105,13 +102,15 @@ const actions = {
 
         try {
             const response = await api.post('/auth/login', credentials);
-            const { token, user } = response.data;
+            const { sessionToken, user, expiresAt } = response.data;
 
-            localStorage.setItem('token', token);
+            localStorage.setItem('sessionToken', sessionToken);
             localStorage.setItem('currentUser', JSON.stringify(user));
+            localStorage.setItem('sessionExpiresAt', expiresAt);
 
-            commit('setToken', token);
+            commit('setSessionToken', sessionToken);
             commit('setCurrentUser', user);
+            commit('setSessionExpiresAt', expiresAt);
 
             return user;
         } catch (error) {
@@ -126,6 +125,37 @@ const actions = {
             throw error;
         } finally {
             commit('setLoading', false);
+        }
+    },
+    async logout({ commit }) {
+        try {
+            await api.post('/auth/logout');
+        } catch (error) {
+            console.error('ログアウトエラー:', error);
+        } finally {
+            localStorage.removeItem('sessionToken');
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('sessionExpiresAt');
+            commit('setSessionToken', null);
+            commit('setCurrentUser', null);
+            commit('setSessionExpiresAt', null);
+            commit('resetImpersonation');
+        }
+    },
+    async refreshSession({ commit, state }) {
+        if (!state.sessionToken) return false;
+
+        try {
+            const response = await api.post('/auth/refresh');
+            const { expiresAt } = response.data;
+
+            localStorage.setItem('sessionExpiresAt', expiresAt);
+            commit('setSessionExpiresAt', expiresAt);
+
+            return true;
+        } catch (error) {
+            console.error('セッション延長エラー:', error);
+            return false;
         }
     },
     async register({ commit }, userData) {
@@ -164,6 +194,20 @@ const actions = {
         }
     },
 
+    async deleteUser({ commit }, userId) {
+        commit('setLoading', true);
+
+        try {
+            const response = await api.delete(`/auth/users/${userId}`);
+            return response.data;
+        } catch (error) {
+            console.error('ユーザー削除エラー:', error);
+            throw error;
+        } finally {
+            commit('setLoading', false);
+        }
+    },
+
     async startImpersonating({ commit, state }, user) {
         if (!state.currentUser || state.currentUser.role !== 'admin') {
             throw new Error('管理者権限が必要です');
@@ -189,22 +233,33 @@ const actions = {
         commit('setOriginalUser', null);
     },
 
-    async logout({ commit }) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('currentUser');
-        commit('setToken', null);
-        commit('setCurrentUser', null);
-        commit('resetImpersonation');
+    async checkSessionExpiry({ dispatch, state }) {
+        if (!state.sessionExpiresAt) return;
+
+        const expiresAt = new Date(state.sessionExpiresAt);
+        const now = new Date();
+        const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+
+        if (timeUntilExpiry <= 5 * 60 * 1000) {
+            const refreshed = await dispatch('refreshSession');
+            if (!refreshed) {
+                await dispatch('logout');
+            }
+        }
     }
 };
 
 const mutations = {
-    setToken(state, token) {
-        state.token = token;
+    setSessionToken(state, sessionToken) {
+        state.sessionToken = sessionToken;
     },
 
     setCurrentUser(state, user) {
         state.currentUser = user;
+    },
+
+    setSessionExpiresAt(state, expiresAt) {
+        state.sessionExpiresAt = expiresAt;
     },
 
     setLoading(state, loading) {
@@ -240,14 +295,6 @@ const mutations = {
         state.error = null;
     }
 };
-
-api.interceptors.response.use(
-    response => response,
-    error => {
-        console.error('API エラー:', error.response || error);
-        return Promise.reject(error);
-    }
-);
 
 export default {
     namespaced: true,

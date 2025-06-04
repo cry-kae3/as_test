@@ -2,6 +2,7 @@ const { sequelize } = require('../config/db');
 const { DataTypes } = require('sequelize');
 
 const User = require('./User')(sequelize, DataTypes);
+const Session = require('./Session')(sequelize, DataTypes);
 const Store = require('./Store')(sequelize, DataTypes);
 const StoreClosedDay = require('./StoreClosedDay')(sequelize, DataTypes);
 const StoreStaffRequirement = require('./StoreStaffRequirement')(sequelize, DataTypes);
@@ -14,6 +15,9 @@ const ShiftChangeLog = require('./ShiftChangeLog')(sequelize, DataTypes);
 const UserChangeLog = require('./UserChangeLog')(sequelize, DataTypes);
 const BusinessHours = require('./BusinessHours')(sequelize, DataTypes);
 const SystemSetting = require('./SystemSetting')(sequelize, DataTypes);
+
+User.hasMany(Session, { foreignKey: 'user_id', as: 'sessions' });
+Session.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 Store.hasMany(StoreClosedDay, { foreignKey: 'store_id', as: 'closedDays' });
 StoreClosedDay.belongsTo(Store, { foreignKey: 'store_id' });
@@ -79,6 +83,7 @@ SystemSetting.belongsTo(User, { foreignKey: 'user_id' });
 module.exports = {
     sequelize,
     User,
+    Session,
     Store,
     StoreClosedDay,
     StoreStaffRequirement,

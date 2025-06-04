@@ -6,9 +6,28 @@ CREATE TABLE users (
     company_name VARCHAR(255),
     role VARCHAR(50) NOT NULL,
     parent_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    is_active BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
     "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_token VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    user_agent TEXT,
+    ip_address VARCHAR(45),
+    last_activity TIMESTAMP NOT NULL DEFAULT NOW(),
+    "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_sessions_token ON sessions(session_token);
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX idx_sessions_expires ON sessions(expires_at);
+CREATE INDEX idx_sessions_active ON sessions(is_active);
 
 CREATE TABLE stores (
     id SERIAL PRIMARY KEY,
@@ -174,13 +193,13 @@ CREATE TABLE system_settings (
     UNIQUE(user_id)
 );
 
-INSERT INTO users (username, password, email, company_name, role, parent_user_id, "createdAt", "updatedAt") VALUES
-('owner1', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'owner1@example.com', '株式会社テスト1', 'owner', NULL, NOW(), NOW()),
-('owner2', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'owner2@example.com', '株式会社テスト2', 'owner', NULL, NOW(), NOW()),
-('staff1_owner1', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff1@owner1.com', NULL, 'staff', 1, NOW(), NOW()),
-('staff2_owner1', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff2@owner1.com', NULL, 'staff', 1, NOW(), NOW()),
-('staff1_owner2', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff1@owner2.com', NULL, 'staff', 2, NOW(), NOW()),
-('staff2_owner2', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff2@owner2.com', NULL, 'staff', 2, NOW(), NOW());
+INSERT INTO users (username, password, email, company_name, role, parent_user_id, is_active, "createdAt", "updatedAt") VALUES
+('owner1', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'owner1@example.com', '株式会社テスト1', 'owner', NULL, true, NOW(), NOW()),
+('owner2', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'owner2@example.com', '株式会社テスト2', 'owner', NULL, true, NOW(), NOW()),
+('staff1_owner1', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff1@owner1.com', NULL, 'staff', 1, true, NOW(), NOW()),
+('staff2_owner1', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff2@owner1.com', NULL, 'staff', 1, true, NOW(), NOW()),
+('staff1_owner2', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff1@owner2.com', NULL, 'staff', 2, true, NOW(), NOW()),
+('staff2_owner2', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff2@owner2.com', NULL, 'staff', 2, true, NOW(), NOW());
 
 INSERT INTO stores (name, address, phone, email, opening_time, closing_time, area, postal_code, owner_id, "createdAt", "updatedAt") VALUES
 ('福井本店', '福井県福井市下馬3丁目1601', '0776-76-2247', NULL, '07:00', '19:00', '福井県', '918-8112', 1, NOW(), NOW()),

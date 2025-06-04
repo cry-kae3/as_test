@@ -1,24 +1,21 @@
-const jwt = require('jsonwebtoken');
 const { User } = require('../models');
+const sessionService = require('../services/sessionService');
 
-const authenticateJWT = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
+const authenticateSession = async (req, res, next) => {
+    const sessionToken = req.headers['x-session-token'] || req.cookies?.sessionToken;
 
-    if (!authHeader) {
-        return res.status(401).json({ message: '認証トークンが必要です' });
+    if (!sessionToken) {
+        return res.status(401).json({ message: '認証が必要です' });
     }
 
-    const token = authHeader.split(' ')[1];
-
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const session = await sessionService.validateSession(sessionToken);
 
-        const user = await User.findByPk(decoded.id);
-
-        if (!user) {
-            return res.status(404).json({ message: 'ユーザーが見つかりません' });
+        if (!session) {
+            return res.status(401).json({ message: 'セッションが無効または期限切れです' });
         }
 
+        const user = session.user;
         const impersonateUserId = req.headers['x-impersonate-user-id'];
 
         console.log('認証ミドルウェア:', {
@@ -29,7 +26,12 @@ const authenticateJWT = async (req, res, next) => {
 
         if (impersonateUserId && user.role === 'admin') {
             try {
-                const impersonateUser = await User.findByPk(impersonateUserId);
+                const impersonateUser = await User.findOne({
+                    where: {
+                        id: impersonateUserId,
+                        is_active: true
+                    }
+                });
                 if (impersonateUser) {
                     console.log('なりすまし有効:', {
                         impersonateUserId: impersonateUser.id,
@@ -50,10 +52,11 @@ const authenticateJWT = async (req, res, next) => {
             req.user = user;
         }
 
+        req.sessionToken = sessionToken;
         next();
     } catch (error) {
-        console.error('JWT検証エラー:', error);
-        return res.status(403).json({ message: '無効なトークンです' });
+        console.error('セッション検証エラー:', error);
+        return res.status(401).json({ message: 'セッション検証に失敗しました' });
     }
 };
 
@@ -128,7 +131,7 @@ const isManager = (req, res, next) => {
 };
 
 module.exports = {
-    authenticateJWT,
+    authenticateSession,
     isAdmin,
     isOwnerOrAdmin,
     isAuthorized,

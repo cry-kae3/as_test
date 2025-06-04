@@ -1,6 +1,6 @@
-const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { User } = require('../models');
+const { User, Session } = require('../models');
+const sessionService = require('../services/sessionService');
 
 const register = async (req, res) => {
     try {
@@ -48,7 +48,8 @@ const register = async (req, res) => {
             email,
             company_name,
             role: userRole,
-            parent_user_id: parent_user_id || null
+            parent_user_id: parent_user_id || null,
+            is_active: true
         });
 
         const { password: _, ...userWithoutPassword } = user.get({ plain: true });
@@ -63,7 +64,7 @@ const register = async (req, res) => {
 const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const { username, email, password, company_name, role, parent_user_id } = req.body;
+        const { username, email, password, company_name, role, parent_user_id, is_active } = req.body;
 
         if (req.user.id.toString() === id && req.user.role === 'admin' && role !== 'admin') {
             return res.status(400).json({ message: '自分自身の管理者権限を削除することはできません' });
@@ -92,12 +93,20 @@ const updateUser = async (req, res) => {
             updates.parent_user_id = parent_user_id;
         }
 
+        if (is_active !== undefined) {
+            updates.is_active = is_active;
+        }
+
         if (password) {
             const salt = await bcrypt.genSalt(10);
             updates.password = await bcrypt.hash(password, salt);
         }
 
         await user.update(updates);
+
+        if (is_active === false) {
+            await sessionService.destroyAllUserSessions(user.id);
+        }
 
         const { password: _, ...userWithoutPassword } = user.get({ plain: true });
 
@@ -119,7 +128,10 @@ const login = async (req, res) => {
         }
 
         const user = await User.findOne({
-            where: { username }
+            where: {
+                username,
+                is_active: true
+            }
         });
 
         if (!user) {
@@ -134,16 +146,10 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'ユーザー名またはパスワードが正しくありません' });
         }
 
-        if (!process.env.JWT_SECRET) {
-            console.error('JWT_SECRET環境変数が設定されていません');
-            return res.status(500).json({ message: 'サーバー設定エラー' });
-        }
+        const userAgent = req.headers['user-agent'];
+        const ipAddress = req.ip || req.connection.remoteAddress;
 
-        const token = jwt.sign(
-            { id: user.id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
+        const session = await sessionService.createSession(user.id, userAgent, ipAddress);
 
         const userWithoutPassword = { ...user.toJSON() };
         delete userWithoutPassword.password;
@@ -151,12 +157,28 @@ const login = async (req, res) => {
         console.log('ログイン成功:', { id: user.id, username: user.username });
 
         res.status(200).json({
-            token,
-            user: userWithoutPassword
+            sessionToken: session.session_token,
+            user: userWithoutPassword,
+            expiresAt: session.expires_at
         });
     } catch (error) {
         console.error('ログインエラー:', error);
         res.status(500).json({ message: 'ログイン処理中にエラーが発生しました', error: error.message });
+    }
+};
+
+const logout = async (req, res) => {
+    try {
+        const sessionToken = req.sessionToken;
+
+        if (sessionToken) {
+            await sessionService.destroySession(sessionToken);
+        }
+
+        res.status(200).json({ message: 'ログアウトしました' });
+    } catch (error) {
+        console.error('ログアウトエラー:', error);
+        res.status(500).json({ message: 'ログアウト処理中にエラーが発生しました' });
     }
 };
 
@@ -222,6 +244,8 @@ const deleteUser = async (req, res) => {
             return res.status(404).json({ message: 'ユーザーが見つかりません' });
         }
 
+        await sessionService.destroyAllUserSessions(user.id);
+
         await user.destroy();
         res.status(200).json({ message: 'ユーザーが削除されました' });
     } catch (error) {
@@ -230,11 +254,37 @@ const deleteUser = async (req, res) => {
     }
 };
 
+const refreshSession = async (req, res) => {
+    try {
+        const sessionToken = req.sessionToken;
+
+        if (!sessionToken) {
+            return res.status(401).json({ message: 'セッショントークンが必要です' });
+        }
+
+        const session = await sessionService.extendSession(sessionToken);
+
+        if (!session) {
+            return res.status(401).json({ message: 'セッションの延長に失敗しました' });
+        }
+
+        res.status(200).json({
+            message: 'セッションを延長しました',
+            expiresAt: session.expires_at
+        });
+    } catch (error) {
+        console.error('セッション延長エラー:', error);
+        res.status(500).json({ message: 'セッション延長中にエラーが発生しました' });
+    }
+};
+
 module.exports = {
     register,
     login,
+    logout,
     getCurrentUser,
     getAllUsers,
     updateUser,
-    deleteUser
+    deleteUser,
+    refreshSession
 };

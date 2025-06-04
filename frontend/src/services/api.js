@@ -15,14 +15,15 @@ const api = axios.create({
     headers: {
         'Content-Type': 'application/json'
     },
-    timeout: 10000
+    timeout: 10000,
+    withCredentials: true
 });
 
 api.interceptors.request.use(
     config => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+        const sessionToken = localStorage.getItem('sessionToken');
+        if (sessionToken) {
+            config.headers['x-session-token'] = sessionToken;
         }
 
         const isImpersonating = store.getters['auth/isImpersonating'];
@@ -68,8 +69,9 @@ api.interceptors.response.use(
         });
 
         if (error.response && error.response.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            localStorage.removeItem('sessionToken');
+            localStorage.removeItem('currentUser');
+            store.dispatch('auth/logout');
 
             if (window.location.pathname !== '/login') {
                 window.location.href = '/login';

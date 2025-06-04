@@ -235,9 +235,9 @@ export default {
       if (!isAdmin.value || isImpersonating.value) return [];
 
       try {
-        const token = localStorage.getItem('token');
+        const sessionToken = localStorage.getItem('sessionToken');
         const response = await axios.get('/api/auth/users', {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { 'x-session-token': sessionToken }
         });
         
         if (response && response.data && Array.isArray(response.data)) {
@@ -283,6 +283,12 @@ export default {
       router.push("/login");
     };
 
+    const startSessionMonitoring = () => {
+      setInterval(() => {
+        store.dispatch('auth/checkSessionExpiry');
+      }, 5 * 60 * 1000);
+    };
+
     watch(
       () => router.currentRoute.value.path,
       () => {
@@ -322,6 +328,8 @@ export default {
           if (isAdmin.value && !isImpersonating.value) {
             await fetchUsers();
           }
+
+          startSessionMonitoring();
         }
 
         window.addEventListener("resize", () => {

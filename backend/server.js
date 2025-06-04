@@ -3,11 +3,12 @@ const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const cookieParser = require('cookie-parser');
 const { logUserChange } = require('./middleware/changeLogger');
+const sessionService = require('./services/sessionService');
 require('dotenv').config();
 
 const requiredEnvVars = [
-  'JWT_SECRET',
   'CLAUDE_API_KEY',
   'API_PORT',
   'INITIAL_ADMIN_USERNAME',
@@ -33,6 +34,7 @@ app.use(cors({
 }));
 
 app.use(morgan('dev'));
+app.use(cookieParser());
 app.use(logUserChange);
 
 app.use(express.json({ limit: '50mb' }));
@@ -65,7 +67,8 @@ async function createInitialUsers() {
       username: process.env.INITIAL_ADMIN_USERNAME,
       password: hashedPassword,
       email: process.env.INITIAL_ADMIN_EMAIL,
-      role: process.env.INITIAL_ADMIN_ROLE
+      role: process.env.INITIAL_ADMIN_ROLE,
+      is_active: true
     });
     console.log('Initial admin user created');
 
@@ -77,7 +80,8 @@ async function createInitialUsers() {
         password: ownerHashedPassword,
         email: process.env.INITIAL_USER_EMAIL,
         company_name: process.env.INITIAL_USER_COMPANY,
-        role: process.env.INITIAL_USER_ROLE
+        role: process.env.INITIAL_USER_ROLE,
+        is_active: true
       });
       console.log('Initial owner user created');
     }
@@ -85,6 +89,21 @@ async function createInitialUsers() {
   } catch (error) {
     console.error('Error creating initial users:', error);
   }
+}
+
+async function startSessionCleanup() {
+  const cleanupInterval = 60 * 60 * 1000;
+
+  const cleanup = async () => {
+    try {
+      await sessionService.cleanupExpiredSessions();
+    } catch (error) {
+      console.error('Session cleanup error:', error);
+    }
+  };
+
+  setInterval(cleanup, cleanupInterval);
+  cleanup();
 }
 
 async function startServer() {
@@ -107,6 +126,8 @@ async function startServer() {
     } else {
       await createInitialUsers();
     }
+
+    startSessionCleanup();
 
     app.listen(API_PORT, () => {
       console.log(`Server is running on port ${API_PORT}`);
