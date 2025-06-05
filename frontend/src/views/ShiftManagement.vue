@@ -333,9 +333,15 @@
               <div class="staff-avatar-small">
                 {{ staff.first_name.charAt(0) }}
               </div>
-              <span class="staff-name"
-                >{{ staff.last_name }} {{ staff.first_name }}</span
-              >
+              <div class="staff-info-column">
+                <span class="staff-name"
+                  >{{ staff.last_name }} {{ staff.first_name }}</span
+                >
+                <div class="staff-conditions">
+                  <span class="condition-item">最小: {{ staff.min_hours_per_month || 0 }}h</span>
+                  <span class="condition-item">最大: {{ staff.max_hours_per_month || 0 }}h</span>
+                </div>
+              </div>
             </div>
             <div class="summary-hours">
               <span class="hours-number">{{
@@ -887,11 +893,6 @@ export default {
       }
 
       daysInMonth.value = days;
-
-      // この部分を削除またはコメントアウト
-      // if (!selectedDate.value && days.length > 0) {
-      //   selectedDate.value = days[0].date;
-      // }
     };
 
     const previousMonth = async () => {
@@ -1949,611 +1950,653 @@ export default {
 }
 
 .staff-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
+ display: flex;
+ flex-direction: column;
+ gap: 0.1rem;
 }
 
 .staff-name {
-  font-weight: 500;
-  color: #495057;
-  font-size: 0.8rem;
+ font-weight: 500;
+ color: #495057;
+ font-size: 0.8rem;
 }
 
 .staff-role {
-  font-size: 0.7rem;
-  color: #6c757d;
+ font-size: 0.7rem;
+ color: #6c757d;
 }
 
 .shift-cell {
-  min-width: 70px;
-  width: 70px;
-  min-height: 60px;
-  border-right: 1px solid #f1f3f4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  transition: all 0.2s ease;
-  cursor: default;
+ min-width: 70px;
+ width: 70px;
+ min-height: 60px;
+ border-right: 1px solid #f1f3f4;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ position: relative;
+ transition: all 0.2s ease;
+ cursor: default;
 }
 
 .shift-cell.is-today {
-  background: #e3f2fd;
+ background: #e3f2fd;
 }
 
 .shift-cell.is-weekend {
-  background: #fff8e1;
+ background: #fff8e1;
 }
 
 .shift-cell.is-holiday {
-  background: #fce4ec;
+ background: #fce4ec;
 }
 
 .shift-cell.is-past {
-  opacity: 0.7;
+ opacity: 0.7;
 }
 
 .shift-cell.is-editable {
-  cursor: pointer;
+ cursor: pointer;
 }
 
 .shift-cell.is-editable:hover {
-  background: #f0f8ff;
-  transform: scale(1.02);
+ background: #f0f8ff;
+ transform: scale(1.02);
 }
 
 .shift-cell.past-editable:hover {
-  background: #fff3cd;
+ background: #fff3cd;
 }
 
 .shift-cell.is-selected {
 }
 
 .shift-time-card {
-  background: #28a745;
-  color: white;
-  padding: 0.4rem 0.3rem;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
-  font-weight: 500;
-  font-size: 0.65rem;
-  min-width: 45px;
-  transition: all 0.2s ease;
+ background: #28a745;
+ color: white;
+ padding: 0.4rem 0.3rem;
+ border-radius: 4px;
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ gap: 0.1rem;
+ font-weight: 500;
+ font-size: 0.65rem;
+ min-width: 45px;
+ transition: all 0.2s ease;
 }
 
 .shift-time-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+ transform: translateY(-1px);
+ box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
 }
 
 .shift-start,
 .shift-end {
-  font-weight: 600;
+ font-weight: 600;
 }
 
 .shift-separator {
-  font-size: 0.55rem;
-  opacity: 0.8;
+ font-size: 0.55rem;
+ opacity: 0.8;
 }
 
 .no-shift {
-  color: #adb5bd;
-  font-size: 1rem;
-  transition: all 0.2s ease;
+ color: #adb5bd;
+ font-size: 1rem;
+ transition: all 0.2s ease;
 }
 
 .shift-cell.is-editable .no-shift {
-  color: #28a745;
-  font-weight: 500;
+ color: #28a745;
+ font-weight: 500;
 }
 
 .gantt-view {
-  position: relative;
-  height: calc(100vh - 450px);
-  overflow: hidden;
+ position: relative;
+ height: calc(100vh - 450px);
+ overflow: hidden;
 }
 
 .gantt-container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+ height: 100%;
+ display: flex;
+ flex-direction: column;
 }
 
 .gantt-header {
-  display: grid;
-  grid-template-columns: 180px 200px 1fr;
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+ display: grid;
+ grid-template-columns: 180px 200px 1fr;
+ background: #f8f9fa;
+ border-bottom: 1px solid #dee2e6;
+ position: sticky;
+ top: 0;
+ z-index: 10;
 }
 
 .gantt-staff-header {
-  padding: 1rem;
-  background: #495057;
-  color: white;
-  font-weight: 600;
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-right: 1px solid #dee2e6;
+ padding: 1rem;
+ background: #495057;
+ color: white;
+ font-weight: 600;
+ font-size: 0.9rem;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ border-right: 1px solid #dee2e6;
 }
 
 .gantt-date-header {
-  padding: 1rem;
-  background: #6c757d;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-right: 1px solid #dee2e6;
+ padding: 1rem;
+ background: #6c757d;
+ color: white;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ border-right: 1px solid #dee2e6;
 }
 
 .gantt-date-title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-  text-align: center;
+ font-size: 1rem;
+ font-weight: 600;
+ margin: 0;
+ text-align: center;
 }
 
 .gantt-timeline-header {
-  display: flex;
-  overflow: hidden;
-  background: #f8f9fa;
+ display: flex;
+ overflow: hidden;
+ background: #f8f9fa;
 }
 
 .gantt-hour-cell {
-  text-align: center;
-  padding: 0.75rem 0.5rem;
-  border-right: 1px solid #dee2e6;
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: #495057;
-  background: #f8f9fa;
+ text-align: center;
+ padding: 0.75rem 0.5rem;
+ border-right: 1px solid #dee2e6;
+ font-size: 0.7rem;
+ font-weight: 500;
+ color: #495057;
+ background: #f8f9fa;
 }
 
 .gantt-body {
-  flex: 1;
-  overflow: auto;
-  background: white;
+ flex: 1;
+ overflow: auto;
+ background: white;
 }
 
 .gantt-staff-rows {
-  display: flex;
-  flex-direction: column;
+ display: flex;
+ flex-direction: column;
 }
 
 .gantt-staff-row {
-  display: grid;
-  grid-template-columns: 180px 200px 1fr;
-  border-bottom: 1px solid #f1f3f4;
-  min-height: 60px;
+ display: grid;
+ grid-template-columns: 180px 200px 1fr;
+ border-bottom: 1px solid #f1f3f4;
+ min-height: 60px;
 }
 
 .gantt-staff-row:hover {
-  background: #f8f9fa;
+ background: #f8f9fa;
 }
 
 .gantt-staff-info {
-  padding: 0.75rem;
-  background: #fafafa;
-  border-right: 1px solid #dee2e6;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+ padding: 0.75rem;
+ background: #fafafa;
+ border-right: 1px solid #dee2e6;
+ display: flex;
+ align-items: center;
+ gap: 0.5rem;
 }
 
 .staff-avatar-small {
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  background: #007bff;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 500;
-  font-size: 0.7rem;
+ width: 28px;
+ height: 28px;
+ border-radius: 4px;
+ background: #007bff;
+ color: white;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ font-weight: 500;
+ font-size: 0.7rem;
 }
 
 .staff-name-small {
-  font-weight: 500;
-  color: #495057;
-  font-size: 0.75rem;
+ font-weight: 500;
+ color: #495057;
+ font-size: 0.75rem;
 }
 
 .gantt-timeline {
-  position: relative;
-  cursor: pointer;
-  min-height: 60px;
-  display: flex;
-  align-items: center;
-  padding: 0;
-  border-right: 1px solid #dee2e6;
+ position: relative;
+ cursor: pointer;
+ min-height: 60px;
+ display: flex;
+ align-items: center;
+ padding: 0;
+ border-right: 1px solid #dee2e6;
 }
 
 .gantt-timeline:hover {
-  background: rgba(0, 123, 255, 0.05);
+ background: rgba(0, 123, 255, 0.05);
 }
 
 .gantt-grid {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
+ position: absolute;
+ top: 0;
+ left: 0;
+ right: 0;
+ bottom: 0;
+ display: flex;
 }
 
 .gantt-hour-line {
-  border-right: 1px solid #f1f3f4;
-  height: 100%;
+ border-right: 1px solid #f1f3f4;
+ height: 100%;
 }
 
 .gantt-shift-block {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  background: #28a745;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 500;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  cursor: pointer;
-  z-index: 3;
-  transition: all 0.2s ease;
+ position: absolute;
+ top: 8px;
+ bottom: 8px;
+ background: #28a745;
+ border-radius: 4px;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ color: white;
+ font-weight: 500;
+ box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+ cursor: pointer;
+ z-index: 3;
+ transition: all 0.2s ease;
 }
 
 .gantt-shift-block:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+ transform: translateY(-1px);
+ box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .gantt-shift-block.is-past-editable {
-  background: #ffc107;
+ background: #ffc107;
 }
 
 .shift-time-text {
-  font-size: 0.7rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 0.5rem;
+ font-size: 0.7rem;
+ white-space: nowrap;
+ overflow: hidden;
+ text-overflow: ellipsis;
+ padding: 0 0.5rem;
 }
 
 .shift-summary-panel {
-  padding: 1.25rem;
-  background: #f8f9fa;
-  border-top: 1px solid #dee2e6;
+ padding: 1.25rem;
+ background: #f8f9fa;
+ border-top: 1px solid #dee2e6;
 }
 
 .summary-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #495057;
-  margin-bottom: 1rem;
+ font-size: 0.95rem;
+ font-weight: 600;
+ color: #495057;
+ margin-bottom: 1rem;
 }
 
 .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 0.75rem;
+ display: grid;
+ grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+ gap: 0.75rem;
 }
 
 .summary-card {
-  background: white;
-  border-radius: 6px;
-  padding: 0.75rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid #dee2e6;
-  transition: all 0.2s ease;
+ background: white;
+ border-radius: 6px;
+ padding: 0.75rem;
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ border: 1px solid #dee2e6;
+ transition: all 0.2s ease;
 }
 
 .summary-card:hover {
-  border-color: #adb5bd;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+ border-color: #adb5bd;
+ box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .summary-staff {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+ display: flex;
+ align-items: center;
+ gap: 0.5rem;
+ flex: 1;
+}
+
+.staff-info-column {
+ display: flex;
+ flex-direction: column;
+ gap: 0.25rem;
+}
+
+.staff-conditions {
+ display: flex;
+ flex-direction: column;
+ gap: 0.1rem;
+}
+
+.condition-item {
+ font-size: 0.65rem;
+ color: #6c757d;
+ background: #f8f9fa;
+ padding: 0.1rem 0.3rem;
+ border-radius: 3px;
+ border: 1px solid #e9ecef;
 }
 
 .summary-hours {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+ display: flex;
+ flex-direction: column;
+ align-items: center;
+ text-align: center;
+ margin-left: 0.5rem;
 }
 
 .hours-number {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #007bff;
+ font-size: 1.1rem;
+ font-weight: 600;
+ color: #007bff;
 }
 
 .hours-unit {
-  font-size: 0.65rem;
-  color: #6c757d;
+ font-size: 0.65rem;
+ color: #6c757d;
 }
 
 .shift-editor-dialog .p-dialog-content {
-  border-radius: 8px;
+ border-radius: 8px;
 }
 
 .shift-editor-form {
-  padding: 0.5rem 0;
+ padding: 0.5rem 0;
 }
 
 .status-alert {
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  font-weight: 500;
-  font-size: 0.875rem;
+ padding: 0.75rem 1rem;
+ border-radius: 6px;
+ display: flex;
+ align-items: center;
+ gap: 0.5rem;
+ margin-bottom: 1rem;
+ font-weight: 500;
+ font-size: 0.875rem;
 }
 
 .status-alert.warning {
-  background: #fff3cd;
-  color: #856404;
-  border: 1px solid #ffeaa7;
+ background: #fff3cd;
+ color: #856404;
+ border: 1px solid #ffeaa7;
 }
 
 .time-inputs-section {
-  margin-bottom: 1rem;
+ margin-bottom: 1rem;
 }
 
 .time-input-group {
-  margin-bottom: 1rem;
+ margin-bottom: 1rem;
 }
 
 .form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: #495057;
-  font-size: 0.875rem;
+ display: block;
+ margin-bottom: 0.5rem;
+ font-weight: 600;
+ color: #495057;
+ font-size: 0.875rem;
 }
 
 .time-selector {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #f8f9fa;
-  padding: 0.5rem;
-  border-radius: 6px;
-  border: 1px solid #ced4da;
-  max-width: 250px;
+ display: flex;
+ align-items: center;
+ gap: 0.5rem;
+ background: #f8f9fa;
+ padding: 0.5rem;
+ border-radius: 6px;
+ border: 1px solid #ced4da;
+ max-width: 250px;
 }
 
 .time-dropdown {
-  flex: 1;
-  border: none;
-  background: transparent;
+ flex: 1;
+ border: none;
+ background: transparent;
 }
 
 .time-separator {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #6c757d;
+ font-size: 1.1rem;
+ font-weight: 600;
+ color: #6c757d;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+ margin-bottom: 1rem;
 }
 
 .form-textarea {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 0.875rem;
+ width: 100%;
+ padding: 0.5rem;
+ border: 1px solid #ced4da;
+ border-radius: 4px;
+ font-size: 0.875rem;
 }
 
 .checkbox-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+ display: flex;
+ align-items: center;
+ gap: 0.5rem;
 }
 
 .checkbox-label {
-  font-weight: 500;
-  color: #495057;
-  cursor: pointer;
-  font-size: 0.875rem;
+ font-weight: 500;
+ color: #495057;
+ cursor: pointer;
+ font-size: 0.875rem;
 }
 
 .dialog-actions {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: center;
-  padding-top: 0.5rem;
+ display: flex;
+ gap: 0.75rem;
+ justify-content: center;
+ padding-top: 0.5rem;
 }
 
 .delete-button,
 .cancel-button,
 .save-button {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  font-weight: 500;
-  border: 1px solid;
-  transition: all 0.2s ease;
-  cursor: pointer;
-  font-size: 0.875rem;
+ padding: 0.5rem 1rem;
+ border-radius: 4px;
+ font-weight: 500;
+ border: 1px solid;
+ transition: all 0.2s ease;
+ cursor: pointer;
+ font-size: 0.875rem;
 }
 
 .delete-button {
-  background: #dc3545;
-  color: white;
-  border-color: #dc3545;
+ background: #dc3545;
+ color: white;
+ border-color: #dc3545;
 }
 
 .delete-button:hover {
-  background: #c82333;
-  border-color: #bd2130;
+ background: #c82333;
+ border-color: #bd2130;
 }
 
 .cancel-button {
-  background: #f8f9fa;
-  color: #6c757d;
-  border-color: #ced4da;
+ background: #f8f9fa;
+ color: #6c757d;
+ border-color: #ced4da;
 }
 
 .cancel-button:hover {
-  background: #e9ecef;
-  color: #495057;
+ background: #e9ecef;
+ color: #495057;
 }
 
 .save-button {
-  background: #28a745;
-  color: white;
-  border-color: #28a745;
+ background: #28a745;
+ color: white;
+ border-color: #28a745;
 }
 
 .save-button:hover {
-  background: #218838;
-  border-color: #1e7e34;
+ background: #218838;
+ border-color: #1e7e34;
 }
 
 @media (max-width: 1024px) {
-  .control-panel {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    text-align: center;
-  }
+ .control-panel {
+   grid-template-columns: 1fr;
+   gap: 1rem;
+   text-align: center;
+ }
 
-  .action-controls {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
+ .action-controls {
+   justify-content: center;
+   flex-wrap: wrap;
+ }
 
-  .summary-grid {
-    grid-template-columns: 1fr;
-  }
+ .summary-grid {
+   grid-template-columns: 1fr;
+ }
 
-  .gantt-header {
-    grid-template-columns: 120px 150px 1fr;
-  }
+ .gantt-header {
+   grid-template-columns: 120px 150px 1fr;
+ }
 
-  .gantt-staff-row {
-    grid-template-columns: 120px 150px 1fr;
-  }
+ .gantt-staff-row {
+   grid-template-columns: 120px 150px 1fr;
+ }
 
-  .gantt-staff-header,
-  .gantt-staff-info {
-    padding: 0.5rem;
-  }
+ .gantt-staff-header,
+ .gantt-staff-info {
+   padding: 0.5rem;
+ }
 
-  .gantt-date-header {
-    padding: 0.5rem;
-  }
+ .gantt-date-header {
+   padding: 0.5rem;
+ }
 
-  .gantt-date-title {
-    font-size: 0.8rem;
-  }
+ .gantt-date-title {
+   font-size: 0.8rem;
+ }
 }
 
 @media (max-width: 768px) {
-  .shift-management {
-    padding: 1rem;
-  }
+ .shift-management {
+   padding: 1rem;
+ }
 
-  .page-title {
-    font-size: 1.5rem;
-  }
+ .page-title {
+   font-size: 1.5rem;
+ }
 
-  .staff-column-header,
-  .staff-info {
-    min-width: 120px;
-    width: 120px;
-  }
+ .staff-column-header,
+ .staff-info {
+   min-width: 120px;
+   width: 120px;
+ }
 
-  .date-cell-header,
-  .shift-cell {
-    min-width: 50px;
-    width: 50px;
-  }
+ .date-cell-header,
+ .shift-cell {
+   min-width: 50px;
+   width: 50px;
+ }
 
-  .staff-avatar {
-    width: 28px;
-    height: 28px;
-    font-size: 0.7rem;
-  }
+ .staff-avatar {
+   width: 28px;
+   height: 28px;
+   font-size: 0.7rem;
+ }
 
-  .staff-name {
-    font-size: 0.75rem;
-  }
+ .staff-name {
+   font-size: 0.75rem;
+ }
 
-  .shift-time-card {
-    padding: 0.3rem 0.2rem;
-    font-size: 0.6rem;
-    min-width: 36px;
-  }
+ .shift-time-card {
+   padding: 0.3rem 0.2rem;
+   font-size: 0.6rem;
+   min-width: 36px;
+ }
 
-  .time-selector {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
+ .time-selector {
+   flex-direction: column;
+   gap: 0.5rem;
+ }
 
-  .time-dropdown {
-    width: 100%;
-  }
+ .time-dropdown {
+   width: 100%;
+ }
 
-  .calendar-container {
-    max-height: calc(100vh - 500px);
-  }
+ .calendar-container {
+   max-height: calc(100vh - 500px);
+ }
 
-  .gantt-view {
-    height: calc(100vh - 550px);
-  }
+ .gantt-view {
+   height: calc(100vh - 550px);
+ }
 
-  .gantt-header {
-    grid-template-columns: 100px 120px 1fr;
-  }
+ .gantt-header {
+   grid-template-columns: 100px 120px 1fr;
+ }
 
-  .gantt-staff-row {
-    grid-template-columns: 100px 120px 1fr;
-  }
+ .gantt-staff-row {
+   grid-template-columns: 100px 120px 1fr;
+ }
 
-  .gantt-staff-header,
-  .gantt-staff-info {
-    padding: 0.4rem;
-  }
+ .gantt-staff-header,
+ .gantt-staff-info {
+   padding: 0.4rem;
+ }
 
-  .gantt-date-header {
-    padding: 0.4rem;
-  }
+ .gantt-date-header {
+   padding: 0.4rem;
+ }
 
-  .gantt-date-title {
-    font-size: 0.7rem;
-  }
+ .gantt-date-title {
+   font-size: 0.7rem;
+ }
 
-  .staff-name-small {
-    font-size: 0.65rem;
-  }
+ .staff-name-small {
+   font-size: 0.65rem;
+ }
 
-  .view-controls {
-    flex-direction: row;
-    gap: 0.5rem;
-  }
+ .view-controls {
+   flex-direction: row;
+   gap: 0.5rem;
+ }
 
-  .date-selector {
-    max-width: 150px;
-  }
+ .date-selector {
+   max-width: 150px;
+ }
+
+ .summary-grid {
+   grid-template-columns: 1fr;
+ }
+
+ .summary-card {
+   flex-direction: column;
+   gap: 0.5rem;
+   text-align: center;
+ }
+
+ .summary-staff {
+   justify-content: center;
+ }
+
+ .staff-conditions {
+   flex-direction: row;
+   gap: 0.25rem;
+ }
 }
 </style>
