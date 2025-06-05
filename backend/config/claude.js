@@ -6,8 +6,8 @@ const anthropic = new Anthropic({
 });
 
 const DEFAULT_AI_PARAMS = {
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 2000,
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 10000,
     temperature: 0.2,
 };
 

@@ -1,15 +1,19 @@
-const { anthropic, DEFAULT_AI_PARAMS } = require('../config/claude');
+const claudeConfig = require('../config/claude');
 const { Store, Staff, StaffDayPreference, StaffDayOffRequest,
     StoreClosedDay, StoreStaffRequirement, Shift, ShiftAssignment } = require('../models');
 const { Op, sequelize } = require('sequelize');
 const moment = require('moment-timezone');
 
-// シフト生成サービス
 class ShiftGeneratorService {
-    // 指定された年月のシフトを生成
     async generateShift(storeId, year, month) {
         try {
-            // 店舗情報の取得
+            console.log('Claude config:', claudeConfig);
+            console.log('Anthropic client:', claudeConfig.anthropic);
+
+            if (!claudeConfig.anthropic) {
+                throw new Error('Anthropic client is not properly initialized');
+            }
+
             const store = await Store.findByPk(storeId, {
                 include: [
                     { model: StoreClosedDay, as: 'closedDays' },
@@ -21,7 +25,6 @@ class ShiftGeneratorService {
                 throw new Error('店舗が見つかりません');
             }
 
-            // スタッフ情報の取得
             const staff = await Staff.findAll({
                 where: { store_id: storeId },
                 include: [
@@ -33,55 +36,75 @@ class ShiftGeneratorService {
                 throw new Error('スタッフが登録されていません');
             }
 
-            // 対象月の開始日と終了日
-            const startDate = moment(`${year}-${month}-01`);
+            const startDate = moment(`${year}-${month.toString().padStart(2, '0')}-01`);
             const endDate = moment(startDate).endOf('month');
             const daysInMonth = endDate.date();
 
-            // スタッフの休み希望の取得
             const dayOffRequests = await StaffDayOffRequest.findAll({
                 where: {
                     staff_id: staff.map(s => s.id),
                     date: {
                         [Op.between]: [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')]
                     },
-                    status: ['pending', 'approved']  // 承認済みと保留中の休み希望を考慮
+                    status: ['pending', 'approved']
                 }
             });
 
-            // Claude AIに渡すデータの準備
             const storeData = this._formatStoreData(store);
             const staffData = this._formatStaffData(staff, dayOffRequests);
             const calendarData = this._generateCalendarData(year, month, daysInMonth);
             const requirementsData = this._formatRequirementsData(store, year, month, daysInMonth);
 
-            // Claude AIに入力するプロンプトの作成
             const prompt = this._generatePrompt(storeData, staffData, calendarData, requirementsData, year, month);
 
             console.log('Claude APIにリクエスト送信中...');
+            console.log('Available methods:', Object.getOwnPropertyNames(claudeConfig.anthropic));
+            console.log('Messages object:', claudeConfig.anthropic.messages);
 
-            // Claude APIを呼び出してシフトを生成
-            const response = await anthropic.messages.create({
-                ...DEFAULT_AI_PARAMS,
-                system: "あなたはシフト最適化と生成の専門家です。労働基準法を遵守しながら、人員要件と従業員の希望休みを考慮して最適なシフトを作成します。JSONフォーマット形式で出力してください。",
-                messages: [
-                    {
-                        role: "user",
-                        content: prompt
-                    }
-                ],
-                temperature: 0.1 // 決定論的な結果のために低い温度を設定
-            });
+            let response;
+            try {
+                if (claudeConfig.anthropic.messages && claudeConfig.anthropic.messages.create) {
+                    response = await claudeConfig.anthropic.messages.create({
+                        ...claudeConfig.DEFAULT_AI_PARAMS,
+                        system: "あなたはシフト最適化と生成の専門家です。労働基準法を遵守しながら、人員要件と従業員の希望休みを考慮して最適なシフトを作成します。JSONフォーマット形式で出力してください。",
+                        messages: [
+                            {
+                                role: "user",
+                                content: prompt
+                            }
+                        ],
+                        temperature: 0.1
+                    });
+                } else if (claudeConfig.anthropic.completions && claudeConfig.anthropic.completions.create) {
+                    response = await claudeConfig.anthropic.completions.create({
+                        model: claudeConfig.DEFAULT_AI_PARAMS.model,
+                        max_tokens_to_sample: claudeConfig.DEFAULT_AI_PARAMS.max_tokens,
+                        temperature: 0.1,
+                        prompt: `\n\nHuman: あなたはシフト最適化と生成の専門家です。労働基準法を遵守しながら、人員要件と従業員の希望休みを考慮して最適なシフトを作成します。JSONフォーマット形式で出力してください。\n\n${prompt}\n\nAssistant:`
+                    });
+                } else {
+                    throw new Error('No suitable API method found on Anthropic client');
+                }
+            } catch (apiError) {
+                console.error('Claude API呼び出しエラー:', apiError);
+                throw new Error(`Claude API呼び出しに失敗しました: ${apiError.message}`);
+            }
 
             console.log('Claude APIからレスポンスを受信しました');
 
-            // レスポンスを解析してシフトデータを抽出
-            const shiftData = this._parseAIResponse(response.content[0].text);
+            let responseText;
+            if (response.content && Array.isArray(response.content)) {
+                responseText = response.content[0].text;
+            } else if (response.completion) {
+                responseText = response.completion;
+            } else {
+                throw new Error('Unexpected response format from Claude API');
+            }
 
-            // シフトの検証
+            const shiftData = this._parseAIResponse(responseText);
+
             const validationResult = await this.validateShift(shiftData, storeId, year, month);
 
-            // 警告があればシフトデータに追加
             if (validationResult.warnings.length > 0) {
                 if (!shiftData.summary) {
                     shiftData.summary = {};
@@ -96,7 +119,6 @@ class ShiftGeneratorService {
         }
     }
 
-    // 店舗データをフォーマット
     _formatStoreData(store) {
         return {
             id: store.id,
@@ -110,10 +132,8 @@ class ShiftGeneratorService {
         };
     }
 
-    // スタッフデータをフォーマット
     _formatStaffData(staff, dayOffRequests) {
         const staffData = staff.map(s => {
-            // スタッフの休み希望を取得
             const daysOff = dayOffRequests
                 .filter(req => req.staff_id === s.id)
                 .map(req => ({
@@ -122,7 +142,6 @@ class ShiftGeneratorService {
                     status: req.status
                 }));
 
-            // 曜日ごとの希望を曜日名に変換して見やすくする
             const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
             const formattedPreferences = s.dayPreferences.map(pref => ({
                 day_of_week: pref.day_of_week,
@@ -151,13 +170,12 @@ class ShiftGeneratorService {
         return staffData;
     }
 
-    // カレンダーデータを生成
     _generateCalendarData(year, month, daysInMonth) {
         const calendarData = [];
         const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
 
         for (let day = 1; day <= daysInMonth; day++) {
-            const date = moment(`${year}-${month}-${day}`);
+            const date = moment(`${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
             const dayOfWeek = date.day();
 
             calendarData.push({
@@ -171,27 +189,22 @@ class ShiftGeneratorService {
         return calendarData;
     }
 
-    // 人員要件データをフォーマット
     _formatRequirementsData(store, year, month, daysInMonth) {
         const requirementsData = [];
 
         for (let day = 1; day <= daysInMonth; day++) {
-            const date = moment(`${year}-${month}-${day}`);
+            const date = moment(`${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
             const dayOfWeek = date.day();
             const dateStr = date.format('YYYY-MM-DD');
 
-            // 曜日ごとの人員要件を取得
             const regularRequirements = store.staffRequirements
                 .filter(req => req.day_of_week === dayOfWeek && !req.specific_date);
 
-            // 特定日の人員要件を取得
             const specialRequirements = store.staffRequirements
                 .filter(req => req.specific_date && moment(req.specific_date).format('YYYY-MM-DD') === dateStr);
 
-            // 特定日の要件があればそれを優先、なければ曜日ごとの要件を使用
             const dayRequirements = specialRequirements.length > 0 ? specialRequirements : regularRequirements;
 
-            // 時間帯ごとに整形
             const formattedRequirements = dayRequirements.map(req => ({
                 start_time: moment(req.start_time, 'HH:mm:ss').format('HH:mm'),
                 end_time: moment(req.end_time, 'HH:mm:ss').format('HH:mm'),
@@ -208,14 +221,12 @@ class ShiftGeneratorService {
         return requirementsData;
     }
 
-    // Claude AIへのプロンプトを生成
     _generatePrompt(storeData, staffData, calendarData, requirementsData, year, month) {
         const monthNames = [
             '1月', '2月', '3月', '4月', '5月', '6月',
             '7月', '8月', '9月', '10月', '11月', '12月'
         ];
 
-        // 休業日情報をわかりやすく整形
         const closedDaysInfo = storeData.closed_days.map(day => {
             if (day.specific_date) {
                 return `${day.specific_date}`;
@@ -316,12 +327,10 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
 `;
     }
 
-    // Claude AIのレスポンスを解析
     _parseAIResponse(response) {
         try {
             console.log('AIレスポンスの解析を開始します');
 
-            // JSONデータを抽出
             const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
 
             if (!jsonMatch || !jsonMatch[1]) {
@@ -332,7 +341,6 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
             const jsonString = jsonMatch[1].trim();
             console.log('JSON文字列を抽出しました');
 
-            // JSONをパース
             try {
                 const shiftData = JSON.parse(jsonString);
                 console.log('JSONのパースに成功しました');
@@ -341,7 +349,6 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                 console.error('JSONパースエラー:', parseError);
                 console.error('問題のある文字列:', jsonString);
 
-                // エラー箇所を特定するための処理
                 const lines = jsonString.split('\n');
                 for (let i = 0; i < lines.length; i++) {
                     try {
@@ -360,7 +367,6 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
         }
     }
 
-    // 生成されたシフトの警告を検証
     async validateShift(shiftData, storeId, year, month) {
         try {
             console.log('シフトの検証を開始します');
@@ -377,53 +383,42 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
 
             const warnings = [];
 
-            // 各日付のシフトを検証
             for (const dayShift of shiftData.shifts) {
                 const date = moment(dayShift.date);
                 const dayOfWeek = date.day();
 
-                // 特定日の人員要件を取得
                 const specialRequirements = store.staffRequirements
                     .filter(req => req.specific_date && moment(req.specific_date).format('YYYY-MM-DD') === dayShift.date);
 
-                // 曜日ごとの人員要件を取得
                 const regularRequirements = store.staffRequirements
                     .filter(req => req.day_of_week === dayOfWeek && !req.specific_date);
 
-                // 特定日の要件があればそれを優先、なければ曜日ごとの要件を使用
                 const requirements = specialRequirements.length > 0 ? specialRequirements : regularRequirements;
 
-                // 人員要件がない場合はスキップ
                 if (requirements.length === 0) {
                     continue;
                 }
 
-                // 各時間帯の人員要件を検証
                 for (const requirement of requirements) {
                     const startTime = moment(requirement.start_time, 'HH:mm:ss');
                     const endTime = moment(requirement.end_time, 'HH:mm:ss');
 
-                    // 時間範囲を15分単位で分割して人員をカウント
                     const timeSlots = this._generateTimeSlots(startTime, endTime, 15);
 
-                    // 各時間スロットでの人員をカウント
                     const staffCounts = {};
                     timeSlots.forEach(slot => {
                         staffCounts[slot] = 0;
                     });
 
-                    // assignments配列がない場合は空配列として扱う
                     const assignments = dayShift.assignments || [];
 
                     for (const assignment of assignments) {
                         const assignmentStart = moment(assignment.start_time, 'HH:mm');
                         const assignmentEnd = moment(assignment.end_time, 'HH:mm');
 
-                        // 休憩時間を考慮
                         const breakStart = assignment.break_start_time ? moment(assignment.break_start_time, 'HH:mm') : null;
                         const breakEnd = assignment.break_end_time ? moment(assignment.break_end_time, 'HH:mm') : null;
 
-                        // 各時間スロットでスタッフがいるかチェック
                         timeSlots.forEach(slot => {
                             const slotTime = moment(slot, 'HH:mm');
                             const isInBreak = breakStart && breakEnd &&
@@ -440,26 +435,21 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                         });
                     }
 
-                    // 人員不足の時間帯を特定
                     let currentWarningStart = null;
                     let currentShortage = 0;
 
-                    // すべての時間スロットをチェック
                     for (let i = 0; i < timeSlots.length; i++) {
                         const slot = timeSlots[i];
                         const staffCount = staffCounts[slot];
                         const shortage = requirement.required_staff_count - staffCount;
 
-                        // 人員不足の時間帯の開始
                         if (shortage > 0 && currentWarningStart === null) {
                             currentWarningStart = slot;
                             currentShortage = shortage;
                         }
-                        // 人員不足の程度が変わった、または十分な人員になった
                         else if (currentWarningStart !== null &&
                             (shortage !== currentShortage || shortage <= 0 || i === timeSlots.length - 1)) {
 
-                            // 警告を作成
                             if (currentShortage > 0) {
                                 warnings.push({
                                     date: dayShift.date,
@@ -470,7 +460,6 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                                 });
                             }
 
-                            // 新しい警告状態を設定
                             if (shortage > 0) {
                                 currentWarningStart = slot;
                                 currentShortage = shortage;
@@ -494,7 +483,6 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
         }
     }
 
-    // 時間範囲を一定間隔で分割
     _generateTimeSlots(startTime, endTime, intervalMinutes) {
         const slots = [];
         const current = moment(startTime);
@@ -507,12 +495,10 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
         return slots;
     }
 
-    // データベースにシフトを保存
     async saveShift(shiftData, storeId, year, month) {
         try {
             console.log('シフトの保存を開始します');
 
-            // 既存のシフトを検索
             let shift = await Shift.findOne({
                 where: {
                     store_id: storeId,
@@ -521,9 +507,7 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                 }
             });
 
-            // トランザクションを開始
             const result = await sequelize.transaction(async (t) => {
-                // シフトが存在しない場合は新規作成
                 if (!shift) {
                     console.log('新規シフトを作成します');
                     shift = await Shift.create({
@@ -534,12 +518,10 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                     }, { transaction: t });
                 } else {
                     console.log('既存シフトを更新します');
-                    // シフトが存在する場合はステータスを確認
                     if (shift.status === 'confirmed') {
                         throw new Error('既に確定済みのシフトは更新できません');
                     }
 
-                    // 既存のシフト割り当てを削除
                     await ShiftAssignment.destroy({
                         where: { shift_id: shift.id },
                         transaction: t
@@ -547,9 +529,7 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                 }
 
                 console.log('シフト割り当てを保存します');
-                // シフト割り当てを保存
                 for (const dayShift of shiftData.shifts) {
-                    // assignments配列がない場合は次の日に進む
                     if (!dayShift.assignments || !Array.isArray(dayShift.assignments)) {
                         console.warn(`${dayShift.date}のassignmentsがありません`);
                         continue;
@@ -580,7 +560,6 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
         }
     }
 
-    // シフトを確定
     async confirmShift(shiftId) {
         try {
             console.log(`シフト(ID: ${shiftId})の確定を開始します`);
@@ -606,7 +585,6 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
         }
     }
 
-    // シフトを印刷用フォーマットで取得
     async getShiftForPrinting(shiftId) {
         try {
             console.log(`印刷用シフト(ID: ${shiftId})の取得を開始します`);
@@ -634,12 +612,10 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                 throw new Error('シフトが見つかりません');
             }
 
-            // 日付ごとにシフトをグループ化
             const assignmentsByDate = {};
             const staffList = [];
             const staffMap = {};
 
-            // スタッフのリストを作成
             for (const assignment of shift.assignments) {
                 if (!staffMap[assignment.staff_id]) {
                     staffMap[assignment.staff_id] = {
@@ -651,13 +627,11 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                     staffList.push(staffMap[assignment.staff_id]);
                 }
 
-                // 日付ごとにグループ化
                 const dateStr = moment(assignment.date).format('YYYY-MM-DD');
                 if (!assignmentsByDate[dateStr]) {
                     assignmentsByDate[dateStr] = [];
                 }
 
-                // 勤務時間を計算（休憩時間を除く）
                 let hoursWorked = this._calculateWorkingHours(
                     assignment.start_time,
                     assignment.end_time,
@@ -665,7 +639,6 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                     assignment.break_end_time
                 );
 
-                // スタッフの総勤務時間を更新
                 staffMap[assignment.staff_id].totalHours += hoursWorked;
 
                 assignmentsByDate[dateStr].push({
@@ -681,7 +654,6 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                 });
             }
 
-            // 結果を整形
             const dates = Object.keys(assignmentsByDate).sort();
             const dailyShifts = dates.map(date => {
                 return {
@@ -702,7 +674,7 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
                 daily_shifts: dailyShifts,
                 staff_summary: staffList.map(staff => ({
                     ...staff,
-                    totalHours: Math.round(staff.totalHours * 10) / 10 // 小数点第1位まで
+                    totalHours: Math.round(staff.totalHours * 10) / 10
                 }))
             };
         } catch (error) {
@@ -711,14 +683,12 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
         }
     }
 
-    // 勤務時間を計算（休憩時間を除く）
     _calculateWorkingHours(startTime, endTime, breakStartTime, breakEndTime) {
         const start = moment(startTime, 'HH:mm:ss');
         const end = moment(endTime, 'HH:mm:ss');
 
         let totalMinutes = end.diff(start, 'minutes');
 
-        // 休憩時間があれば差し引く
         if (breakStartTime && breakEndTime) {
             const breakStart = moment(breakStartTime, 'HH:mm:ss');
             const breakEnd = moment(breakEndTime, 'HH:mm:ss');
@@ -726,7 +696,7 @@ JSONフォーマットで、以下の構造で出力してください。必ずJ
             totalMinutes -= breakMinutes;
         }
 
-        return totalMinutes / 60; // 時間単位に変換
+        return totalMinutes / 60;
     }
 }
 
