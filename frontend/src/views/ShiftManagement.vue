@@ -336,7 +336,7 @@
       :header="shiftEditorDialog.title"
       :modal="true"
       class="modern-dialog"
-      :style="{ width: '500px' }"
+      :style="{ width: '600px' }"
       :closable="!saving"
     >
       <div class="shift-editor-form">
@@ -351,24 +351,52 @@
             <span>過去の日付を編集しています。変更は履歴に記録されます。</span>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">開始時間</label>
-            <InputMask
-              v-model="shiftEditorDialog.startTime"
-              mask="99:99"
-              placeholder="09:00"
-              class="form-input"
-            />
-          </div>
+          <div class="time-inputs-section">
+            <div class="time-input-group">
+              <label class="form-label">開始時間</label>
+              <div class="time-selector">
+                <Dropdown
+                  v-model="shiftEditorDialog.startTimeHour"
+                  :options="hourOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="時"
+                  class="time-dropdown hour-dropdown"
+                />
+                <span class="time-separator">:</span>
+                <Dropdown
+                  v-model="shiftEditorDialog.startTimeMinute"
+                  :options="minuteOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="分"
+                  class="time-dropdown minute-dropdown"
+                />
+              </div>
+            </div>
 
-          <div class="form-group">
-            <label class="form-label">終了時間</label>
-            <InputMask
-              v-model="shiftEditorDialog.endTime"
-              mask="99:99"
-              placeholder="18:00"
-              class="form-input"
-            />
+            <div class="time-input-group">
+              <label class="form-label">終了時間</label>
+              <div class="time-selector">
+                <Dropdown
+                  v-model="shiftEditorDialog.endTimeHour"
+                  :options="hourOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="時"
+                  class="time-dropdown hour-dropdown"
+                />
+                <span class="time-separator">:</span>
+                <Dropdown
+                  v-model="shiftEditorDialog.endTimeMinute"
+                  :options="minuteOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="分"
+                  class="time-dropdown minute-dropdown"
+                />
+              </div>
+            </div>
           </div>
 
           <div class="form-group checkbox-group">
@@ -521,6 +549,23 @@ export default {
     const systemSettings = ref({ closing_day: 25 });
     const holidays = ref([]);
 
+    const hourOptions = ref([]);
+    const minuteOptions = ref([]);
+
+    const generateTimeOptions = () => {
+      hourOptions.value = Array.from({ length: 24 }, (_, i) => ({
+        label: i.toString().padStart(2, '0'),
+        value: i.toString().padStart(2, '0')
+      }));
+
+      minuteOptions.value = [
+        { label: '00', value: '00' },
+        { label: '15', value: '15' },
+        { label: '30', value: '30' },
+        { label: '45', value: '45' }
+      ];
+    };
+
     const viewModeOptions = ref([
       { label: 'カレンダー', value: 'calendar' },
       { label: 'ガントチャート', value: 'gantt' }
@@ -539,8 +584,10 @@ export default {
       title: "",
       date: null,
       staff: null,
-      startTime: "",
-      endTime: "",
+      startTimeHour: "09",
+      startTimeMinute: "00",
+      endTimeHour: "18",
+      endTimeMinute: "00",
       isRestDay: false,
       isConfirmed: false,
       isPast: false,
@@ -608,6 +655,19 @@ export default {
       return hours + minutes / 60;
     };
 
+    const parseTimeToComponents = (timeStr) => {
+      if (!timeStr) return { hour: "09", minute: "00" };
+      const [hour, minute] = timeStr.split(':');
+      return {
+        hour: hour.padStart(2, '0'),
+        minute: minute.padStart(2, '0')
+      };
+    };
+
+    const combineTimeComponents = (hour, minute) => {
+      return `${hour}:${minute}`;
+    };
+
     const openGanttShiftEditor = (day, staff, event) => {
       if (!isEditMode.value || isShiftConfirmed.value) return;
       
@@ -619,14 +679,16 @@ export default {
       const hourWidth = 60;
       
       const clickedHour = Math.floor(clickX / hourWidth);
-      const startTime = `${clickedHour.toString().padStart(2, '0')}:00`;
-      const endTime = `${(clickedHour + 8).toString().padStart(2, '0')}:00`;
+      const startHour = clickedHour.toString().padStart(2, '0');
+      const endHour = (clickedHour + 8).toString().padStart(2, '0');
       
       shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${day.date}`;
       shiftEditorDialog.date = day.date;
       shiftEditorDialog.staff = staff;
-      shiftEditorDialog.startTime = startTime;
-      shiftEditorDialog.endTime = endTime;
+      shiftEditorDialog.startTimeHour = startHour;
+      shiftEditorDialog.startTimeMinute = "00";
+      shiftEditorDialog.endTimeHour = endHour;
+      shiftEditorDialog.endTimeMinute = "00";
       shiftEditorDialog.isRestDay = false;
       shiftEditorDialog.isConfirmed = isShiftConfirmed.value;
       shiftEditorDialog.isPast = isPastDate(day.date);
@@ -879,13 +941,20 @@ export default {
       shiftEditorDialog.changeReason = "";
 
       if (shift) {
-        shiftEditorDialog.startTime = shift.start_time;
-        shiftEditorDialog.endTime = shift.end_time;
+        const startTime = parseTimeToComponents(shift.start_time);
+        const endTime = parseTimeToComponents(shift.end_time);
+        
+        shiftEditorDialog.startTimeHour = startTime.hour;
+        shiftEditorDialog.startTimeMinute = startTime.minute;
+        shiftEditorDialog.endTimeHour = endTime.hour;
+        shiftEditorDialog.endTimeMinute = endTime.minute;
         shiftEditorDialog.isRestDay = shift.is_day_off;
         shiftEditorDialog.hasShift = true;
       } else {
-        shiftEditorDialog.startTime = "09:00";
-        shiftEditorDialog.endTime = "18:00";
+        shiftEditorDialog.startTimeHour = "09";
+        shiftEditorDialog.startTimeMinute = "00";
+        shiftEditorDialog.endTimeHour = "18";
+        shiftEditorDialog.endTimeMinute = "00";
         shiftEditorDialog.isRestDay = false;
         shiftEditorDialog.hasShift = false;
       }
@@ -1352,8 +1421,6 @@ export default {
       return printHtml;
     };
 
-    // ShiftManagement.vue の saveShift メソッドを修正
-
     const saveShift = async () => {
       if (!shiftEditorDialog.date || !shiftEditorDialog.staff) return;
 
@@ -1362,31 +1429,19 @@ export default {
         return;
       }
 
-      if (!shiftEditorDialog.startTime || !shiftEditorDialog.endTime) {
+      if (!shiftEditorDialog.startTimeHour || !shiftEditorDialog.startTimeMinute || 
+          !shiftEditorDialog.endTimeHour || !shiftEditorDialog.endTimeMinute) {
         toast.add({
           severity: "warn",
           summary: "入力エラー",
-          detail: "開始時間と終了時間を入力してください",
+          detail: "開始時間と終了時間を選択してください",
           life: 3000,
         });
         return;
       }
 
-      // 時間形式の検証と修正
-      const startTime = shiftEditorDialog.startTime;
-      const endTime = shiftEditorDialog.endTime;
-
-      // HH:MM形式の検証
-      const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-      if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
-        toast.add({
-          severity: "warn",
-          summary: "入力エラー",
-          detail: "時間は HH:MM 形式で入力してください（例: 09:00）",
-          life: 3000,
-        });
-        return;
-      }
+      const startTime = combineTimeComponents(shiftEditorDialog.startTimeHour, shiftEditorDialog.startTimeMinute);
+      const endTime = combineTimeComponents(shiftEditorDialog.endTimeHour, shiftEditorDialog.endTimeMinute);
 
       if (startTime >= endTime) {
         toast.add({
@@ -1411,29 +1466,26 @@ export default {
       saving.value = true;
 
       try {
-        // 必要な情報をすべて含むデータオブジェクトを作成
         const shiftData = {
           store_id: selectedStore.value.id,
           staff_id: shiftEditorDialog.staff.id,
           date: shiftEditorDialog.date,
           start_time: startTime,
           end_time: endTime,
-          break_start_time: null, // デフォルト値を設定
-          break_end_time: null,   // デフォルト値を設定
-          notes: null             // デフォルト値を設定
+          break_start_time: null,
+          break_end_time: null,
+          notes: null
         };
 
-        // 過去の日付の場合は変更理由を追加
         if (shiftEditorDialog.isPast) {
           shiftData.change_reason = shiftEditorDialog.changeReason;
         }
 
-        console.log('Sending shift data:', shiftData); // デバッグ用
+        console.log('Sending shift data:', shiftData);
 
         const existingShift = getShiftForStaff(shiftEditorDialog.date, shiftEditorDialog.staff.id);
 
         if (existingShift) {
-          // 更新の場合
           await store.dispatch("shift/updateShiftAssignment", {
             year: currentYear.value,
             month: currentMonth.value,
@@ -1441,7 +1493,6 @@ export default {
             assignmentData: shiftData
           });
         } else {
-          // 新規作成の場合
           await store.dispatch("shift/createShiftAssignment", {
             year: currentYear.value,
             month: currentMonth.value,
@@ -1465,7 +1516,6 @@ export default {
       } catch (error) {
         console.error("シフト保存エラー:", error);
         
-        // エラーの詳細をログに出力
         if (error.response) {
           console.error("Response data:", error.response.data);
           console.error("Response status:", error.response.status);
@@ -1577,6 +1627,7 @@ export default {
 
     onMounted(async () => {
       try {
+        generateTimeOptions();
         await fetchSystemSettings();
         await fetchHolidays(currentYear.value);
         
@@ -1605,6 +1656,8 @@ export default {
       viewMode,
       viewModeOptions,
       timelineHours,
+      hourOptions,
+      minuteOptions,
       currentYear,
       currentMonth,
       selectedStore,
@@ -1621,6 +1674,8 @@ export default {
       getTimeHeaderStyle,
       getGanttBarStyle,
       parseTimeToFloat,
+      parseTimeToComponents,
+      combineTimeComponents,
       openGanttShiftEditor,
       getStatusBannerClass,
       getStatusIcon,
@@ -2672,16 +2727,67 @@ export default {
   border: 1px solid rgba(255, 152, 0, 0.2);
 }
 
-.form-group {
+.time-inputs-section {
+  margin-bottom: 1.5rem;
+}
+
+.time-input-group {
   margin-bottom: 1.5rem;
 }
 
 .form-label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   font-weight: 600;
-  color: #333;
-  font-size: 0.9rem;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.time-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f9fafb;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 2px solid #e5e7eb;
+  transition: all 0.3s ease;
+  max-width: 300px;
+}
+
+.p-inputtext{
+  font-size: 1.2em;
+}
+
+.time-selector:focus-within {
+  border-color: #3b82f6;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.time-dropdown {
+  flex: 1;
+  border: none;
+  background: transparent;
+}
+
+.hour-dropdown {
+  min-width: 80px;
+}
+
+.minute-dropdown {
+  min-width: 80px;
+}
+
+.time-separator {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 0 0.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
 }
 
 .form-input, .form-textarea {
@@ -2720,8 +2826,9 @@ export default {
 .dialog-actions {
   display: flex;
   gap: 1rem;
-  justify-content: flex-end;
+  justify-content: center;
   padding-top: 1rem;
+  width: 100%;
 }
 
 .delete-button, .cancel-button, .save-button, .confirm-button {
@@ -2784,6 +2891,7 @@ export default {
   color: #333;
 }
 
+
 @media (max-width: 1024px) {
   .control-panel {
     grid-template-columns: 1fr;
@@ -2840,6 +2948,15 @@ export default {
     padding: 0.3rem 0.2rem;
     font-size: 0.6rem;
     min-width: 36px;
+  }
+
+  .time-selector {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .time-dropdown {
+    width: 100%;
   }
 }
 </style>
