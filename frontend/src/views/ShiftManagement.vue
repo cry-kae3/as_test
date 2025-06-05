@@ -1352,6 +1352,8 @@ export default {
       return printHtml;
     };
 
+    // ShiftManagement.vue の saveShift メソッドを修正
+
     const saveShift = async () => {
       if (!shiftEditorDialog.date || !shiftEditorDialog.staff) return;
 
@@ -1370,8 +1372,21 @@ export default {
         return;
       }
 
+      // 時間形式の検証と修正
       const startTime = shiftEditorDialog.startTime;
       const endTime = shiftEditorDialog.endTime;
+
+      // HH:MM形式の検証
+      const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "時間は HH:MM 形式で入力してください（例: 09:00）",
+          life: 3000,
+        });
+        return;
+      }
 
       if (startTime >= endTime) {
         toast.add({
@@ -1396,29 +1411,41 @@ export default {
       saving.value = true;
 
       try {
+        // 必要な情報をすべて含むデータオブジェクトを作成
         const shiftData = {
           store_id: selectedStore.value.id,
-          date: shiftEditorDialog.date,
           staff_id: shiftEditorDialog.staff.id,
+          date: shiftEditorDialog.date,
           start_time: startTime,
           end_time: endTime,
-          change_reason: shiftEditorDialog.isPast ? shiftEditorDialog.changeReason : null,
+          break_start_time: null, // デフォルト値を設定
+          break_end_time: null,   // デフォルト値を設定
+          notes: null             // デフォルト値を設定
         };
+
+        // 過去の日付の場合は変更理由を追加
+        if (shiftEditorDialog.isPast) {
+          shiftData.change_reason = shiftEditorDialog.changeReason;
+        }
+
+        console.log('Sending shift data:', shiftData); // デバッグ用
 
         const existingShift = getShiftForStaff(shiftEditorDialog.date, shiftEditorDialog.staff.id);
 
         if (existingShift) {
+          // 更新の場合
           await store.dispatch("shift/updateShiftAssignment", {
             year: currentYear.value,
             month: currentMonth.value,
             assignmentId: existingShift.id,
-            ...shiftData,
+            assignmentData: shiftData
           });
         } else {
+          // 新規作成の場合
           await store.dispatch("shift/createShiftAssignment", {
             year: currentYear.value,
             month: currentMonth.value,
-            ...shiftData,
+            assignmentData: shiftData
           });
         }
 
@@ -1437,10 +1464,22 @@ export default {
         });
       } catch (error) {
         console.error("シフト保存エラー:", error);
+        
+        // エラーの詳細をログに出力
+        if (error.response) {
+          console.error("Response data:", error.response.data);
+          console.error("Response status:", error.response.status);
+        }
+        
+        let errorMessage = "シフトの保存に失敗しました";
+        if (error.response && error.response.data && error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
+        
         toast.add({
           severity: "error",
           summary: "エラー",
-          detail: "シフトの保存に失敗しました",
+          detail: errorMessage,
           life: 3000,
         });
       } finally {

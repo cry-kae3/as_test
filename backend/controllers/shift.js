@@ -465,18 +465,68 @@ const confirmShift = async (req, res) => {
     }
 };
 
+// backend/controllers/shift.js の createShiftAssignment メソッドを修正
+
 const createShiftAssignment = async (req, res) => {
     try {
         const { year, month } = req.params;
         const { store_id, staff_id, date, start_time, end_time, break_start_time, break_end_time, notes, change_reason } = req.body;
 
+        console.log('Received assignment data:', {
+            year,
+            month,
+            store_id,
+            staff_id,
+            date,
+            start_time,
+            end_time,
+            break_start_time,
+            break_end_time,
+            notes,
+            change_reason
+        });
+
+        // バリデーション
         if (!store_id || !staff_id || !date || !start_time || !end_time) {
-            return res.status(400).json({ message: '必須フィールドが不足しています' });
+            console.log('Validation failed:', {
+                store_id: !!store_id,
+                staff_id: !!staff_id,
+                date: !!date,
+                start_time: !!start_time,
+                end_time: !!end_time
+            });
+            return res.status(400).json({
+                message: '必須フィールドが不足しています',
+                missing_fields: {
+                    store_id: !store_id,
+                    staff_id: !staff_id,
+                    date: !date,
+                    start_time: !start_time,
+                    end_time: !end_time
+                }
+            });
         }
 
+        // 時間形式の検証
+        const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+        if (!timeRegex.test(start_time) || !timeRegex.test(end_time)) {
+            return res.status(400).json({
+                message: '時間は HH:MM 形式で入力してください'
+            });
+        }
+
+        // 日付形式の検証
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(date)) {
+            return res.status(400).json({
+                message: '日付は YYYY-MM-DD 形式で入力してください'
+            });
+        }
+
+        // シフトの存在確認
         const shift = await Shift.findOne({
             where: {
-                store_id,
+                store_id: parseInt(store_id),
                 year: parseInt(year),
                 month: parseInt(month)
             }
@@ -490,40 +540,62 @@ const createShiftAssignment = async (req, res) => {
             return res.status(400).json({ message: '確定済みのシフトは編集できません' });
         }
 
-        const assignment = await ShiftAssignment.create({
-            shift_id: shift.id,
-            staff_id,
-            date,
-            start_time,
-            end_time,
-            break_start_time,
-            break_end_time,
-            notes
+        // 重複チェック
+        const existingAssignment = await ShiftAssignment.findOne({
+            where: {
+                shift_id: shift.id,
+                staff_id: parseInt(staff_id),
+                date: date
+            }
         });
 
+        if (existingAssignment) {
+            return res.status(400).json({
+                message: 'この日付に既にシフトが存在します。更新する場合は更新APIを使用してください。'
+            });
+        }
+
+        // シフト割り当ての作成
+        const assignment = await ShiftAssignment.create({
+            shift_id: shift.id,
+            staff_id: parseInt(staff_id),
+            date: date,
+            start_time: start_time,
+            end_time: end_time,
+            break_start_time: break_start_time || null,
+            break_end_time: break_end_time || null,
+            notes: notes || null
+        });
+
+        // 変更ログの記録
         const isPastDate = new Date(date) < new Date();
         const logData = {
             shift_assignment_id: assignment.id,
             user_id: req.user.id,
             change_type: 'create',
             new_data: {
-                staff_id,
+                staff_id: parseInt(staff_id),
                 date,
                 start_time,
                 end_time,
-                break_start_time,
-                break_end_time,
-                notes
+                break_start_time: break_start_time || null,
+                break_end_time: break_end_time || null,
+                notes: notes || null
             },
             change_reason: isPastDate && change_reason ? change_reason : '新規シフト作成'
         };
 
         await ShiftChangeLog.create(logData);
 
+        console.log('Assignment created successfully:', assignment.id);
+
         res.status(201).json(assignment);
     } catch (error) {
         console.error('シフト割り当て作成エラー:', error);
-        res.status(500).json({ message: 'シフト割り当ての作成中にエラーが発生しました' });
+        res.status(500).json({
+            message: 'シフト割り当ての作成中にエラーが発生しました',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
     }
 };
 

@@ -187,15 +187,28 @@ const actions = {
         }
     },
 
+    // createShiftAssignment アクションを修正
     async createShiftAssignment({ commit }, { year, month, assignmentData }) {
         commit('setLoading', true);
         commit('clearError');
 
         try {
+            console.log('Sending assignment data to API:', assignmentData);
+
             const response = await api.post(`/shifts/${year}/${month}/assignments`, assignmentData);
+
+            // APIレスポンスをログに出力
+            console.log('API response:', response.data);
+
             commit('addShiftAssignment', { date: assignmentData.date, assignment: response.data });
             return response.data;
         } catch (error) {
+            console.error('API error details:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
+
             const message = error.response?.data?.message || 'シフト割り当ての作成に失敗しました';
             commit('setError', message);
             throw error;
@@ -204,15 +217,27 @@ const actions = {
         }
     },
 
+    // updateShiftAssignment アクションを修正
     async updateShiftAssignment({ commit }, { year, month, assignmentId, assignmentData }) {
         commit('setLoading', true);
         commit('clearError');
 
         try {
+            console.log('Updating assignment:', { assignmentId, assignmentData });
+
             const response = await api.put(`/shifts/${year}/${month}/assignments/${assignmentId}`, assignmentData);
+
+            console.log('Update response:', response.data);
+
             commit('updateShiftAssignmentData', response.data);
             return response.data;
         } catch (error) {
+            console.error('Update error details:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message
+            });
+
             const message = error.response?.data?.message || 'シフト割り当ての更新に失敗しました';
             commit('setError', message);
             throw error;
