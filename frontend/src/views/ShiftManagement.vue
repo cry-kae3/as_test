@@ -123,11 +123,11 @@
       </div>
 
       <div v-if="viewMode === 'calendar'" class="calendar-view">
-        <div class="calendar-header">
-          <div class="staff-column-header">
-            <span>スタッフ</span>
-          </div>
-          <div class="dates-header">
+        <div class="calendar-container">
+          <div class="calendar-header">
+            <div class="staff-column-header">
+              <span>スタッフ</span>
+            </div>
             <div 
               v-for="day in daysInMonth" 
               :key="day.date" 
@@ -143,25 +143,23 @@
               <div v-if="day.isNationalHoliday" class="holiday-indicator">祝</div>
             </div>
           </div>
-        </div>
 
-        <div class="calendar-body">
-          <div
-            v-for="staff in staffList"
-            :key="staff.id"
-            class="staff-row"
-          >
-            <div class="staff-info">
-              <div class="staff-avatar">
-                {{ staff.first_name.charAt(0) }}
+          <div class="calendar-body">
+            <div
+              v-for="staff in staffList"
+              :key="staff.id"
+              class="staff-row"
+            >
+              <div class="staff-info">
+                <div class="staff-avatar">
+                  {{ staff.first_name.charAt(0) }}
+                </div>
+                <div class="staff-details">
+                  <span class="staff-name">{{ staff.last_name }} {{ staff.first_name }}</span>
+                  <span class="staff-role">{{ staff.position || '一般' }}</span>
+                </div>
               </div>
-              <div class="staff-details">
-                <span class="staff-name">{{ staff.last_name }} {{ staff.first_name }}</span>
-                <span class="staff-role">{{ staff.position || '一般' }}</span>
-              </div>
-            </div>
-            
-            <div class="shift-cells">
+              
               <div
                 v-for="day in daysInMonth"
                 :key="`${staff.id}-${day.date}`"
@@ -1650,20 +1648,25 @@ export default {
   color: #007bff;
 }
 
-.calendar-view, .gantt-view {
+.calendar-view {
   position: relative;
 }
 
-.calendar-header, .gantt-header {
+.calendar-container {
+  overflow: auto;
+  max-height: calc(100vh - 400px);
+}
+
+.calendar-header {
   display: flex;
   background: #f8f9fa;
   border-bottom: 1px solid #dee2e6;
   position: sticky;
   top: 0;
-  z-index: 9;
+  z-index: 10;
 }
 
-.staff-column-header, .gantt-staff-header {
+.staff-column-header {
   min-width: 180px;
   width: 180px;
   padding: 1rem;
@@ -1676,7 +1679,8 @@ export default {
   justify-content: center;
   position: sticky;
   left: 0;
-  z-index: 10;
+  z-index: 11;
+  border-right: 1px solid #dee2e6;
 }
 
 .date-cell-header {
@@ -1689,6 +1693,7 @@ export default {
   flex-direction: column;
   align-items: center;
   gap: 0.2rem;
+  background: #f8f9fa;
 }
 
 .date-cell-header.is-today {
@@ -1724,27 +1729,20 @@ export default {
   font-weight: 500;
 }
 
-.dates-header {
-  display: flex;
-  flex: 1;
-  overflow-x: auto;
-}
-
 .calendar-body {
-  overflow-y: auto;
-  height: calc(100vh - 400px);
+  display: block;
 }
 
-.staff-row, .gantt-staff-row {
+.staff-row {
   display: flex;
   border-bottom: 1px solid #f1f3f4;
 }
 
-.staff-row:hover, .gantt-staff-row:hover {
+.staff-row:hover {
   background: #f8f9fa;
 }
 
-.staff-info, .gantt-staff-info {
+.staff-info {
   min-width: 180px;
   width: 180px;
   padding: 1rem;
@@ -1786,11 +1784,6 @@ export default {
 .staff-role {
   font-size: 0.7rem;
   color: #6c757d;
-}
-
-.shift-cells {
-  display: flex;
-  flex: 1;
 }
 
 .shift-cell {
@@ -1875,6 +1868,35 @@ export default {
   font-weight: 500;
 }
 
+.gantt-view {
+  position: relative;
+}
+
+.gantt-header {
+  display: flex;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  position: sticky;
+  top: 0;
+  z-index: 9;
+}
+
+.gantt-staff-header {
+  min-width: 180px;
+  width: 180px;
+  padding: 1rem;
+  background: #495057;
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
 .gantt-timeline-header {
   display: flex;
   flex: 1;
@@ -1885,423 +1907,364 @@ export default {
   text-align: center;
   padding: 0.75rem 0.5rem;
   border-right: 1px solid #dee2e6;
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: #495057;
+  font-size:0.7rem;
+font-weight: 500;
+color: #495057;
 }
-
 .gantt-body {
-  overflow-y: auto;
-  height: calc(100vh - 400px);
+overflow-y: auto;
+height: calc(100vh - 400px);
 }
-
 .gantt-day-section {
-  border-bottom: 1px solid #e9ecef;
+border-bottom: 1px solid #e9ecef;
 }
-
 .gantt-day-section.is-today {
-  background: #f8f9fa;
+background: #f8f9fa;
 }
-
 .gantt-day-section.is-weekend {
-  background: #fffbf0;
+background: #fffbf0;
 }
-
 .gantt-day-section.is-holiday {
-  background: #fff5f5;
+background: #fff5f5;
 }
-
 .gantt-day-header {
-  padding: 0.75rem 1rem;
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
+padding: 0.75rem 1rem;
+background: #f8f9fa;
+border-bottom: 1px solid #dee2e6;
 }
-
 .day-info {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+display: flex;
+align-items: center;
+gap: 1rem;
 }
-
 .day-number {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #495057;
+font-size: 1rem;
+font-weight: 600;
+color: #495057;
 }
-
 .day-weekday {
-  font-size: 0.8rem;
-  color: #6c757d;
+font-size: 0.8rem;
+color: #6c757d;
 }
-
 .day-badges {
-  display: flex;
-  gap: 0.5rem;
+display: flex;
+gap: 0.5rem;
 }
-
 .holiday-badge {
-  font-size: 0.6rem;
-  padding: 0.15rem 0.3rem;
-  border-radius: 3px;
-  background: #dc3545;
-  color: white;
-  font-weight: 500;
+font-size: 0.6rem;
+padding: 0.15rem 0.3rem;
+border-radius: 3px;
+background: #dc3545;
+color: white;
+font-weight: 500;
 }
-
 .gantt-staff-rows {
-  display: flex;
-  flex-direction: column;
+display: flex;
+flex-direction: column;
 }
-
+.gantt-staff-row {
+display: flex;
+border-bottom: 1px solid #f1f3f4;
+}
+.gantt-staff-row:hover {
+background: #f8f9fa;
+}
 .gantt-staff-info {
-  min-width: 180px;
-  width: 180px;
-  padding: 0.75rem;
-  background: #fafafa;
-  border-right: 1px solid #dee2e6;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  position: sticky;
-  left: 0;
-  z-index: 5;
+min-width: 180px;
+width: 180px;
+padding: 0.75rem;
+background: #fafafa;
+border-right: 1px solid #dee2e6;
+display: flex;
+align-items: center;
+gap: 0.5rem;
+position: sticky;
+left: 0;
+z-index: 5;
 }
-
 .staff-avatar-small {
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  background: #007bff;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 500;
-  font-size: 0.7rem;
+width: 28px;
+height: 28px;
+border-radius: 4px;
+background: #007bff;
+color: white;
+display: flex;
+align-items: center;
+justify-content: center;
+font-weight: 500;
+font-size: 0.7rem;
 }
-
 .staff-name-small {
-  font-weight: 500;
-  color: #495057;
-  font-size: 0.75rem;
+font-weight: 500;
+color: #495057;
+font-size: 0.75rem;
 }
-
 .gantt-timeline {
-  position: relative;
-  flex: 1;
-  cursor: pointer;
-  min-height: 50px;
-  overflow-x: auto;
+position: relative;
+flex: 1;
+cursor: pointer;
+min-height: 50px;
+overflow-x: auto;
 }
-
 .gantt-timeline:hover {
-  background: #f8f9fa;
+background: #f8f9fa;
 }
-
 .gantt-grid {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
+position: absolute;
+top: 0;
+left: 0;
+right: 0;
+bottom: 0;
+display: flex;
 }
-
 .gantt-hour-line {
-  border-right: 1px solid #f1f3f4;
-  height: 100%;
+border-right: 1px solid #f1f3f4;
+height: 100%;
 }
-
 .gantt-shift-block {
-  position: absolute;
-  top: 6px;
-  bottom: 6px;
-  background: #28a745;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 500;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  cursor: pointer;
-  z-index: 3;
+position: absolute;
+top: 6px;
+bottom: 6px;
+background: #28a745;
+border-radius: 4px;
+display: flex;
+align-items: center;
+justify-content: center;
+color: white;
+font-weight: 500;
+box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+cursor: pointer;
+z-index: 3;
 }
-
 .gantt-shift-block:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+transform: translateY(-1px);
+box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
-
 .shift-time-text {
-  font-size: 0.7rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 0.5rem;
+font-size: 0.7rem;
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+padding: 0 0.5rem;
 }
-
 .shift-summary-panel {
-  padding: 1.25rem;
-  background: #f8f9fa;
-  border-top: 1px solid #dee2e6;
+padding: 1.25rem;
+background: #f8f9fa;
+border-top: 1px solid #dee2e6;
 }
-
 .summary-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #495057;
-  margin-bottom: 1rem;
+font-size: 0.95rem;
+font-weight: 600;
+color: #495057;
+margin-bottom: 1rem;
 }
-
 .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 0.75rem;
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+gap: 0.75rem;
 }
-
 .summary-card {
-  background: white;
-  border-radius: 6px;
-  padding: 0.75rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid #dee2e6;
-  transition: all 0.2s ease;
+background: white;
+border-radius: 6px;
+padding: 0.75rem;
+display: flex;
+justify-content: space-between;
+align-items: center;
+border: 1px solid #dee2e6;
+transition: all 0.2s ease;
 }
-
 .summary-card:hover {
-  border-color: #adb5bd;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+border-color: #adb5bd;
+box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
-
 .summary-staff {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+display: flex;
+align-items: center;
+gap: 0.5rem;
 }
-
 .summary-hours {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+display: flex;
+flex-direction: column;
+align-items: center;
+text-align: center;
 }
-
 .hours-number {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #007bff;
+font-size: 1.1rem;
+font-weight: 600;
+color: #007bff;
 }
-
 .hours-unit {
-  font-size: 0.65rem;
-  color: #6c757d;
+font-size: 0.65rem;
+color: #6c757d;
 }
-
 .shift-editor-dialog .p-dialog-content {
-  border-radius: 8px;
+border-radius: 8px;
 }
-
 .shift-editor-form {
-  padding: 0.5rem 0;
+padding: 0.5rem 0;
 }
-
 .status-alert {
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  font-weight: 500;
-  font-size: 0.875rem;
+padding: 0.75rem 1rem;
+border-radius: 6px;
+display: flex;
+align-items: center;
+gap: 0.5rem;
+margin-bottom: 1rem;
+font-weight: 500;
+font-size: 0.875rem;
 }
-
 .status-alert.warning {
-  background: #fff3cd;
-  color: #856404;
-  border: 1px solid #ffeaa7;
+background: #fff3cd;
+color: #856404;
+border: 1px solid #ffeaa7;
 }
-
 .time-inputs-section {
-  margin-bottom: 1rem;
+margin-bottom: 1rem;
 }
-
 .time-input-group {
-  margin-bottom: 1rem;
+margin-bottom: 1rem;
 }
-
 .form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: #495057;
-  font-size: 0.875rem;
+display: block;
+margin-bottom: 0.5rem;
+font-weight: 600;
+color: #495057;
+font-size: 0.875rem;
 }
-
 .time-selector {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #f8f9fa;
-  padding: 0.5rem;
-  border-radius: 6px;
-  border: 1px solid #ced4da;
-  max-width: 250px;
+display: flex;
+align-items: center;
+gap: 0.5rem;
+background: #f8f9fa;
+padding: 0.5rem;
+border-radius: 6px;
+border: 1px solid #ced4da;
+max-width: 250px;
 }
-
 .time-dropdown {
-  flex: 1;
-  border: none;
-  background: transparent;
+flex: 1;
+border: none;
+background: transparent;
 }
-
 .time-separator {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #6c757d;
+font-size: 1.1rem;
+font-weight: 600;
+color: #6c757d;
 }
-
 .form-group {
-  margin-bottom: 1rem;
+margin-bottom: 1rem;
 }
-
 .form-textarea {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 0.875rem;
+width: 100%;
+padding: 0.5rem;
+border: 1px solid #ced4da;
+border-radius: 4px;
+font-size: 0.875rem;
 }
-
 .checkbox-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+display: flex;
+align-items: center;
+gap: 0.5rem;
 }
-
 .checkbox-label {
-  font-weight: 500;
-  color: #495057;
-  cursor: pointer;
-  font-size: 0.875rem;
+font-weight: 500;
+color: #495057;
+cursor: pointer;
+font-size: 0.875rem;
 }
-
 .dialog-actions {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: center;
-  padding-top: 0.5rem;
+display: flex;
+gap: 0.75rem;
+justify-content: center;
+padding-top: 0.5rem;
 }
-
 .delete-button, .cancel-button, .save-button {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  font-weight: 500;
-  border: 1px solid;
-  transition: all 0.2s ease;
-  cursor: pointer;
-  font-size: 0.875rem;
+padding: 0.5rem 1rem;
+border-radius: 4px;
+font-weight: 500;
+border: 1px solid;
+transition: all 0.2s ease;
+cursor: pointer;
+font-size: 0.875rem;
 }
-
 .delete-button {
-  background: #dc3545;
-  color: white;
-  border-color: #dc3545;
+background: #dc3545;
+color: white;
+border-color: #dc3545;
 }
-
 .delete-button:hover {
-  background: #c82333;
-  border-color: #bd2130;
+background: #c82333;
+border-color: #bd2130;
 }
-
 .cancel-button {
-  background: #f8f9fa;
-  color: #6c757d;
-  border-color: #ced4da;
+background: #f8f9fa;
+color: #6c757d;
+border-color: #ced4da;
 }
-
 .cancel-button:hover {
-  background: #e9ecef;
-  color: #495057;
+background: #e9ecef;
+color: #495057;
 }
-
 .save-button {
-  background: #28a745;
-  color: white;
-  border-color: #28a745;
+background: #28a745;
+color: white;
+border-color: #28a745;
 }
-
 .save-button:hover {
-  background: #218838;
-  border-color: #1e7e34;
+background: #218838;
+border-color: #1e7e34;
 }
-
 @media (max-width: 1024px) {
-  .control-panel {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    text-align: center;
-  }
-
-  .action-controls {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  .summary-grid {
-    grid-template-columns: 1fr;
-  }
+.control-panel {
+grid-template-columns: 1fr;
+gap: 1rem;
+text-align: center;
 }
-
+.action-controls {
+justify-content: center;
+flex-wrap: wrap;
+}
+.summary-grid {
+grid-template-columns: 1fr;
+}
+}
 @media (max-width: 768px) {
-  .shift-management {
-    padding: 1rem;
-  }
-
-  .page-title {
-    font-size: 1.5rem;
-  }
-
-  .staff-column-header, .staff-info, .gantt-staff-header, .gantt-staff-info {
-    min-width: 120px;
-    width: 120px;
-  }
-
-  .date-cell-header, .shift-cell {
-    min-width: 50px;
-    width: 50px;
-  }
-
-  .staff-avatar {
-    width: 28px;
-    height: 28px;
-    font-size: 0.7rem;
-  }
-
-  .staff-name {
-    font-size: 0.75rem;
-  }
-
-  .shift-time-card {
-    padding: 0.3rem 0.2rem;
-    font-size: 0.6rem;
-    min-width: 36px;
-  }
-
-  .time-selector {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .time-dropdown {
-    width: 100%;
-  }
-
-  .calendar-body, .gantt-body {
-    height: calc(100vh - 500px);
-  }
+.shift-management {
+padding: 1rem;
+}
+.page-title {
+font-size: 1.5rem;
+}
+.staff-column-header, .staff-info, .gantt-staff-header, .gantt-staff-info {
+min-width: 120px;
+width: 120px;
+}
+.date-cell-header, .shift-cell {
+min-width: 50px;
+width: 50px;
+}
+.staff-avatar {
+width: 28px;
+height: 28px;
+font-size: 0.7rem;
+}
+.staff-name {
+font-size: 0.75rem;
+}
+.shift-time-card {
+padding: 0.3rem 0.2rem;
+font-size: 0.6rem;
+min-width: 36px;
+}
+.time-selector {
+flex-direction: column;
+gap: 0.5rem;
+}
+.time-dropdown {
+width: 100%;
+}
+.calendar-container, .gantt-body {
+max-height: calc(100vh - 500px);
+}
 }
 </style>
