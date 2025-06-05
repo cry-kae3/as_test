@@ -2,32 +2,6 @@
   <div class="shift-management">
     <div class="header-section">
       <h1 class="page-title">シフト管理</h1>
-      
-      <div class="shift-status-banner" :class="getStatusBannerClass()">
-        <div class="status-info">
-          <div class="status-main">
-            <div class="status-icon-wrapper">
-              <i :class="getStatusIcon()"></i>
-            </div>
-            <div class="status-content">
-              <span class="status-text">{{ getStatusText() }}</span>
-              <span class="deadline-info" v-if="getDeadlineInfo()">
-                <i class="pi pi-clock"></i>
-                {{ getDeadlineInfo() }}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div class="status-actions" v-if="canConfirm()">
-          <Button
-            label="今すぐ確定"
-            icon="pi pi-check-circle"
-            class="confirm-button"
-            :class="getConfirmButtonClass()"
-            @click="confirmShift"
-          />
-        </div>
-      </div>
     </div>
 
     <div class="control-panel">
@@ -82,16 +56,16 @@
           v-if="!hasCurrentShift"
           label="シフト作成"
           icon="pi pi-plus"
-          class="create-button"
+          class="action-button create-button"
           @click="createShift"
           :disabled="loading || !selectedStore"
         />
 
-        <template v-if="hasCurrentShift && !isShiftConfirmed">
+        <template v-if="hasCurrentShift">
           <Button
-            :label="isEditMode ? '編集終了' : 'シフト編集'"
+            :label="isEditMode ? '編集完了' : 'シフト編集'"
             :icon="isEditMode ? 'pi pi-check' : 'pi pi-pencil'"
-            :class="isEditMode ? 'edit-button active' : 'edit-button'"
+            :class="isEditMode ? 'action-button edit-button active' : 'action-button edit-button'"
             @click="toggleEditMode"
             :disabled="loading"
           />
@@ -99,20 +73,19 @@
           <Button
             label="AI再生成"
             icon="pi pi-refresh"
-            class="regenerate-button"
+            class="action-button regenerate-button"
             @click="regenerateShift"
             :disabled="loading"
           />
-        </template>
 
-        <Button
-          v-if="hasCurrentShift"
-          label="印刷"
-          icon="pi pi-print"
-          class="print-button"
-          @click="printShift"
-          :disabled="loading"
-        />
+          <Button
+            label="印刷"
+            icon="pi pi-print"
+            class="action-button print-button"
+            @click="printShift"
+            :disabled="loading"
+          />
+        </template>
       </div>
     </div>
 
@@ -138,82 +111,82 @@
       <Button
         label="シフトを作成"
         icon="pi pi-plus"
-        class="create-button"
+        class="action-button create-button"
         @click="createShift"
       />
     </div>
 
     <div v-else class="shift-content">
-      <div v-if="viewMode === 'calendar'" class="modern-calendar" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
-        <div class="calendar-container">
-          <div class="calendar-header">
-            <div class="staff-column-header">
-              <span>スタッフ</span>
+      <div v-if="isEditMode" class="edit-mode-indicator">
+        <i class="pi pi-pencil"></i>
+        <span>編集モード - セルをクリックして編集</span>
+      </div>
+
+      <div v-if="viewMode === 'calendar'" class="calendar-view">
+        <div class="calendar-header">
+          <div class="staff-column-header">
+            <span>スタッフ</span>
+          </div>
+          <div class="dates-header">
+            <div 
+              v-for="day in daysInMonth" 
+              :key="day.date" 
+              class="date-cell-header"
+              :class="{
+                'is-weekend': day.isWeekend,
+                'is-holiday': day.isNationalHoliday,
+                'is-today': day.isToday
+              }"
+            >
+              <div class="date-number">{{ day.day }}</div>
+              <div class="date-weekday">{{ day.dayOfWeekLabel }}</div>
+              <div v-if="day.isNationalHoliday" class="holiday-indicator">祝</div>
             </div>
-            <div class="dates-header">
-              <div 
-                v-for="day in daysInMonth" 
-                :key="day.date" 
-                class="date-cell-header"
-                :class="{
+          </div>
+        </div>
+
+        <div class="calendar-body">
+          <div
+            v-for="staff in staffList"
+            :key="staff.id"
+            class="staff-row"
+          >
+            <div class="staff-info">
+              <div class="staff-avatar">
+                {{ staff.first_name.charAt(0) }}
+              </div>
+              <div class="staff-details">
+                <span class="staff-name">{{ staff.last_name }} {{ staff.first_name }}</span>
+                <span class="staff-role">{{ staff.position || '一般' }}</span>
+              </div>
+            </div>
+            
+            <div class="shift-cells">
+              <div
+                v-for="day in daysInMonth"
+                :key="`${staff.id}-${day.date}`"
+                class="shift-cell"
+                :class="{ 
                   'is-weekend': day.isWeekend,
                   'is-holiday': day.isNationalHoliday,
                   'is-today': day.isToday,
-                  'is-deadline': isDeadlineDate(day.date)
+                  'is-past': isPastDate(day.date),
+                  'is-editable': isEditMode,
+                  'has-shift': getShiftForStaff(day.date, staff.id),
+                  'past-editable': isEditMode && isPastDate(day.date)
                 }"
+                @click="openShiftEditor(day, staff)"
               >
-                <div class="date-number">{{ day.day }}</div>
-                <div class="date-weekday">{{ day.dayOfWeekLabel }}</div>
-                <div v-if="day.isNationalHoliday" class="holiday-indicator">祝</div>
-                <div v-if="isDeadlineDate(day.date)" class="deadline-indicator">締切</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="calendar-body">
-            <div
-              v-for="staff in staffList"
-              :key="staff.id"
-              class="staff-row"
-            >
-              <div class="staff-info">
-                <div class="staff-avatar">
-                  {{ staff.first_name.charAt(0) }}
-                </div>
-                <div class="staff-details">
-                  <span class="staff-name">{{ staff.last_name }} {{ staff.first_name }}</span>
-                  <span class="staff-role">{{ staff.position || '一般' }}</span>
-                </div>
-              </div>
-              
-              <div class="shift-cells">
                 <div
-                  v-for="day in daysInMonth"
-                  :key="`${staff.id}-${day.date}`"
-                  class="shift-cell"
-                  :class="{ 
-                    'is-weekend': day.isWeekend,
-                    'is-holiday': day.isNationalHoliday,
-                    'is-today': day.isToday,
-                    'is-past': isPastDate(day.date),
-                    'is-deadline': isDeadlineDate(day.date),
-                    'is-editable': isEditMode && !isShiftConfirmed,
-                    'has-shift': getShiftForStaff(day.date, staff.id),
-                    'past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
-                  }"
-                  @click="openShiftEditor(day, staff)"
+                  v-if="getShiftForStaff(day.date, staff.id)"
+                  class="shift-time-card"
                 >
-                  <div
-                    v-if="getShiftForStaff(day.date, staff.id)"
-                    class="shift-time-card"
-                  >
-                    <div class="shift-start">{{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}</div>
-                    <div class="shift-separator">-</div>
-                    <div class="shift-end">{{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}</div>
-                  </div>
-                  <div v-else class="no-shift">
-                    <span v-if="isEditMode && !isShiftConfirmed">+</span>
-                  </div>
+                  <div class="shift-start">{{ formatTime(getShiftForStaff(day.date, staff.id).start_time) }}</div>
+                  <div class="shift-separator">-</div>
+                  <div class="shift-end">{{ formatTime(getShiftForStaff(day.date, staff.id).end_time) }}</div>
+                </div>
+                <div v-else class="no-shift">
+                  <span v-if="isEditMode">+</span>
                 </div>
               </div>
             </div>
@@ -221,7 +194,7 @@
         </div>
       </div>
 
-      <div v-if="viewMode === 'gantt'" class="modern-gantt" :class="{ 'edit-mode': isEditMode, 'confirmed': isShiftConfirmed }">
+      <div v-if="viewMode === 'gantt'" class="gantt-view">
         <div class="gantt-header">
           <div class="gantt-staff-header">
             <span>スタッフ</span>
@@ -247,8 +220,7 @@
               'is-weekend': day.isWeekend,
               'is-holiday': day.isNationalHoliday,
               'is-today': day.isToday,
-              'is-past': isPastDate(day.date),
-              'is-deadline': isDeadlineDate(day.date)
+              'is-past': isPastDate(day.date)
             }"
           >
             <div class="gantt-day-header">
@@ -257,7 +229,6 @@
                 <span class="day-weekday">{{ day.dayOfWeekLabel }}</span>
                 <div class="day-badges">
                   <span v-if="day.isNationalHoliday" class="holiday-badge">祝</span>
-                  <span v-if="isDeadlineDate(day.date)" class="deadline-badge">締切</span>
                 </div>
               </div>
             </div>
@@ -290,8 +261,8 @@
                     class="gantt-shift-block"
                     :style="getGanttBarStyle(getShiftForStaff(day.date, staff.id))"
                     :class="{ 
-                      'is-editable': isEditMode && !isShiftConfirmed,
-                      'is-past-editable': isEditMode && !isShiftConfirmed && isPastDate(day.date)
+                      'is-editable': isEditMode,
+                      'is-past-editable': isEditMode && isPastDate(day.date)
                     }"
                     @click.stop="openShiftEditor(day, staff)"
                   >
@@ -335,95 +306,87 @@
       v-model:visible="shiftEditorDialog.visible"
       :header="shiftEditorDialog.title"
       :modal="true"
-      class="modern-dialog"
-      :style="{ width: '600px' }"
+      class="shift-editor-dialog"
+      :style="{ width: '500px' }"
       :closable="!saving"
     >
       <div class="shift-editor-form">
-        <div v-if="shiftEditorDialog.isConfirmed" class="status-alert confirmed">
-          <i class="pi pi-info-circle"></i>
-          <span>シフトは確定済みです。編集はできません。</span>
+        <div v-if="shiftEditorDialog.isPast" class="status-alert warning">
+          <i class="pi pi-exclamation-triangle"></i>
+          <span>過去の日付を編集しています。変更は履歴に記録されます。</span>
         </div>
-        
-        <div v-else>
-          <div v-if="shiftEditorDialog.isPast" class="status-alert warning">
-            <i class="pi pi-exclamation-triangle"></i>
-            <span>過去の日付を編集しています。変更は履歴に記録されます。</span>
-          </div>
 
-          <div class="time-inputs-section">
-            <div class="time-input-group">
-              <label class="form-label">開始時間</label>
-              <div class="time-selector">
-                <Dropdown
-                  v-model="shiftEditorDialog.startTimeHour"
-                  :options="hourOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  placeholder="時"
-                  class="time-dropdown hour-dropdown"
-                />
-                <span class="time-separator">:</span>
-                <Dropdown
-                  v-model="shiftEditorDialog.startTimeMinute"
-                  :options="minuteOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  placeholder="分"
-                  class="time-dropdown minute-dropdown"
-                />
-              </div>
-            </div>
-
-            <div class="time-input-group">
-              <label class="form-label">終了時間</label>
-              <div class="time-selector">
-                <Dropdown
-                  v-model="shiftEditorDialog.endTimeHour"
-                  :options="hourOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  placeholder="時"
-                  class="time-dropdown hour-dropdown"
-                />
-                <span class="time-separator">:</span>
-                <Dropdown
-                  v-model="shiftEditorDialog.endTimeMinute"
-                  :options="minuteOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  placeholder="分"
-                  class="time-dropdown minute-dropdown"
-                />
-              </div>
+        <div class="time-inputs-section">
+          <div class="time-input-group">
+            <label class="form-label">開始時間</label>
+            <div class="time-selector">
+              <Dropdown
+                v-model="shiftEditorDialog.startTimeHour"
+                :options="hourOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="時"
+                class="time-dropdown"
+              />
+              <span class="time-separator">:</span>
+              <Dropdown
+                v-model="shiftEditorDialog.startTimeMinute"
+                :options="minuteOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="分"
+                class="time-dropdown"
+              />
             </div>
           </div>
 
-          <div class="form-group checkbox-group">
-            <Checkbox
-              v-model="shiftEditorDialog.isRestDay"
-              binary
-              class="form-checkbox"
-            />
-            <label class="checkbox-label">休日として設定</label>
+          <div class="time-input-group">
+            <label class="form-label">終了時間</label>
+            <div class="time-selector">
+              <Dropdown
+                v-model="shiftEditorDialog.endTimeHour"
+                :options="hourOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="時"
+                class="time-dropdown"
+              />
+              <span class="time-separator">:</span>
+              <Dropdown
+                v-model="shiftEditorDialog.endTimeMinute"
+                :options="minuteOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="分"
+                class="time-dropdown"
+              />
+            </div>
           </div>
+        </div>
 
-          <div v-if="shiftEditorDialog.isPast" class="form-group">
-            <label class="form-label">変更理由</label>
-            <Textarea
-              v-model="shiftEditorDialog.changeReason"
-              rows="3"
-              placeholder="変更理由を入力してください"
-              class="form-textarea"
-            />
-          </div>
+        <div class="form-group checkbox-group">
+          <Checkbox
+            v-model="shiftEditorDialog.isRestDay"
+            binary
+            class="form-checkbox"
+          />
+          <label class="checkbox-label">休日として設定</label>
+        </div>
+
+        <div v-if="shiftEditorDialog.isPast" class="form-group">
+          <label class="form-label">変更理由</label>
+          <Textarea
+            v-model="shiftEditorDialog.changeReason"
+            rows="3"
+            placeholder="変更理由を入力してください"
+            class="form-textarea"
+          />
         </div>
       </div>
 
       <template #footer>
         <div class="dialog-actions">
           <Button
-            v-if="!shiftEditorDialog.isConfirmed"
             label="削除"
             icon="pi pi-trash"
             class="delete-button"
@@ -438,60 +401,11 @@
             :disabled="saving"
           />
           <Button
-            v-if="!shiftEditorDialog.isConfirmed"
             label="保存"
             icon="pi pi-check"
             class="save-button"
             @click="saveShift"
             :loading="saving"
-          />
-        </div>
-      </template>
-    </Dialog>
-
-    <Dialog
-      v-model:visible="confirmShiftDialog.visible"
-      header="シフト確定"
-      :modal="true"
-      class="modern-dialog"
-      :style="{ width: '450px' }"
-    >
-      <div class="confirm-content">
-        <div class="confirm-details">
-          <div class="detail-row">
-            <span class="detail-label">対象期間</span>
-            <span class="detail-value">{{ currentYear }}年{{ currentMonth }}月</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">店舗</span>
-            <span class="detail-value">{{ selectedStore?.name }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">締切日</span>
-            <span class="detail-value">{{ getDeadlineDate() }}</span>
-          </div>
-        </div>
-        
-        <div class="status-alert warning">
-          <i class="pi pi-exclamation-triangle"></i>
-          <span>確定後は編集できなくなります。スタッフへの通知も送信されます。</span>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="dialog-actions">
-          <Button
-            label="キャンセル"
-            icon="pi pi-times"
-            class="cancel-button"
-            @click="confirmShiftDialog.visible = false"
-          />
-          <Button
-            label="確定する"
-            icon="pi pi-check"
-            class="confirm-button"
-            @click="executeShiftConfirmation"
-            :loading="confirmShiftDialog.processing"
           />
         </div>
       </template>
@@ -589,23 +503,13 @@ export default {
       endTimeHour: "18",
       endTimeMinute: "00",
       isRestDay: false,
-      isConfirmed: false,
       isPast: false,
       hasShift: false,
       changeReason: "",
     });
 
-    const confirmShiftDialog = reactive({
-      visible: false,
-      processing: false,
-    });
-
     const hasCurrentShift = computed(() => {
       return currentShift.value !== null;
-    });
-
-    const isShiftConfirmed = computed(() => {
-      return currentShift.value && currentShift.value.status === "confirmed";
     });
 
     const fetchHolidays = async (year) => {
@@ -669,7 +573,7 @@ export default {
     };
 
     const openGanttShiftEditor = (day, staff, event) => {
-      if (!isEditMode.value || isShiftConfirmed.value) return;
+      if (!isEditMode.value) return;
       
       const existingShift = getShiftForStaff(day.date, staff.id);
       if (existingShift) return;
@@ -690,7 +594,6 @@ export default {
       shiftEditorDialog.endTimeHour = endHour;
       shiftEditorDialog.endTimeMinute = "00";
       shiftEditorDialog.isRestDay = false;
-      shiftEditorDialog.isConfirmed = isShiftConfirmed.value;
       shiftEditorDialog.isPast = isPastDate(day.date);
       shiftEditorDialog.hasShift = false;
       shiftEditorDialog.changeReason = "";
@@ -707,167 +610,28 @@ export default {
       }
     };
 
-    const getDeadlineDate = () => {
-      const closingDay = systemSettings.value.closing_day || 25;
-      let deadlineYear = currentYear.value;
-      let deadlineMonth = currentMonth.value;
+    const getShiftPeriod = (year, month, closingDay) => {
+      let startDate, endDate;
       
-      if (currentMonth.value === 1) {
-        deadlineYear = currentYear.value - 1;
-        deadlineMonth = 12;
+      if (month === 1) {
+        startDate = new Date(year - 1, 11, closingDay + 1);
+        endDate = new Date(year, 0, closingDay);
       } else {
-        deadlineMonth = currentMonth.value - 1;
+        startDate = new Date(year, month - 2, closingDay + 1);
+        endDate = new Date(year, month - 1, closingDay);
       }
       
-      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
-      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
-      
-      return `${deadlineYear}年${deadlineMonth}月${actualClosingDay}日`;
-    };
-
-    const getStatusBannerClass = () => {
-      if (isShiftConfirmed.value) {
-        return 'status-confirmed';
+      const daysInPrevMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+      if (startDate.getDate() > daysInPrevMonth) {
+        startDate.setDate(daysInPrevMonth);
       }
       
-      const today = new Date();
-      const closingDay = systemSettings.value.closing_day || 25;
-      
-      let deadlineYear = currentYear.value;
-      let deadlineMonth = currentMonth.value;
-      
-      if (currentMonth.value === 1) {
-        deadlineYear = currentYear.value - 1;
-        deadlineMonth = 12;
-      } else {
-        deadlineMonth = currentMonth.value - 1;
+      const daysInCurrentMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
+      if (endDate.getDate() > daysInCurrentMonth) {
+        endDate.setDate(daysInCurrentMonth);
       }
       
-      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
-      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
-      const deadline = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
-      
-      const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
-      
-      if (daysUntilDeadline < 0) {
-        return 'status-overdue';
-      } else if (daysUntilDeadline <= 3) {
-        return 'status-urgent';
-      } else if (daysUntilDeadline <= 7) {
-        return 'status-warning';
-      } else {
-        return 'status-normal';
-      }
-    };
-
-    const getStatusIcon = () => {
-      if (isShiftConfirmed.value) {
-        return 'pi pi-check-circle';
-      }
-      
-      const today = new Date();
-      const closingDay = systemSettings.value.closing_day || 25;
-      
-      let deadlineYear = currentYear.value;
-      let deadlineMonth = currentMonth.value;
-      
-      if (currentMonth.value === 1) {
-        deadlineYear = currentYear.value - 1;
-        deadlineMonth = 12;
-      } else {
-        deadlineMonth = currentMonth.value - 1;
-      }
-      
-      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
-      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
-      const deadline = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
-      
-      const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
-      
-      if (daysUntilDeadline < 0) {
-        return 'pi pi-exclamation-triangle';
-      } else if (daysUntilDeadline <= 3) {
-        return 'pi pi-clock';
-      } else {
-        return 'pi pi-calendar';
-      }
-    };
-
-    const getStatusText = () => {
-      if (isShiftConfirmed.value) {
-        return `${currentYear.value}年${currentMonth.value}月のシフトは確定済みです`;
-      }
-      
-      const today = new Date();
-      const closingDay = systemSettings.value.closing_day || 25;
-      
-      let deadlineYear = currentYear.value;
-      let deadlineMonth = currentMonth.value;
-      
-      if (currentMonth.value === 1) {
-        deadlineYear = currentYear.value - 1;
-        deadlineMonth = 12;
-      } else {
-        deadlineMonth = currentMonth.value - 1;
-      }
-      
-      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
-      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
-      const deadline = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
-      
-      const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
-      
-      if (daysUntilDeadline < 0) {
-        return `締切を${Math.abs(daysUntilDeadline)}日過ぎています（要確定）`;
-      } else if (daysUntilDeadline === 0) {
-        return '本日が締切日です（要確定）';
-      } else if (daysUntilDeadline <= 3) {
-        return `締切まで${daysUntilDeadline}日（至急確定が必要）`;
-      } else if (daysUntilDeadline <= 7) {
-        return `締切まで${daysUntilDeadline}日`;
-      } else {
-        return `締切まで${daysUntilDeadline}日`;
-      }
-    };
-
-    const getDeadlineInfo = () => {
-      if (isShiftConfirmed.value) {
-        return null;
-      }
-      return `締切: ${getDeadlineDate()}`;
-    };
-
-    const canConfirm = () => {
-      return hasCurrentShift.value && !isShiftConfirmed.value;
-    };
-
-    const getConfirmButtonClass = () => {
-      const today = new Date();
-      const closingDay = systemSettings.value.closing_day || 25;
-      
-      let deadlineYear = currentYear.value;
-      let deadlineMonth = currentMonth.value;
-      
-      if (currentMonth.value === 1) {
-        deadlineYear = currentYear.value - 1;
-        deadlineMonth = 12;
-      } else {
-        deadlineMonth = currentMonth.value - 1;
-      }
-      
-      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
-      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
-      const deadline = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
-      
-      const daysUntilDeadline = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
-      
-      if (daysUntilDeadline <= 0) {
-        return 'urgent';
-      } else if (daysUntilDeadline <= 3) {
-        return 'warning';
-      } else {
-        return 'normal';
-      }
+      return { startDate, endDate };
     };
 
     const isPastDate = (date) => {
@@ -878,25 +642,6 @@ export default {
       return checkDate < today;
     };
 
-    const isDeadlineDate = (date) => {
-      const closingDay = systemSettings.value.closing_day || 25;
-      let deadlineYear = currentYear.value;
-      let deadlineMonth = currentMonth.value;
-      
-      if (currentMonth.value === 1) {
-        deadlineYear = currentYear.value - 1;
-        deadlineMonth = 12;
-      } else {
-        deadlineMonth = currentMonth.value - 1;
-      }
-      
-      const daysInPrevMonth = new Date(deadlineYear, deadlineMonth, 0).getDate();
-      const actualClosingDay = Math.min(closingDay, daysInPrevMonth);
-      const deadlineDate = new Date(deadlineYear, deadlineMonth - 1, actualClosingDay);
-      const checkDate = new Date(date);
-      return deadlineDate.toDateString() === checkDate.toDateString();
-    };
-
     const toggleEditMode = () => {
       isEditMode.value = !isEditMode.value;
       
@@ -904,28 +649,18 @@ export default {
         severity: 'info',
         summary: isEditMode.value ? '編集モード開始' : '編集モード終了',
         detail: isEditMode.value 
-          ? 'シフトセルをクリックして編集できます（過去の日付も編集可能）' 
+          ? 'シフトセルをクリックして編集できます' 
           : '編集モードを終了しました',
         life: 3000,
       });
     };
 
     const openShiftEditor = async (day, staff) => {
-      if (!isEditMode.value && !isShiftConfirmed.value) {
+      if (!isEditMode.value) {
         toast.add({
           severity: 'info',
           summary: '編集不可',
           detail: '「シフト編集」ボタンを押して編集モードにしてください',
-          life: 2000,
-        });
-        return;
-      }
-
-      if (isShiftConfirmed.value) {
-        toast.add({
-          severity: 'warn',
-          summary: '編集不可',
-          detail: '確定済みのシフトは編集できません',
           life: 2000,
         });
         return;
@@ -936,7 +671,6 @@ export default {
       shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${day.date}`;
       shiftEditorDialog.date = day.date;
       shiftEditorDialog.staff = staff;
-      shiftEditorDialog.isConfirmed = isShiftConfirmed.value;
       shiftEditorDialog.isPast = isPastDate(day.date);
       shiftEditorDialog.changeReason = "";
 
@@ -964,42 +698,6 @@ export default {
 
     const closeShiftEditor = () => {
       shiftEditorDialog.visible = false;
-    };
-
-    const confirmShift = () => {
-      confirmShiftDialog.visible = true;
-    };
-
-    const executeShiftConfirmation = async () => {
-      confirmShiftDialog.processing = true;
-
-      try {
-        await store.dispatch("shift/confirmShift", {
-          year: currentYear.value,
-          month: currentMonth.value,
-          storeId: selectedStore.value.id
-        });
-        await loadShiftData();
-        confirmShiftDialog.visible = false;
-        isEditMode.value = false;
-
-        toast.add({
-          severity: "success",
-          summary: "確定完了",
-          detail: "シフトを確定しました",
-          life: 3000,
-        });
-      } catch (error) {
-        console.error("シフト確定エラー:", error);
-        toast.add({
-          severity: "error",
-          summary: "エラー",
-          detail: "シフトの確定に失敗しました",
-          life: 3000,
-        });
-      } finally {
-        confirmShiftDialog.processing = false;
-      }
     };
 
     const loadShiftData = async () => {
@@ -1060,30 +758,33 @@ export default {
     const generateDaysInMonth = () => {
       const year = currentYear.value;
       const month = currentMonth.value;
-      const daysNum = new Date(year, month, 0).getDate();
+      const closingDay = systemSettings.value.closing_day || 25;
+      
+      const { startDate, endDate } = getShiftPeriod(year, month, closingDay);
       const today = new Date();
       const days = [];
 
-      for (let day = 1; day <= daysNum; day++) {
-        const date = `${year}-${month.toString().padStart(2, "0")}-${day
-          .toString()
-          .padStart(2, "0")}`;
-        const dayOfWeek = new Date(year, month - 1, day).getDay();
+      const current = new Date(startDate);
+      while (current <= endDate) {
+        const dateStr = `${current.getFullYear()}-${(current.getMonth() + 1).toString().padStart(2, "0")}-${current.getDate().toString().padStart(2, "0")}`;
+        const dayOfWeek = current.getDay();
         const dayOfWeekLabel = ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek];
 
         days.push({
-          date,
-          day,
+          date: dateStr,
+          day: current.getDate(),
           dayOfWeek,
           dayOfWeekLabel,
-          isHoliday: isHoliday(date) || dayOfWeek === 0 || dayOfWeek === 6,
-          isNationalHoliday: isHoliday(date),
+          isHoliday: isHoliday(dateStr) || dayOfWeek === 0 || dayOfWeek === 6,
+          isNationalHoliday: isHoliday(dateStr),
           isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
           isToday:
-            today.getFullYear() === year &&
-            today.getMonth() + 1 === month &&
-            today.getDate() === day,
+            today.getFullYear() === current.getFullYear() &&
+            today.getMonth() === current.getMonth() &&
+            today.getDate() === current.getDate(),
         });
+
+        current.setDate(current.getDate() + 1);
       }
 
       daysInMonth.value = days;
@@ -1668,29 +1369,17 @@ export default {
       currentShift,
       systemSettings,
       shiftEditorDialog,
-      confirmShiftDialog,
       hasCurrentShift,
-      isShiftConfirmed,
       getTimeHeaderStyle,
       getGanttBarStyle,
       parseTimeToFloat,
       parseTimeToComponents,
       combineTimeComponents,
       openGanttShiftEditor,
-      getStatusBannerClass,
-      getStatusIcon,
-      getStatusText,
-      getDeadlineInfo,
-      getDeadlineDate,
-      canConfirm,
-      getConfirmButtonClass,
       isPastDate,
-      isDeadlineDate,
       toggleEditMode,
       openShiftEditor,
       closeShiftEditor,
-      confirmShift,
-      executeShiftConfirmation,
       previousMonth,
       nextMonth,
       changeStore,
@@ -1710,7 +1399,7 @@ export default {
 <style scoped>
 .shift-management {
   min-height: 100vh;
-  background: #fafafa;
+  background: #f8f9fa;
   padding: 1.5rem;
 }
 
@@ -1721,175 +1410,47 @@ export default {
 .page-title {
   font-size: 2rem;
   font-weight: 600;
-  color: #111827;
-  margin-bottom: 2rem;
+  color: #2c3e50;
+  margin-bottom: 1rem;
   letter-spacing: -0.025em;
-}
-
-.shift-status-banner {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1.5rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  margin-bottom: 1.5rem;
-}
-
-.shift-status-banner.status-confirmed {
-  border-left: 4px solid #059669;
-  background: #f0fdf4;
-}
-
-.shift-status-banner.status-normal {
-  border-left: 4px solid #2563eb;
-  background: #eff6ff;
-}
-
-.shift-status-banner.status-warning {
-  border-left: 4px solid #d97706;
-  background: #fffbeb;
-}
-
-.shift-status-banner.status-urgent {
-  border-left: 4px solid #dc2626;
-  background: #fef2f2;
-}
-
-.shift-status-banner.status-overdue {
-  border-left: 4px solid #b91c1c;
-  background: #fef2f2;
-}
-
-.status-main {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.status-icon-wrapper {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: #f9fafb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  color: #6b7280;
-}
-
-.status-confirmed .status-icon-wrapper {
-  background: #d1fae5;
-  color: #059669;
-}
-
-.status-normal .status-icon-wrapper {
-  background: #dbeafe;
-  color: #2563eb;
-}
-
-.status-warning .status-icon-wrapper {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.status-urgent .status-icon-wrapper {
-  background: #fecaca;
-  color: #dc2626;
-}
-
-.status-overdue .status-icon-wrapper {
-  background: #fee2e2;
-  color: #b91c1c;
-}
-
-.status-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  color: #111827;
-}
-
-.status-text {
-  font-size: 1rem;
-  font-weight: 500;
-}
-
-.deadline-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-.confirm-button {
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 0.875rem;
-  border: none;
-  transition: all 0.2s ease;
-}
-
-.confirm-button.urgent {
-  background: #dc2626;
-  color: white;
-}
-
-.confirm-button.warning {
-  background: #d97706;
-  color: white;
-}
-
-.confirm-button.normal {
-  background: #2563eb;
-  color: white;
-}
-
-.confirm-button:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
 }
 
 .control-panel {
   background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 2rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .period-controls {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .month-navigator {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: #f9fafb;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  background: #f8f9fa;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
 }
 
 .nav-button {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: 4px;
   background: white;
-  border: 1px solid #d1d5db;
-  color: #6b7280;
+  border: 1px solid #ced4da;
+  color: #6c757d;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1898,8 +1459,8 @@ export default {
 }
 
 .nav-button:hover {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: #007bff;
+  border-color: #007bff;
   color: white;
 }
 
@@ -1907,25 +1468,22 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 100px;
+  min-width: 80px;
 }
 
 .year {
   font-size: 0.75rem;
-  color: #6b7280;
-  font-weight: 400;
+  color: #6c757d;
 }
 
 .month {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  color: #111827;
+  color: #495057;
 }
 
 .store-selector {
   min-width: 200px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
 }
 
 .view-controls {
@@ -1935,35 +1493,35 @@ export default {
 
 .view-mode-tabs {
   display: flex;
-  background: #f9fafb;
-  border-radius: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
   padding: 0.25rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #dee2e6;
 }
 
 .view-tab {
   padding: 0.5rem 0.75rem;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-weight: 500;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: #6c757d;
   transition: all 0.2s ease;
   cursor: pointer;
 }
 
 .view-tab:hover {
-  color: #374151;
+  color: #495057;
 }
 
 .view-tab.active {
   background: white;
-  color: #2563eb;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  color: #007bff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .action-controls {
@@ -1972,12 +1530,12 @@ export default {
   gap: 0.75rem;
 }
 
-.create-button, .edit-button, .regenerate-button, .print-button {
+.action-button {
   padding: 0.5rem 1rem;
-  border-radius: 8px;
+  border-radius: 6px;
   font-weight: 500;
   font-size: 0.875rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid #ced4da;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
@@ -1985,90 +1543,49 @@ export default {
 }
 
 .create-button {
-  background: #2563eb;
+  background: #28a745;
   color: white;
-  border-color: #2563eb;
+  border-color: #28a745;
 }
 
 .create-button:hover {
-  background: #1d4ed8;
+  background: #218838;
+  border-color: #1e7e34;
 }
 
 .edit-button {
   background: white;
-  color: #6b7280;
+  color: #6c757d;
 }
 
 .edit-button:hover {
-  background: #f9fafb;
-  color: #374151;
+  background: #f8f9fa;
+  color: #495057;
 }
 
 .edit-button.active {
-  background: #059669;
+  background: #17a2b8;
   color: white;
-  border-color: #059669;
+  border-color: #17a2b8;
 }
 
-.regenerate-button {
+.regenerate-button, .print-button {
   background: white;
-  color: #6b7280;
+  color: #6c757d;
 }
 
-.regenerate-button:hover {
-  background: #f9fafb;
-  color: #374151;
-}
-
-.print-button {
-  background: white;
-  color: #6b7280;
-}
-
-.print-button:hover {
-  background: #f9fafb;
-  color: #374151;
+.regenerate-button:hover, .print-button:hover {
+  background: #f8f9fa;
+  color: #495057;
 }
 
 .loading-state, .empty-state {
   background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
   padding: 4rem 2rem;
   text-align: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.loading-text {
-  font-size: 1.1rem;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.empty-icon {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 2rem;
-  border-radius: 50%;
-  background: #f8fafc;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  color: #cbd5e1;
-}
-
-.empty-state h3 {
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-  color: #64748b;
-  font-size: 0.95rem;
-  margin-bottom: 2rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .loading-state {
@@ -2078,47 +1595,79 @@ export default {
   gap: 1.5rem;
 }
 
-.shift-content {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+.loading-text {
+  font-size: 1rem;
+  color: #6c757d;
+  font-weight: 500;
 }
 
-.modern-calendar {
+.empty-icon {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 1.5rem;
+  border-radius: 50%;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #adb5bd;
+}
+
+.empty-state h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: #6c757d;
+  margin-bottom: 1.5rem;
+}
+
+.shift-content {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.edit-mode-indicator {
+  background: #e7f3ff;
+  border-bottom: 1px solid #b3d4fc;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #0056b3;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.edit-mode-indicator i {
+  color: #007bff;
+}
+
+.calendar-view, .gantt-view {
   position: relative;
 }
 
-.modern-calendar.edit-mode::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: #10b981;
-  z-index: 10;
-}
-
-.modern-calendar.confirmed::before {
-  background: #3b82f6;
-}
-
-.calendar-header {
+.calendar-header, .gantt-header {
   display: flex;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
   position: sticky;
   top: 0;
   z-index: 9;
 }
 
-.staff-column-header {
-  min-width: 200px;
-  width: 200px;
-  padding: 1.5rem 1rem;
-  background: #1e293b;
+.staff-column-header, .gantt-staff-header {
+  min-width: 180px;
+  width: 180px;
+  padding: 1rem;
+  background: #495057;
   color: white;
   font-weight: 600;
   font-size: 0.9rem;
@@ -2130,102 +1679,77 @@ export default {
   z-index: 10;
 }
 
-.calendar-container {
-  overflow-x: auto;
-}
-
 .date-cell-header {
-  min-width: 80px;
-  width: 80px;
-  padding: 1rem 0.5rem;
+  min-width: 70px;
+  width: 70px;
+  padding: 0.75rem 0.5rem;
   text-align: center;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid #dee2e6;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  position: relative;
-  transition: all 0.2s ease;
-}
-
-.date-cell-header:hover {
-  background: #f8fafc;
+  gap: 0.2rem;
 }
 
 .date-cell-header.is-today {
-  background: #eff6ff;
-  border-left: 3px solid #3b82f6;
+  background: #e3f2fd;
+  border-bottom: 2px solid #1976d2;
 }
 
 .date-cell-header.is-weekend {
-  background: #fef3c7;
+  background: #fff3e0;
 }
 
 .date-cell-header.is-holiday {
-  background: #fecaca;
-}
-
-.date-cell-header.is-deadline::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 20px;
-  height: 2px;
-  background: #ef4444;
-  border-radius: 1px;
+  background: #ffebee;
 }
 
 .date-number {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
-  color: #1e293b;
+  color: #495057;
 }
 
 .date-weekday {
-  font-size: 0.75rem;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.holiday-indicator, .deadline-indicator {
-  font-size: 0.65rem;
-  padding: 0.1rem 0.3rem;
-  border-radius: 4px;
-  color: white;
-  font-weight: 500;
+  font-size: 0.7rem;
+  color: #6c757d;
 }
 
 .holiday-indicator {
-  background: #ef4444;
-}
-
-.deadline-indicator {
-  background: #f59e0b;
+  font-size: 0.6rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: 2px;
+  background: #dc3545;
+  color: white;
+  font-weight: 500;
 }
 
 .dates-header {
   display: flex;
   flex: 1;
+  overflow-x: auto;
 }
 
-.staff-row {
+.calendar-body {
+  overflow-y: auto;
+  height: calc(100vh - 400px);
+}
+
+.staff-row, .gantt-staff-row {
   display: flex;
-  border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
+  border-bottom: 1px solid #f1f3f4;
 }
 
-.staff-row:hover {
-  background: #f8fafc;
+.staff-row:hover, .gantt-staff-row:hover {
+  background: #f8f9fa;
 }
 
-.staff-info {
-  min-width: 200px;
-  width: 200px;
-  padding: 1.2rem 1rem;
-  background: #f8fafc;
-  border-right: 1px solid #e2e8f0;
+.staff-info, .gantt-staff-info {
+  min-width: 180px;
+  width: 180px;
+  padding: 1rem;
+  background: #fafafa;
+  border-right: 1px solid #dee2e6;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -2235,34 +1759,33 @@ export default {
 }
 
 .staff-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: #3b82f6;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: #007bff;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .staff-details {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.1rem;
 }
 
 .staff-name {
   font-weight: 500;
-  color: #1e293b;
-  font-size: 0.85rem;
+  color: #495057;
+  font-size: 0.8rem;
 }
 
 .staff-role {
   font-size: 0.7rem;
-  color: #64748b;
-  font-weight: 400;
+  color: #6c757d;
 }
 
 .shift-cells {
@@ -2271,10 +1794,10 @@ export default {
 }
 
 .shift-cell {
-  min-width: 80px;
-  width: 80px;
-  min-height: 70px;
-  border-right: 1px solid #f1f5f9;
+  min-width: 70px;
+  width: 70px;
+  min-height: 60px;
+  border-right: 1px solid #f1f3f4;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2284,67 +1807,52 @@ export default {
 }
 
 .shift-cell.is-today {
-  background: #eff6ff;
+  background: #e3f2fd;
 }
 
 .shift-cell.is-weekend {
-  background: #fffbeb;
+  background: #fff8e1;
 }
 
 .shift-cell.is-holiday {
-  background: #fef2f2;
+  background: #fce4ec;
 }
 
 .shift-cell.is-past {
-  opacity: 0.6;
-}
-
-.shift-cell.is-deadline::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: #ef4444;
+  opacity: 0.7;
 }
 
 .shift-cell.is-editable {
   cursor: pointer;
-  background: #f0fdf4;
 }
 
 .shift-cell.is-editable:hover {
-  background: #dcfce7;
+  background: #f0f8ff;
   transform: scale(1.02);
 }
 
-.shift-cell.past-editable {
-  background: #fffbeb;
-}
-
 .shift-cell.past-editable:hover {
-  background: #fef3c7;
+  background: #fff3cd;
 }
 
 .shift-time-card {
-  background: #10b981;
+  background: #28a745;
   color: white;
-  padding: 0.5rem 0.4rem;
-  border-radius: 6px;
+  padding: 0.4rem 0.3rem;
+  border-radius: 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
+  gap: 0.1rem;
   font-weight: 500;
-  font-size: 0.7rem;
-  min-width: 50px;
+  font-size: 0.65rem;
+  min-width: 45px;
   transition: all 0.2s ease;
 }
 
 .shift-time-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
 }
 
 .shift-start, .shift-end {
@@ -2352,107 +1860,61 @@ export default {
 }
 
 .shift-separator {
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   opacity: 0.8;
 }
 
 .no-shift {
-  color: #cbd5e1;
-  font-size: 1.2rem;
-  font-weight: 300;
+  color: #adb5bd;
+  font-size: 1rem;
   transition: all 0.2s ease;
 }
 
 .shift-cell.is-editable .no-shift {
-  color: #10b981;
+  color: #28a745;
   font-weight: 500;
-}
-
-.modern-gantt {
-  position: relative;
-}
-
-.modern-gantt.edit-mode::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #4ecdc4, #44a08d);
-  z-index: 10;
-}
-
-.modern-gantt.confirmed::before {
-  background: linear-gradient(90deg, #667eea, #764ba2);
-}
-
-.gantt-header {
-  display: flex;
-  background: linear-gradient(135deg, #f8f9ff, #e8f0fe);
-  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
-  position: sticky;
-  top: 0;
-  z-index: 9;
-}
-
-.gantt-staff-header {
-  min-width: 200px;
-  width: 200px;
-  padding: 1.5rem 1rem;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  font-weight: 600;
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: sticky;
-  left: 0;
-  z-index: 10;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
 }
 
 .gantt-timeline-header {
   display: flex;
   flex: 1;
+  overflow-x: auto;
 }
 
 .gantt-hour-cell {
   text-align: center;
-  padding: 1rem 0.5rem;
-  border-right: 1px solid rgba(102, 126, 234, 0.1);
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.02);
+  padding: 0.75rem 0.5rem;
+  border-right: 1px solid #dee2e6;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #495057;
 }
 
 .gantt-body {
-  max-height: 70vh;
   overflow-y: auto;
+  height: calc(100vh - 400px);
 }
 
 .gantt-day-section {
-  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
+  border-bottom: 1px solid #e9ecef;
 }
 
 .gantt-day-section.is-today {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.03), rgba(118, 75, 162, 0.03));
+  background: #f8f9fa;
 }
 
 .gantt-day-section.is-weekend {
-  background: rgba(255, 152, 0, 0.02);
+  background: #fffbf0;
 }
 
 .gantt-day-section.is-holiday {
-  background: rgba(244, 67, 54, 0.02);
+  background: #fff5f5;
 }
 
 .gantt-day-header {
-  padding: 1rem;
-  background: rgba(248, 249, 255, 0.8);
-  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
 }
 
 .day-info {
@@ -2462,15 +1924,14 @@ export default {
 }
 
 .day-number {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #333;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #495057;
 }
 
 .day-weekday {
-  font-size: 0.9rem;
-  color: #666;
-  font-weight: 500;
+  font-size: 0.8rem;
+  color: #6c757d;
 }
 
 .day-badges {
@@ -2478,20 +1939,13 @@ export default {
   gap: 0.5rem;
 }
 
-.holiday-badge, .deadline-badge {
-  font-size: 0.7rem;
-  padding: 0.2rem 0.4rem;
-  border-radius: 8px;
-  color: white;
-  font-weight: 600;
-}
-
 .holiday-badge {
-  background: linear-gradient(135deg, #ff4757, #ff3742);
-}
-
-.deadline-badge {
-  background: linear-gradient(135deg, #ff9f43, #feca57);
+  font-size: 0.6rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: 3px;
+  background: #dc3545;
+  color: white;
+  font-weight: 500;
 }
 
 .gantt-staff-rows {
@@ -2499,61 +1953,49 @@ export default {
   flex-direction: column;
 }
 
-.gantt-staff-row {
-  display: flex;
-  min-height: 60px;
-  border-bottom: 1px solid rgba(102, 126, 234, 0.05);
-  transition: all 0.3s ease;
-}
-
-.gantt-staff-row:hover {
-  background: rgba(102, 126, 234, 0.02);
-}
-
 .gantt-staff-info {
-  min-width: 200px;
-  width: 200px;
-  padding: 1rem;
-  background: rgba(248, 249, 255, 0.6);
-  border-right: 1px solid rgba(102, 126, 234, 0.1);
+  min-width: 180px;
+  width: 180px;
+  padding: 0.75rem;
+  background: #fafafa;
+  border-right: 1px solid #dee2e6;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   position: sticky;
   left: 0;
   z-index: 5;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.03);
 }
 
 .staff-avatar-small {
-  width: 35px;
-  height: 35px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  background: #007bff;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 0.9rem;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  font-weight: 500;
+  font-size: 0.7rem;
 }
 
 .staff-name-small {
   font-weight: 500;
-  color: #333;
-  font-size: 0.85rem;
+  color: #495057;
+  font-size: 0.75rem;
 }
 
 .gantt-timeline {
   position: relative;
   flex: 1;
   cursor: pointer;
-  transition: all 0.3s ease;
+  min-height: 50px;
+  overflow-x: auto;
 }
 
 .gantt-timeline:hover {
-  background: rgba(76, 220, 196, 0.05);
+  background: #f8f9fa;
 }
 
 .gantt-grid {
@@ -2566,91 +2008,72 @@ export default {
 }
 
 .gantt-hour-line {
-  border-right: 1px solid rgba(102, 126, 234, 0.05);
+  border-right: 1px solid #f1f3f4;
   height: 100%;
-  transition: all 0.3s ease;
-}
-
-.gantt-hour-line:hover {
-  background: rgba(102, 126, 234, 0.05);
 }
 
 .gantt-shift-block {
   position: absolute;
-  top: 8px;
-  bottom: 8px;
-  background: linear-gradient(135deg, #4ecdc4, #44a08d);
-  border-radius: 8px;
+  top: 6px;
+  bottom: 6px;
+  background: #28a745;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(76, 220, 196, 0.3);
-  transition: all 0.3s ease;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   cursor: pointer;
   z-index: 3;
 }
 
 .gantt-shift-block:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(76, 220, 196, 0.4);
-}
-
-.gantt-shift-block.is-editable {
-  background: linear-gradient(135deg, #66bb6a, #81c784);
-}
-
-.gantt-shift-block.is-past-editable {
-  background: linear-gradient(135deg, #ff9800, #ffb74d);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 .shift-time-text {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 0 0.5rem;
 }
 
-.calendar-body {
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
 .shift-summary-panel {
-  padding: 1.5rem;
-  background: #fafafa;
-  border-top: 1px solid #e5e7eb;
+  padding: 1.25rem;
+  background: #f8f9fa;
+  border-top: 1px solid #dee2e6;
 }
 
 .summary-title {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  color: #111827;
+  color: #495057;
   margin-bottom: 1rem;
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 0.75rem;
 }
 
 .summary-card {
   background: white;
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: 6px;
+  padding: 0.75rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #dee2e6;
   transition: all 0.2s ease;
 }
 
 .summary-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-color: #adb5bd;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .summary-staff {
@@ -2667,79 +2090,54 @@ export default {
 }
 
 .hours-number {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  color: #2563eb;
+  color: #007bff;
 }
 
 .hours-unit {
-  font-size: 0.7rem;
-  color: #6b7280;
-  font-weight: 400;
+  font-size: 0.65rem;
+  color: #6c757d;
 }
 
-.staff-avatar-small {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: #2563eb;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 500;
-  font-size: 0.7rem;
-}
-
-.staff-name-small {
-  font-weight: 500;
-  color: #111827;
-  font-size: 0.75rem;
-}
-
-.modern-dialog .p-dialog-content {
-  border-radius: 20px;
+.shift-editor-dialog .p-dialog-content {
+  border-radius: 8px;
 }
 
 .shift-editor-form {
-  padding: 1rem 0;
+  padding: 0.5rem 0;
 }
 
 .status-alert {
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
   font-weight: 500;
-}
-
-.status-alert.confirmed {
-  background: linear-gradient(135deg, rgba(33, 150, 243, 0.1), rgba(100, 181, 246, 0.1));
-  color: #1976d2;
-  border: 1px solid rgba(33, 150, 243, 0.2);
+  font-size: 0.875rem;
 }
 
 .status-alert.warning {
-  background: linear-gradient(135deg, rgba(255, 152, 0, 0.1), rgba(255, 183, 77, 0.1));
-  color: #f57c00;
-  border: 1px solid rgba(255, 152, 0, 0.2);
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
 }
 
 .time-inputs-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .time-input-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .form-label {
   display: block;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   font-weight: 600;
-  color: #374151;
+  color: #495057;
   font-size: 0.875rem;
 }
 
@@ -2747,22 +2145,11 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #f9fafb;
-  padding: 0.75rem;
-  border-radius: 12px;
-  border: 2px solid #e5e7eb;
-  transition: all 0.3s ease;
-  max-width: 300px;
-}
-
-.p-inputtext{
-  font-size: 1.2em;
-}
-
-.time-selector:focus-within {
-  border-color: #3b82f6;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: #f8f9fa;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  max-width: 250px;
 }
 
 .time-dropdown {
@@ -2771,126 +2158,86 @@ export default {
   background: transparent;
 }
 
-.hour-dropdown {
-  min-width: 80px;
-}
-
-.minute-dropdown {
-  min-width: 80px;
-}
-
 .time-separator {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  color: #6b7280;
-  padding: 0 0.5rem;
+  color: #6c757d;
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
-.form-input, .form-textarea {
+.form-textarea {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 2px solid rgba(102, 126, 234, 0.2);
-  border-radius: 12px;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-  background: rgba(248, 249, 255, 0.5);
-}
-
-.form-input:focus, .form-textarea:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-  background: white;
+  padding: 0.5rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.875rem;
 }
 
 .checkbox-group {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-}
-
-.form-checkbox {
-  width: 20px;
-  height: 20px;
+  gap: 0.5rem;
 }
 
 .checkbox-label {
   font-weight: 500;
-  color: #333;
+  color: #495057;
   cursor: pointer;
+  font-size: 0.875rem;
 }
 
 .dialog-actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: center;
-  padding-top: 1rem;
-  width: 100%;
+  padding-top: 0.5rem;
 }
 
-.delete-button, .cancel-button, .save-button, .confirm-button {
-  padding: 0.75rem 1.5rem;
-  border-radius: 12px;
-  font-weight: 600;
-  border: none;
-  transition: all 0.3s ease;
+.delete-button, .cancel-button, .save-button {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: 500;
+  border: 1px solid;
+  transition: all 0.2s ease;
   cursor: pointer;
+  font-size: 0.875rem;
 }
 
 .delete-button {
-  background: linear-gradient(135deg, #ff4757, #ff3742);
+  background: #dc3545;
   color: white;
+  border-color: #dc3545;
+}
+
+.delete-button:hover {
+  background: #c82333;
+  border-color: #bd2130;
 }
 
 .cancel-button {
   background: #f8f9fa;
-  color: #666;
-  border: 2px solid #e9ecef;
+  color: #6c757d;
+  border-color: #ced4da;
 }
 
-.save-button, .confirm-button {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+.cancel-button:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.save-button {
+  background: #28a745;
   color: white;
+  border-color: #28a745;
 }
 
-.delete-button:hover, .cancel-button:hover, .save-button:hover, .confirm-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+.save-button:hover {
+  background: #218838;
+  border-color: #1e7e34;
 }
-
-.confirm-content {
-  padding: 1rem 0;
-}
-
-.confirm-details {
-  margin-bottom: 1.5rem;
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
-}
-
-.detail-row:last-child {
-  border-bottom: none;
-}
-
-.detail-label {
-  font-weight: 600;
-  color: #666;
-}
-
-.detail-value {
-  font-weight: 500;
-  color: #333;
-}
-
 
 @media (max-width: 1024px) {
   .control-panel {
@@ -2918,20 +2265,14 @@ export default {
     font-size: 1.5rem;
   }
 
-  .shift-status-banner {
-    flex-direction: column;
-    gap: 1rem;
-    text-align: center;
-  }
-
-  .staff-column-header, .staff-info {
+  .staff-column-header, .staff-info, .gantt-staff-header, .gantt-staff-info {
     min-width: 120px;
     width: 120px;
   }
 
   .date-cell-header, .shift-cell {
-    min-width: 48px;
-    width: 48px;
+    min-width: 50px;
+    width: 50px;
   }
 
   .staff-avatar {
@@ -2952,11 +2293,15 @@ export default {
 
   .time-selector {
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 
   .time-dropdown {
     width: 100%;
+  }
+
+  .calendar-body, .gantt-body {
+    height: calc(100vh - 500px);
   }
 }
 </style>

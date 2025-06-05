@@ -465,8 +465,6 @@ const confirmShift = async (req, res) => {
     }
 };
 
-// backend/controllers/shift.js の createShiftAssignment メソッドを修正
-
 const createShiftAssignment = async (req, res) => {
     try {
         const { year, month } = req.params;
@@ -486,7 +484,6 @@ const createShiftAssignment = async (req, res) => {
             change_reason
         });
 
-        // バリデーション
         if (!store_id || !staff_id || !date || !start_time || !end_time) {
             console.log('Validation failed:', {
                 store_id: !!store_id,
@@ -507,7 +504,6 @@ const createShiftAssignment = async (req, res) => {
             });
         }
 
-        // 時間形式の検証
         const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
         if (!timeRegex.test(start_time) || !timeRegex.test(end_time)) {
             return res.status(400).json({
@@ -515,7 +511,6 @@ const createShiftAssignment = async (req, res) => {
             });
         }
 
-        // 日付形式の検証
         const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (!dateRegex.test(date)) {
             return res.status(400).json({
@@ -523,7 +518,6 @@ const createShiftAssignment = async (req, res) => {
             });
         }
 
-        // シフトの存在確認
         const shift = await Shift.findOne({
             where: {
                 store_id: parseInt(store_id),
@@ -536,11 +530,6 @@ const createShiftAssignment = async (req, res) => {
             return res.status(404).json({ message: 'シフトが見つかりません' });
         }
 
-        if (shift.status === 'confirmed') {
-            return res.status(400).json({ message: '確定済みのシフトは編集できません' });
-        }
-
-        // 重複チェック
         const existingAssignment = await ShiftAssignment.findOne({
             where: {
                 shift_id: shift.id,
@@ -555,7 +544,6 @@ const createShiftAssignment = async (req, res) => {
             });
         }
 
-        // シフト割り当ての作成
         const assignment = await ShiftAssignment.create({
             shift_id: shift.id,
             staff_id: parseInt(staff_id),
@@ -567,7 +555,6 @@ const createShiftAssignment = async (req, res) => {
             notes: notes || null
         });
 
-        // 変更ログの記録
         const isPastDate = new Date(date) < new Date();
         const logData = {
             shift_assignment_id: assignment.id,
@@ -619,10 +606,6 @@ const updateShiftAssignment = async (req, res) => {
 
         if (!assignment) {
             return res.status(404).json({ message: 'シフト割り当てが見つかりません' });
-        }
-
-        if (assignment.Shift.status === 'confirmed') {
-            return res.status(400).json({ message: '確定済みのシフトは編集できません' });
         }
 
         const previousData = {
@@ -691,10 +674,6 @@ const deleteShiftAssignment = async (req, res) => {
 
         if (!assignment) {
             return res.status(404).json({ message: 'シフト割り当てが見つかりません' });
-        }
-
-        if (assignment.Shift.status === 'confirmed') {
-            return res.status(400).json({ message: '確定済みのシフトは編集できません' });
         }
 
         const previousData = {
