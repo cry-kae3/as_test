@@ -170,6 +170,17 @@
               </div>
               <div v-if="hasDateWarnings(day.date)" class="warning-indicator">
                 <i class="pi pi-exclamation-triangle"></i>
+                <div class="warning-tooltip">
+                  <div 
+                    v-for="warning in getDateWarnings(day.date)" 
+                    :key="warning.type"
+                    class="warning-tooltip-item"
+                    :class="warning.type"
+                  >
+                    <i :class="warning.icon"></i>
+                    <span>{{ warning.message }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -185,6 +196,10 @@
                     >{{ staff.last_name }} {{ staff.first_name }}</span
                   >
                   <span class="staff-role">{{ staff.position || "一般" }}</span>
+                  <div class="staff-hours-info">
+                    <span class="current-hours">{{ calculateTotalHours(staff.id) }}h</span>
+                    <span class="hours-range">/ {{ staff.max_hours_per_month || 0 }}h</span>
+                  </div>
                   <div v-if="hasStaffWarnings(staff.id)" class="staff-warnings">
                     <div 
                       v-for="warning in getStaffWarnings(staff.id)" 
@@ -237,6 +252,15 @@
                   </div>
                   <div v-if="hasShiftViolation(day.date, staff.id)" class="violation-icon">
                     <i class="pi pi-exclamation-triangle"></i>
+                    <div class="violation-tooltip">
+                      <div 
+                        v-for="violation in getShiftViolations(day.date, staff.id)" 
+                        :key="violation.type"
+                        class="violation-tooltip-item"
+                      >
+                        {{ violation.message }}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div v-else class="no-shift">
@@ -246,9 +270,7 @@
             </div>
           </div>
         </div>
-      </div>
 
-      <div v-if="viewMode === 'gantt' && selectedDate" class="gantt-view">
         <div class="gantt-info-panel">
           <div class="date-info-header">
             <h3>{{ formatDateForGantt(selectedDate) }}</h3>
@@ -351,7 +373,9 @@
             </div>
           </div>
         </div>
+      </div>
 
+      <div v-if="viewMode === 'gantt' && selectedDate" class="gantt-view">
         <div class="gantt-container" ref="ganttContainer">
           <div class="gantt-header">
             <div class="gantt-staff-header">
@@ -364,7 +388,17 @@
                 class="gantt-hour-cell"
                 :style="getTimeHeaderStyle()"
               >
-                {{ hour.toString().padStart(2, "0") }}:00
+                <div class="hour-label">{{ hour.toString().padStart(2, "0") }}:00</div>
+                <div v-if="hasHourRequirements(selectedDate, hour)" class="hour-requirements">
+                  <div 
+                    v-for="req in getHourRequirements(selectedDate, hour)" 
+                    :key="`${req.start_time}-${req.end_time}`"
+                    class="hour-requirement-badge"
+                    :class="{ 'shortage': hasRequirementShortage(selectedDate, req) }"
+                  >
+                    {{ getAssignedStaffCount(selectedDate, req) }}/{{ req.required_staff_count }}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -383,9 +417,15 @@
                   <div class="staff-avatar-small">
                     {{ staff.first_name.charAt(0) }}
                   </div>
-                  <span class="staff-name-small"
-                    >{{ staff.last_name }} {{ staff.first_name }}</span
-                  >
+                  <div class="gantt-staff-details">
+                    <span class="staff-name-small"
+                      >{{ staff.last_name }} {{ staff.first_name }}</span
+                    >
+                    <div class="staff-hours-small">
+                      <span class="current-hours">{{ calculateTotalHours(staff.id) }}h</span>
+                      <span class="hours-range">/{{ staff.max_hours_per_month || 0 }}h</span>
+                    </div>
+                  </div>
                   <div v-if="hasStaffWarnings(staff.id)" class="warning-indicator-gantt">
                     <i class="pi pi-exclamation-triangle"></i>
                   </div>
@@ -671,13 +711,13 @@ export default {
     });
 
     const getDailyRequirements = (date) => {
-      if (!currentStore.value || !currentStore.value.staffRequirements) {
+      if (!storeRequirements.value || storeRequirements.value.length === 0) {
         return [];
       }
 
       const dayOfWeek = new Date(date).getDay();
       
-      const specificRequirements = currentStore.value.staffRequirements.filter(
+      const specificRequirements = storeRequirements.value.filter(
         req => req.specific_date && req.specific_date === date
       );
       
@@ -685,9 +725,37 @@ export default {
         return specificRequirements;
       }
       
-      return currentStore.value.staffRequirements.filter(
+      return storeRequirements.value.filter(
         req => req.day_of_week === dayOfWeek && !req.specific_date
       );
+    };
+
+    const hasHourRequirements = (date, hour) => {
+      const requirements = getDailyRequirements(date);
+      return requirements.some(req => {
+        const reqStartHour = parseTimeToFloat(req.start_time);
+        const reqEndHour = parseTimeToFloat(req.end_time);
+        return hour >= reqStartHour && hour < reqEndHour;
+      });
+    };
+
+    const hasHourShortage = (date, hour) => {
+      const requirements = getHourRequirements(date, hour);
+      return requirements.some(req => hasRequirementShortage(date, req));
+    };
+
+    const getHourRequirements = (date, hour) => {
+      const requirements = getDailyRequirements(date);
+      return requirements.filter(req => {
+        const reqStartHour = parseTimeToFloat(req.start_time);
+        const reqEndHour = parseTimeToFloat(req.end_time);
+        return hour >= reqStartHour && hour < reqEndHour;
+      });
+    };
+
+    const hasRequirementShortage = (date, requirement) => {
+      const assignedCount = getAssignedStaffCount(date, requirement);
+      return assignedCount < requirement.required_staff_count;
     };
 
     const getConsecutiveWorkDays = (staffId, currentDate) => {
@@ -1889,6 +1957,10 @@ export default {
       getStaffWarnings,
       hasDateWarnings,
       getDateWarnings,
+      hasHourRequirements,
+      hasHourShortage,
+      getHourRequirements,
+      hasRequirementShortage,
     };
   },
 };
@@ -2191,8 +2263,8 @@ export default {
 }
 
 .staff-column-header {
-  min-width: 180px;
-  width: 180px;
+  min-width: 220px;
+  width: 220px;
   padding: 1rem;
   background: #495057;
   color: white;
@@ -2241,7 +2313,6 @@ export default {
 }
 
 .date-cell-header.has-warnings {
-  background: #fff3cd;
   border-left: 3px solid #ffc107;
 }
 
@@ -2271,6 +2342,49 @@ export default {
   right: 0.25rem;
   color: #ffc107;
   font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.warning-tooltip {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 0.5rem;
+  z-index: 20;
+  width: 200px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: none;
+}
+
+.warning-indicator:hover .warning-tooltip {
+  display: block;
+}
+
+.warning-tooltip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.warning-tooltip-item:last-child {
+  margin-bottom: 0;
+}
+
+.warning-tooltip-item.staffing_shortage {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.warning-tooltip-item.staff_violation {
+  background: #f8d7da;
+  color: #721c24;
 }
 
 .calendar-body {
@@ -2287,8 +2401,8 @@ export default {
 }
 
 .staff-info {
-  min-width: 180px;
-  width: 180px;
+  min-width: 220px;
+  width: 220px;
   padding: 1rem;
   background: #fafafa;
   border-right: 1px solid #dee2e6;
@@ -2327,6 +2441,24 @@ export default {
 }
 
 .staff-role {
+  font-size: 0.7rem;
+  color: #6c757d;
+}
+
+.staff-hours-info {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.current-hours {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #007bff;
+}
+
+.hours-range {
   font-size: 0.7rem;
   color: #6c757d;
 }
@@ -2441,6 +2573,35 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+}
+
+.violation-tooltip {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 0.5rem;
+  z-index: 20;
+  width: 180px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  display: none;
+}
+
+.violation-icon:hover .violation-tooltip {
+  display: block;
+}
+
+.violation-tooltip-item {
+  font-size: 0.75rem;
+  color: #721c24;
+  margin-bottom: 0.25rem;
+}
+
+.violation-tooltip-item:last-child {
+  margin-bottom: 0;
 }
 
 .no-shift {
@@ -2459,17 +2620,17 @@ export default {
   height: calc(100vh - 450px);
   overflow: hidden;
   display: flex;
+  flex-direction: column;
   gap: 1rem;
 }
 
 .gantt-info-panel {
-  width: 350px;
+  width: 100%;
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
   gap: 1rem;
-  overflow-y: auto;
-  max-height: 100%;
+  overflow-x: auto;
+  max-height: 200px;
 }
 
 .date-info-header {
@@ -2519,6 +2680,8 @@ export default {
   border: 1px solid #dee2e6;
   border-radius: 6px;
   overflow: hidden;
+  min-width: 300px;
+  flex-shrink: 0;
 }
 
 .section-title {
@@ -2727,11 +2890,12 @@ export default {
   border: 1px solid #dee2e6;
   border-radius: 6px;
   overflow: hidden;
+  min-height: 400px;
 }
 
 .gantt-header {
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: 220px 1fr;
   background: #f8f9fa;
   border-bottom: 1px solid #dee2e6;
   position: sticky;
@@ -2759,12 +2923,40 @@ export default {
 
 .gantt-hour-cell {
   text-align: center;
-  padding: 0.75rem 0.5rem;
+  padding: 0.5rem 0.25rem;
   border-right: 1px solid #dee2e6;
   font-size: 0.7rem;
   font-weight: 500;
   color: #495057;
   background: #f8f9fa;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  position: relative;
+}
+
+.hour-label {
+  font-weight: 600;
+}
+
+.hour-requirements {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.hour-requirement-badge {
+  font-size: 0.6rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: 2px;
+  background: #28a745;
+  color: white;
+  border: 1px solid #28a745;
+}
+
+.hour-requirement-badge.shortage {
+  background: #dc3545;
+  border-color: #dc3545;
 }
 
 .gantt-body {
@@ -2780,7 +2972,7 @@ export default {
 
 .gantt-staff-row {
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: 220px 1fr;
   border-bottom: 1px solid #f1f3f4;
   min-height: 60px;
 }
@@ -2815,11 +3007,23 @@ export default {
   font-size: 0.7rem;
 }
 
+.gantt-staff-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+}
+
 .staff-name-small {
   font-weight: 500;
   color: #495057;
   font-size: 0.75rem;
-  flex: 1;
+}
+
+.staff-hours-small {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
 }
 
 .warning-indicator-gantt {
@@ -3083,7 +3287,7 @@ export default {
     width: 100%;
     flex-direction: row;
     overflow-x: auto;
-    max-height: 250px;
+    max-height: 200px;
   }
 
   .requirements-section,
@@ -3093,7 +3297,7 @@ export default {
   }
 
   .gantt-container {
-    height: calc(100vh - 600px);
+    height: calc(100vh - 500px);
   }
 }
 
@@ -3135,8 +3339,8 @@ export default {
 
   .staff-column-header,
   .staff-info {
-    min-width: 120px;
-    width: 120px;
+    min-width: 160px;
+    width: 160px;
   }
 
   .date-cell-header,
@@ -3197,11 +3401,11 @@ export default {
   }
 
   .gantt-header {
-    grid-template-columns: 100px 1fr;
+    grid-template-columns: 120px 1fr;
   }
 
   .gantt-staff-row {
-    grid-template-columns: 100px 1fr;
+    grid-template-columns: 120px 1fr;
   }
 
   .gantt-staff-header,
