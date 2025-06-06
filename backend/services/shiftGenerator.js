@@ -3,14 +3,15 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { Store, Staff, StaffDayPreference, StaffDayOffRequest,
-    StoreClosedDay, StoreStaffRequirement, Shift, ShiftAssignment } = require('../models');
-const { Op, sequelize } = require('sequelize');
+    StoreClosedDay, StoreStaffRequirement, Shift, ShiftAssignment, sequelize } = require('../models');
+const { Op } = require('sequelize');
 const moment = require('moment-timezone');
 
 class ShiftGeneratorService {
     constructor() {
         this.claudeApiUrl = 'https://api.anthropic.com/v1/messages';
         this.claudeApiKey = process.env.CLAUDE_API_KEY;
+        // 最新のClaude 4 Sonnetモデルに更新
         this.claudeModel = 'claude-sonnet-4-20250514';
 
         this.setupSSLCertificates();
@@ -156,77 +157,67 @@ class ShiftGeneratorService {
             return `${req.date}: ${reqs}`;
         }).filter(Boolean).join('\n');
 
+        // プロンプトを簡潔にして、レスポンスサイズを制限
         return `
-    # シフト生成リクエスト
-    
-    ## 年月
-    ${year}年${monthNames[month - 1]}（${month}月）
-    
-    ## 店舗情報
-    店舗名: ${storeData.name}
-    営業時間: ${storeData.opening_time}～${storeData.closing_time}
-    定休日: ${closedDaysInfo}
-    
-    ## スタッフ詳細情報
-    ${staffDetails}
-    
-    ## 日別人員要件
-    ${requirementDetails}
-    
-    ## 作成ルール
-    1. 労働基準法を遵守すること
-       - 6時間超8時間以内の勤務には最低45分の休憩が必要
-       - 8時間超の勤務には最低1時間の休憩が必要
-    2. スタッフの希望シフト（曜日・時間帯）をできる限り尊重すること
-    3. スタッフの休み希望は必ず尊重すること（絶対条件）
-    4. スタッフの最大・最小勤務時間を尊重すること
-    5. 各スタッフの勤務時間をできるだけ均等にすること
-    6. 最大連続勤務日数を超えないようにすること
-    7. 定休日には誰もシフトに入れないこと
-    8. 各時間帯で必要な人員数を満たすこと
-    
-    ## 出力形式
-    JSONフォーマットで、以下の構造で出力してください。必ずJSON形式で返してください。
-    
-    \`\`\`json
+# シフト生成リクエスト
+
+## 基本情報
+年月: ${year}年${monthNames[month - 1]}
+店舗: ${storeData.name}
+営業時間: ${storeData.opening_time}～${storeData.closing_time}
+定休日: ${closedDaysInfo}
+
+## スタッフ情報
+${staffDetails}
+
+## 日別要件
+${requirementDetails}
+
+## 制約条件
+1. 労働基準法遵守（6時間超で45分、8時間超で60分の休憩）
+2. スタッフの希望シフトを尊重
+3. 休み希望は絶対条件
+4. 勤務時間の均等配分
+5. 連続勤務日数制限
+
+## 出力形式
+必ずJSON形式のみで回答してください。説明文は不要です。
+
+{
+  "shifts": [
     {
-        "shifts": [
-            {
-                "date": "YYYY-MM-DD",
-                "assignments": [
-                    {
-                        "staff_id": 1,
-                        "staff_name": "山田 太郎",
-                        "start_time": "09:00",
-                        "end_time": "18:00",
-                        "break_start_time": "12:00",
-                        "break_end_time": "13:00"
-                    }
-                ]
-            }
-        ],
-        "summary": {
-            "totalHoursByStaff": [
-                {
-                    "staff_id": 1,
-                    "staff_name": "山田 太郎",
-                    "total_hours": 160
-                }
-            ]
+      "date": "YYYY-MM-DD",
+      "assignments": [
+        {
+          "staff_id": 1,
+          "staff_name": "田中 太郎",
+          "start_time": "09:00",
+          "end_time": "18:00",
+          "break_start_time": "12:00",
+          "break_end_time": "13:00"
         }
+      ]
     }
-    \`\`\`
-    
-    必ず上記のJSON形式で出力してください。`;
+  ],
+  "summary": {
+    "totalHoursByStaff": [
+      {
+        "staff_id": 1,
+        "staff_name": "田中 太郎",
+        "total_hours": 160
+      }
+    ]
+  }
+}`;
     }
 
     async _callClaudeAPI(prompt) {
         try {
             const requestData = {
                 model: this.claudeModel,
-                max_tokens: 4000,
+                max_tokens: 8000, // トークン数を増加
                 temperature: 0.1,
-                system: "あなたはシフト最適化と生成の専門家です。労働基準法を遵守しながら、人員要件と従業員の希望休みを考慮して最適なシフトを作成します。JSONフォーマット形式で出力してください。",
+                system: "あなたはシフト最適化の専門家です。必ずJSON形式のデータのみを返してください。説明文や追加のテキストは一切含めないでください。",
                 messages: [
                     {
                         role: "user",
@@ -237,8 +228,8 @@ class ShiftGeneratorService {
 
             console.log('Claude API リクエスト送信中...');
             console.log('API URL:', this.claudeApiUrl);
+            console.log('Model:', this.claudeModel);
             console.log('API Key exists:', !!this.claudeApiKey);
-            console.log('API Key length:', this.claudeApiKey ? this.claudeApiKey.length : 0);
             console.log('プロンプト文字数:', prompt.length);
 
             const httpsAgentOptions = {};
@@ -262,7 +253,7 @@ class ShiftGeneratorService {
                     'x-api-key': this.claudeApiKey,
                     'anthropic-version': '2023-06-01'
                 },
-                timeout: 120000,
+                timeout: 180000, // タイムアウトを3分に延長
                 httpsAgent: httpsAgent
             };
 
@@ -276,8 +267,10 @@ class ShiftGeneratorService {
             console.log('Response status:', response.status);
 
             if (response.data && response.data.content && Array.isArray(response.data.content)) {
-                console.log('Content received, length:', response.data.content[0]?.text?.length || 0);
-                return response.data.content[0].text;
+                const responseText = response.data.content[0]?.text;
+                console.log('Content received, length:', responseText?.length || 0);
+                console.log('Response preview:', responseText?.substring(0, 500) + '...');
+                return responseText;
             } else {
                 console.error('Unexpected response format:', response.data);
                 throw new Error('Unexpected response format from Claude API');
@@ -421,38 +414,79 @@ class ShiftGeneratorService {
         return requirementsData;
     }
 
-
-
     _parseAIResponse(response) {
         try {
             console.log('AIレスポンスの解析を開始します');
+            console.log('Response length:', response?.length || 0);
 
-            const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+            if (!response) {
+                throw new Error('レスポンスが空です');
+            }
 
-            if (!jsonMatch || !jsonMatch[1]) {
-                console.error('JSONデータが見つかりません:', response);
+            // 複数のパターンでJSONを抽出
+            let jsonString = null;
+
+            // パターン1: ```json ... ``` ブロック
+            const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonBlockMatch && jsonBlockMatch[1]) {
+                jsonString = jsonBlockMatch[1].trim();
+                console.log('JSONブロックからデータを抽出しました');
+            }
+
+            // パターン2: ```JSON ... ``` ブロック（大文字）
+            if (!jsonString) {
+                const jsonBlockMatchUpper = response.match(/```JSON\s*([\s\S]*?)\s*```/);
+                if (jsonBlockMatchUpper && jsonBlockMatchUpper[1]) {
+                    jsonString = jsonBlockMatchUpper[1].trim();
+                    console.log('JSONブロック（大文字）からデータを抽出しました');
+                }
+            }
+
+            // パターン3: { で始まり } で終わるJSON
+            if (!jsonString) {
+                const jsonObjectMatch = response.match(/(\{[\s\S]*\})/);
+                if (jsonObjectMatch && jsonObjectMatch[1]) {
+                    jsonString = jsonObjectMatch[1].trim();
+                    console.log('JSONオブジェクトからデータを抽出しました');
+                }
+            }
+
+            if (!jsonString) {
+                console.error('JSONデータが見つかりません');
+                console.error('Response preview:', response.substring(0, 1000));
                 throw new Error('AIレスポンスからJSONデータを抽出できませんでした');
             }
 
-            const jsonString = jsonMatch[1].trim();
-            console.log('JSON文字列を抽出しました');
+            // JSON文字列の検証と修復
+            jsonString = this._repairJsonString(jsonString);
+
+            console.log('JSON文字列を抽出しました (length: ' + jsonString.length + ')');
+            console.log('JSON preview:', jsonString.substring(0, 500) + '...');
 
             try {
                 const shiftData = JSON.parse(jsonString);
                 console.log('JSONのパースに成功しました');
+
+                // データ構造の検証
+                if (!shiftData.shifts || !Array.isArray(shiftData.shifts)) {
+                    throw new Error('シフトデータの形式が正しくありません: shifts配列が見つかりません');
+                }
+
+                // サマリーデータがない場合は生成
+                if (!shiftData.summary) {
+                    shiftData.summary = this._generateSummary(shiftData.shifts);
+                }
+
                 return shiftData;
             } catch (parseError) {
-                console.error('JSONパースエラー:', parseError);
-                console.error('問題のある文字列:', jsonString);
+                console.error('JSONパースエラー:', parseError.message);
+                console.error('問題のあるJSON文字列:', jsonString);
 
-                const lines = jsonString.split('\n');
-                for (let i = 0; i < lines.length; i++) {
-                    try {
-                        JSON.parse(lines.slice(0, i + 1).join('\n'));
-                    } catch (lineError) {
-                        console.error(`エラー発生行: ${i + 1}行目`, lines[i]);
-                        break;
-                    }
+                // 部分的なJSONの修復を試行
+                const repairedJson = this._attemptJsonRepair(jsonString);
+                if (repairedJson) {
+                    console.log('JSON修復を試行します');
+                    return JSON.parse(repairedJson);
                 }
 
                 throw new Error('JSONのパースに失敗しました: ' + parseError.message);
@@ -461,6 +495,90 @@ class ShiftGeneratorService {
             console.error('AIレスポンス解析エラー:', error);
             throw new Error('AIレスポンスの解析に失敗しました: ' + error.message);
         }
+    }
+
+    _repairJsonString(jsonString) {
+        // 基本的なJSON修復
+        jsonString = jsonString
+            .replace(/,\s*}/g, '}')  // 末尾の不要なカンマを削除
+            .replace(/,\s*]/g, ']')  // 配列の末尾の不要なカンマを削除
+            .replace(/^\s*,/gm, '')  // 行頭の不要なカンマを削除
+            .trim();
+
+        return jsonString;
+    }
+
+    _attemptJsonRepair(jsonString) {
+        try {
+            // 切り捨てられたJSONの修復を試行
+            let repaired = jsonString;
+
+            // 未完了のオブジェクトや配列を閉じる
+            const openBraces = (repaired.match(/\{/g) || []).length;
+            const closeBraces = (repaired.match(/\}/g) || []).length;
+            const openBrackets = (repaired.match(/\[/g) || []).length;
+            const closeBrackets = (repaired.match(/\]/g) || []).length;
+
+            // 不足している閉じ括弧を追加
+            for (let i = 0; i < openBrackets - closeBrackets; i++) {
+                repaired += ']';
+            }
+            for (let i = 0; i < openBraces - closeBraces; i++) {
+                repaired += '}';
+            }
+
+            // 最後のカンマを削除
+            repaired = repaired.replace(/,\s*([}\]])/, '$1');
+
+            console.log('修復されたJSON:', repaired.substring(0, 500) + '...');
+
+            // パースを試行
+            JSON.parse(repaired);
+            return repaired;
+        } catch (error) {
+            console.error('JSON修復に失敗:', error.message);
+            return null;
+        }
+    }
+
+    _generateSummary(shifts) {
+        const staffHours = {};
+
+        shifts.forEach(dayShift => {
+            if (dayShift.assignments) {
+                dayShift.assignments.forEach(assignment => {
+                    const staffId = assignment.staff_id;
+                    const startTime = moment(assignment.start_time, 'HH:mm');
+                    const endTime = moment(assignment.end_time, 'HH:mm');
+
+                    let hours = endTime.diff(startTime, 'minutes') / 60;
+
+                    // 休憩時間を差し引く
+                    if (assignment.break_start_time && assignment.break_end_time) {
+                        const breakStart = moment(assignment.break_start_time, 'HH:mm');
+                        const breakEnd = moment(assignment.break_end_time, 'HH:mm');
+                        const breakHours = breakEnd.diff(breakStart, 'minutes') / 60;
+                        hours -= breakHours;
+                    }
+
+                    if (!staffHours[staffId]) {
+                        staffHours[staffId] = {
+                            staff_id: staffId,
+                            staff_name: assignment.staff_name || `スタッフ${staffId}`,
+                            total_hours: 0
+                        };
+                    }
+                    staffHours[staffId].total_hours += hours;
+                });
+            }
+        });
+
+        return {
+            totalHoursByStaff: Object.values(staffHours).map(staff => ({
+                ...staff,
+                total_hours: Math.round(staff.total_hours * 10) / 10
+            }))
+        };
     }
 
     async validateShift(shiftData, storeId, year, month) {
@@ -614,14 +732,16 @@ class ShiftGeneratorService {
                     }, { transaction: t });
                 } else {
                     console.log('既存シフトを更新します');
-                    if (shift.status === 'confirmed') {
-                        throw new Error('既に確定済みのシフトは更新できません');
-                    }
 
                     await ShiftAssignment.destroy({
                         where: { shift_id: shift.id },
                         transaction: t
                     });
+
+                    if (shift.status === 'confirmed') {
+                        await shift.update({ status: 'draft' }, { transaction: t });
+                        console.log('確定済みシフトをドラフト状態に変更しました');
+                    }
                 }
 
                 console.log('シフト割り当てを保存します');
