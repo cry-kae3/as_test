@@ -113,11 +113,118 @@ class ShiftGeneratorService {
         }
     }
 
+    _generatePrompt(storeData, staffData, calendarData, requirementsData, year, month) {
+        const monthNames = [
+            '1月', '2月', '3月', '4月', '5月', '6月',
+            '7月', '8月', '9月', '10月', '11月', '12月'
+        ];
+
+        const closedDaysInfo = storeData.closed_days.map(day => {
+            if (day.specific_date) {
+                return `${day.specific_date}`;
+            } else if (day.day_of_week !== null) {
+                const dayNames = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'];
+                return dayNames[day.day_of_week];
+            }
+            return '';
+        }).join(', ');
+
+        const staffDetails = staffData.map(staff => {
+            const dayPrefs = staff.day_preferences.map(pref =>
+                `${pref.day_name}:${pref.available ? `${pref.preferred_start_time || '未設定'}-${pref.preferred_end_time || '未設定'}` : '休み'}`
+            ).join(', ');
+
+            const dayOffs = staff.days_off.map(off => `${off.date}(${off.reason || ''})`).join(', ');
+
+            return `
+    スタッフID: ${staff.id}
+    名前: ${staff.name}
+    役職: ${staff.position}
+    雇用形態: ${staff.employment_type}
+    月間勤務時間: 最小${staff.min_hours_per_month}時間～最大${staff.max_hours_per_month}時間
+    1日最大勤務時間: ${staff.max_hours_per_day}時間
+    最大連続勤務日数: ${staff.max_consecutive_days}日
+    曜日別希望: ${dayPrefs}
+    休み希望: ${dayOffs || 'なし'}`;
+        }).join('\n');
+
+        const requirementDetails = requirementsData.map(req => {
+            if (req.requirements.length === 0) return null;
+            const reqs = req.requirements.map(r =>
+                `${r.start_time}-${r.end_time}: ${r.required_staff_count}名必要`
+            ).join(', ');
+            return `${req.date}: ${reqs}`;
+        }).filter(Boolean).join('\n');
+
+        return `
+    # シフト生成リクエスト
+    
+    ## 年月
+    ${year}年${monthNames[month - 1]}（${month}月）
+    
+    ## 店舗情報
+    店舗名: ${storeData.name}
+    営業時間: ${storeData.opening_time}～${storeData.closing_time}
+    定休日: ${closedDaysInfo}
+    
+    ## スタッフ詳細情報
+    ${staffDetails}
+    
+    ## 日別人員要件
+    ${requirementDetails}
+    
+    ## 作成ルール
+    1. 労働基準法を遵守すること
+       - 6時間超8時間以内の勤務には最低45分の休憩が必要
+       - 8時間超の勤務には最低1時間の休憩が必要
+    2. スタッフの希望シフト（曜日・時間帯）をできる限り尊重すること
+    3. スタッフの休み希望は必ず尊重すること（絶対条件）
+    4. スタッフの最大・最小勤務時間を尊重すること
+    5. 各スタッフの勤務時間をできるだけ均等にすること
+    6. 最大連続勤務日数を超えないようにすること
+    7. 定休日には誰もシフトに入れないこと
+    8. 各時間帯で必要な人員数を満たすこと
+    
+    ## 出力形式
+    JSONフォーマットで、以下の構造で出力してください。必ずJSON形式で返してください。
+    
+    \`\`\`json
+    {
+        "shifts": [
+            {
+                "date": "YYYY-MM-DD",
+                "assignments": [
+                    {
+                        "staff_id": 1,
+                        "staff_name": "山田 太郎",
+                        "start_time": "09:00",
+                        "end_time": "18:00",
+                        "break_start_time": "12:00",
+                        "break_end_time": "13:00"
+                    }
+                ]
+            }
+        ],
+        "summary": {
+            "totalHoursByStaff": [
+                {
+                    "staff_id": 1,
+                    "staff_name": "山田 太郎",
+                    "total_hours": 160
+                }
+            ]
+        }
+    }
+    \`\`\`
+    
+    必ず上記のJSON形式で出力してください。`;
+    }
+
     async _callClaudeAPI(prompt) {
         try {
             const requestData = {
                 model: this.claudeModel,
-                max_tokens: 10000,
+                max_tokens: 4000,
                 temperature: 0.1,
                 system: "あなたはシフト最適化と生成の専門家です。労働基準法を遵守しながら、人員要件と従業員の希望休みを考慮して最適なシフトを作成します。JSONフォーマット形式で出力してください。",
                 messages: [
@@ -132,14 +239,19 @@ class ShiftGeneratorService {
             console.log('API URL:', this.claudeApiUrl);
             console.log('API Key exists:', !!this.claudeApiKey);
             console.log('API Key length:', this.claudeApiKey ? this.claudeApiKey.length : 0);
+            console.log('プロンプト文字数:', prompt.length);
 
-            const httpsAgentOptions = {
-                rejectUnauthorized: process.env.NODE_ENV === 'production'
-            };
+            const httpsAgentOptions = {};
 
-            if (this.caCert) {
-                httpsAgentOptions.ca = this.caCert;
+            if (process.env.NODE_ENV === 'development') {
+                httpsAgentOptions.rejectUnauthorized = false;
+                console.log('開発環境: SSL証明書検証を無効化');
+            } else {
                 httpsAgentOptions.rejectUnauthorized = true;
+                if (this.caCert) {
+                    httpsAgentOptions.ca = this.caCert;
+                    console.log('本番環境: カスタムCA証明書を使用');
+                }
             }
 
             const httpsAgent = new https.Agent(httpsAgentOptions);
@@ -150,29 +262,24 @@ class ShiftGeneratorService {
                     'x-api-key': this.claudeApiKey,
                     'anthropic-version': '2023-06-01'
                 },
-                timeout: 60000,
+                timeout: 120000,
                 httpsAgent: httpsAgent
             };
 
-            if (process.env.HTTP_PROXY || process.env.HTTPS_PROXY) {
-                const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
-                console.log('Using proxy:', proxyUrl);
-                const proxyParts = proxyUrl.match(/^https?:\/\/([^:]+):(\d+)/);
-                if (proxyParts) {
-                    axiosConfig.proxy = {
-                        host: proxyParts[1],
-                        port: parseInt(proxyParts[2])
-                    };
-                }
-            }
-
             console.log('Sending request to Claude API...');
+            const startTime = Date.now();
             const response = await axios.post(this.claudeApiUrl, requestData, axiosConfig);
+            const endTime = Date.now();
+
             console.log('Claude API response received');
+            console.log('Response time:', endTime - startTime, 'ms');
+            console.log('Response status:', response.status);
 
             if (response.data && response.data.content && Array.isArray(response.data.content)) {
+                console.log('Content received, length:', response.data.content[0]?.text?.length || 0);
                 return response.data.content[0].text;
             } else {
+                console.error('Unexpected response format:', response.data);
                 throw new Error('Unexpected response format from Claude API');
             }
         } catch (error) {
@@ -195,8 +302,16 @@ class ShiftGeneratorService {
             } else if (error.request) {
                 console.error('Claude API リクエストエラー:', error.message);
                 console.error('Error code:', error.code);
-                console.error('Error config:', error.config);
-                throw new Error('Claude APIへの接続に失敗しました。ネットワーク設定を確認してください。');
+
+                if (error.code === 'ECONNABORTED') {
+                    throw new Error('Claude API接続タイムアウト: リクエストが時間内に完了しませんでした');
+                } else if (error.code === 'ENOTFOUND') {
+                    throw new Error('Claude API DNS解決エラー: インターネット接続を確認してください');
+                } else if (error.code === 'ECONNREFUSED') {
+                    throw new Error('Claude API接続拒否: ネットワーク設定を確認してください');
+                }
+
+                throw new Error('Claude APIへの接続に失敗しました');
             } else {
                 console.error('予期しないエラー:', error);
                 throw error;
@@ -306,111 +421,7 @@ class ShiftGeneratorService {
         return requirementsData;
     }
 
-    _generatePrompt(storeData, staffData, calendarData, requirementsData, year, month) {
-        const monthNames = [
-            '1月', '2月', '3月', '4月', '5月', '6月',
-            '7月', '8月', '9月', '10月', '11月', '12月'
-        ];
 
-        const closedDaysInfo = storeData.closed_days.map(day => {
-            if (day.specific_date) {
-                return `${day.specific_date}`;
-            } else if (day.day_of_week !== null) {
-                const dayNames = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'];
-                return dayNames[day.day_of_week];
-            }
-            return '';
-        }).join(', ');
-
-        return `
-# シフト生成リクエスト
-
-## 年月
-${year}年${monthNames[month - 1]}（${month}月）
-
-## 店舗情報
-店舗名: ${storeData.name}
-営業時間: ${storeData.opening_time}～${storeData.closing_time}
-定休日: ${closedDaysInfo}
-
-## スタッフ情報
-${JSON.stringify(staffData, null, 2)}
-
-## カレンダー情報
-${JSON.stringify(calendarData, null, 2)}
-
-## 人員要件
-${JSON.stringify(requirementsData, null, 2)}
-
-## 作成ルール
-1. 労働基準法を遵守すること
-   - 6時間超8時間以内の勤務には最低45分の休憩が必要
-   - 8時間超の勤務には最低1時間の休憩が必要
-2. スタッフの希望シフト（曜日・時間帯）をできる限り尊重すること
-3. スタッフの休み希望は必ず尊重すること（絶対条件）
-4. スタッフの最大・最小勤務時間を尊重すること
-5. 各スタッフの勤務時間をできるだけ均等にすること
-6. 最大連続勤務日数を超えないようにすること
-7. 定休日には誰もシフトに入れないこと
-8. 各時間帯で必要な人員数を満たすこと
-
-## 出力形式
-JSONフォーマットで、以下の構造で出力してください。必ずJSON形式で返してください。
-
-\`\`\`json
-{
-    "shifts": [
-        {
-            "date": "YYYY-MM-DD",
-            "assignments": [
-                {
-                    "staff_id": 1,
-                    "staff_name": "山田 太郎",
-                    "start_time": "09:00",
-                    "end_time": "18:00",
-                    "break_start_time": "12:00",
-                    "break_end_time": "13:00"
-                }
-            ]
-        }
-    ],
-    "summary": {
-        "totalHoursByStaff": [
-            {
-                "staff_id": 1,
-                "staff_name": "山田 太郎",
-                "total_hours": 160
-            }
-        ],
-        "staffingWarnings": [
-            {
-                "date": "YYYY-MM-DD",
-                "time_range": "09:00-12:00",
-                "required": 2,
-                "assigned": 1,
-                "message": "人員が不足しています"
-            }
-        ]
-    }
-}
-\`\`\`
-
-必ず上記のJSON形式で出力してください。各スタッフの勤務パターンや休憩時間を考慮して、最適なシフトを生成してください。また、シフト要件が満たされない場合は警告を出力してください。
-
-要件を満たせない場合は、以下の優先順位で対応してください：
-1. 休み希望は絶対に尊重する
-2. 労働基準法（休憩時間など）は必ず守る
-3. できるだけ人員要件を満たす（満たせない場合は警告を出す）
-4. できるだけ希望シフトを尊重する
-5. できるだけ勤務時間を均等にする
-
-細かいルール：
-- 営業時間外にはシフトを入れない
-- 休憩時間は労働時間に含めない
-- 日をまたぐシフトは作成しない（深夜帯は当日の終了時間まで）
-- 同じ日に複数回出勤するシフトは作成しない（1日1回のみ）
-`;
-    }
 
     _parseAIResponse(response) {
         try {
