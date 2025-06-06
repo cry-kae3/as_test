@@ -159,6 +159,7 @@
                 'is-holiday': day.isNationalHoliday,
                 'is-today': day.isToday,
                 'is-selected': selectedDate === day.date,
+                'has-warnings': hasDateWarnings(day.date)
               }"
               @click="selectDate(day.date)"
             >
@@ -166,6 +167,9 @@
               <div class="date-weekday">{{ day.dayOfWeekLabel }}</div>
               <div v-if="day.isNationalHoliday" class="holiday-indicator">
                 祝
+              </div>
+              <div v-if="hasDateWarnings(day.date)" class="warning-indicator">
+                <i class="pi pi-exclamation-triangle"></i>
               </div>
             </div>
           </div>
@@ -181,6 +185,16 @@
                     >{{ staff.last_name }} {{ staff.first_name }}</span
                   >
                   <span class="staff-role">{{ staff.position || "一般" }}</span>
+                  <div v-if="hasStaffWarnings(staff.id)" class="staff-warnings">
+                    <div 
+                      v-for="warning in getStaffWarnings(staff.id)" 
+                      :key="warning.type"
+                      class="warning-badge"
+                      :title="warning.message"
+                    >
+                      {{ warning.icon }}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -197,12 +211,16 @@
                   'has-shift': getShiftForStaff(day.date, staff.id),
                   'past-editable': isEditMode && isPastDate(day.date),
                   'is-selected': selectedDate === day.date,
+                  'has-violation': hasShiftViolation(day.date, staff.id)
                 }"
                 @click="openShiftEditor(day, staff)"
               >
                 <div
                   v-if="getShiftForStaff(day.date, staff.id)"
                   class="shift-time-card"
+                  :class="{
+                    'violation': hasShiftViolation(day.date, staff.id)
+                  }"
                 >
                   <div class="shift-start">
                     {{
@@ -217,6 +235,9 @@
                       formatTime(getShiftForStaff(day.date, staff.id).end_time)
                     }}
                   </div>
+                  <div v-if="hasShiftViolation(day.date, staff.id)" class="violation-icon">
+                    <i class="pi pi-exclamation-triangle"></i>
+                  </div>
                 </div>
                 <div v-else class="no-shift">
                   <span v-if="isEditMode">+</span>
@@ -228,15 +249,113 @@
       </div>
 
       <div v-if="viewMode === 'gantt' && selectedDate" class="gantt-view">
+        <div class="gantt-info-panel">
+          <div class="date-info-header">
+            <h3>{{ formatDateForGantt(selectedDate) }}</h3>
+            <div v-if="hasDateWarnings(selectedDate)" class="date-warnings">
+              <div 
+                v-for="warning in getDateWarnings(selectedDate)" 
+                :key="warning.type"
+                class="warning-item"
+                :class="warning.type"
+              >
+                <i :class="warning.icon"></i>
+                <span>{{ warning.message }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="requirements-section">
+            <h4 class="section-title">
+              <i class="pi pi-users"></i>
+              人員要件
+            </h4>
+            <div v-if="getDailyRequirements(selectedDate).length > 0" class="requirements-list">
+              <div 
+                v-for="req in getDailyRequirements(selectedDate)" 
+                :key="`req-${req.start_time}-${req.end_time}`"
+                class="requirement-item"
+                :class="{
+                  'shortage': hasStaffingShortage(selectedDate, req)
+                }"
+              >
+                <div class="time-range">
+                  {{ formatTime(req.start_time) }} - {{ formatTime(req.end_time) }}
+                </div>
+                <div class="staff-count">
+                  <span class="assigned-count">{{ getAssignedStaffCount(selectedDate, req) }}</span>
+                  <span class="separator">/</span>
+                  <span class="required-count">{{ req.required_staff_count }}</span>
+                  <span class="count-unit">名</span>
+                </div>
+                <div v-if="hasStaffingShortage(selectedDate, req)" class="shortage-icon">
+                  <i class="pi pi-exclamation-triangle"></i>
+                </div>
+              </div>
+            </div>
+            <div v-else class="no-requirements">
+              <i class="pi pi-info-circle"></i>
+              <span>設定なし</span>
+            </div>
+          </div>
+
+          <div class="staff-summary-section">
+            <h4 class="section-title">
+              <i class="pi pi-user"></i>
+              スタッフ状況
+            </h4>
+            <div class="staff-summary-grid">
+              <div 
+                v-for="staff in staffList" 
+                :key="`summary-${staff.id}`"
+                class="staff-summary-card"
+                :class="{
+                  'has-warnings': hasStaffWarnings(staff.id)
+                }"
+              >
+                <div class="staff-header">
+                  <div class="staff-avatar-tiny">
+                    {{ staff.first_name.charAt(0) }}
+                  </div>
+                  <div class="staff-name-summary">
+                    {{ staff.last_name }} {{ staff.first_name }}
+                  </div>
+                  <div v-if="hasStaffWarnings(staff.id)" class="warning-indicator-small">
+                    <i class="pi pi-exclamation-triangle"></i>
+                  </div>
+                </div>
+                
+                <div class="summary-stats">
+                  <div class="stat-item">
+                    <span class="stat-value">{{ calculateTotalHours(staff.id) }}h</span>
+                    <span class="stat-range">/{{ staff.max_hours_per_month || 0 }}h</span>
+                  </div>
+                  
+                  <div v-if="getShiftForStaff(selectedDate, staff.id)" class="today-shift">
+                    <span class="today-hours">
+                      本日: {{ calculateDayHours(getShiftForStaff(selectedDate, staff.id)) }}h
+                    </span>
+                    <div v-if="hasShiftViolation(selectedDate, staff.id)" class="violations">
+                      <div 
+                        v-for="violation in getShiftViolations(selectedDate, staff.id)" 
+                        :key="violation.type"
+                        class="violation-badge"
+                        :title="violation.message"
+                      >
+                        {{ violation.icon }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="gantt-container" ref="ganttContainer">
           <div class="gantt-header">
             <div class="gantt-staff-header">
               <span>スタッフ</span>
-            </div>
-            <div class="gantt-date-header">
-              <h3 class="gantt-date-title">
-                {{ formatDateForGantt(selectedDate) }}
-              </h3>
             </div>
             <div class="gantt-timeline-header" ref="ganttTimelineHeader">
               <div
@@ -256,6 +375,9 @@
                 v-for="staff in staffList"
                 :key="`gantt-${selectedDate}-${staff.id}`"
                 class="gantt-staff-row"
+                :class="{
+                  'has-warnings': hasStaffWarnings(staff.id)
+                }"
               >
                 <div class="gantt-staff-info">
                   <div class="staff-avatar-small">
@@ -264,6 +386,9 @@
                   <span class="staff-name-small"
                     >{{ staff.last_name }} {{ staff.first_name }}</span
                   >
+                  <div v-if="hasStaffWarnings(staff.id)" class="warning-indicator-gantt">
+                    <i class="pi pi-exclamation-triangle"></i>
+                  </div>
                 </div>
 
                 <div
@@ -289,6 +414,7 @@
                       'is-editable': isEditMode,
                       'is-past-editable':
                         isEditMode && isPastDate(selectedDate),
+                      'has-violation': hasShiftViolation(selectedDate, staff.id)
                     }"
                     @click.stop="openShiftEditor({ date: selectedDate }, staff)"
                   >
@@ -305,6 +431,9 @@
                         )
                       }}
                     </span>
+                    <div v-if="hasShiftViolation(selectedDate, staff.id)" class="gantt-violation-icon">
+                      <i class="pi pi-exclamation-triangle"></i>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -319,42 +448,6 @@
         </div>
         <h3>日付を選択してください</h3>
         <p>ガントチャートを表示するには日付を選択してください</p>
-      </div>
-
-      <div class="shift-summary-panel">
-        <h3 class="summary-title">月間勤務時間</h3>
-        <div class="summary-grid">
-          <div
-            v-for="staff in staffList"
-            :key="`summary-${staff.id}`"
-            class="summary-card"
-          >
-            <div class="summary-staff">
-              <div class="staff-avatar-small">
-                {{ staff.first_name.charAt(0) }}
-              </div>
-              <div class="staff-info-column">
-                <span class="staff-name"
-                  >{{ staff.last_name }} {{ staff.first_name }}</span
-                >
-                <div class="staff-conditions">
-                  <span class="condition-item"
-                    >最小: {{ staff.min_hours_per_month || 0 }}h</span
-                  >
-                  <span class="condition-item"
-                    >最大: {{ staff.max_hours_per_month || 0 }}h</span
-                  >
-                </div>
-              </div>
-            </div>
-            <div class="summary-hours">
-              <span class="hours-number">{{
-                calculateTotalHours(staff.id)
-              }}</span>
-              <span class="hours-unit">時間</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -519,6 +612,8 @@ export default {
     const currentShift = ref(null);
     const systemSettings = ref({ closing_day: 25 });
     const holidays = ref([]);
+    const storeRequirements = ref([]);
+    const currentStore = ref(null);
 
     const ganttContainer = ref(null);
     const ganttTimelineHeader = ref(null);
@@ -574,6 +669,241 @@ export default {
     const hasCurrentShift = computed(() => {
       return currentShift.value !== null;
     });
+
+    const getDailyRequirements = (date) => {
+      if (!currentStore.value || !currentStore.value.staffRequirements) {
+        return [];
+      }
+
+      const dayOfWeek = new Date(date).getDay();
+      
+      const specificRequirements = currentStore.value.staffRequirements.filter(
+        req => req.specific_date && req.specific_date === date
+      );
+      
+      if (specificRequirements.length > 0) {
+        return specificRequirements;
+      }
+      
+      return currentStore.value.staffRequirements.filter(
+        req => req.day_of_week === dayOfWeek && !req.specific_date
+      );
+    };
+
+    const getConsecutiveWorkDays = (staffId, currentDate) => {
+      if (!shifts.value || shifts.value.length === 0) return 0;
+
+      const currentDateObj = new Date(currentDate);
+      let consecutiveDays = 0;
+      let checkDate = new Date(currentDateObj);
+      
+      while (true) {
+        const dateStr = `${checkDate.getFullYear()}-${(checkDate.getMonth() + 1).toString().padStart(2, '0')}-${checkDate.getDate().toString().padStart(2, '0')}`;
+        
+        const hasShift = shifts.value.some(dayShift => 
+          dayShift.date === dateStr && 
+          dayShift.assignments.some(assignment => assignment.staff_id === staffId)
+        );
+        
+        if (hasShift) {
+          consecutiveDays++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+      
+      checkDate = new Date(currentDateObj);
+      checkDate.setDate(checkDate.getDate() + 1);
+      
+      while (true) {
+        const dateStr = `${checkDate.getFullYear()}-${(checkDate.getMonth() + 1).toString().padStart(2, '0')}-${checkDate.getDate().toString().padStart(2, '0')}`;
+        
+        const hasShift = shifts.value.some(dayShift => 
+          dayShift.date === dateStr && 
+          dayShift.assignments.some(assignment => assignment.staff_id === staffId)
+        );
+        
+        if (hasShift) {
+          consecutiveDays++;
+          checkDate.setDate(checkDate.getDate() + 1);
+        } else {
+          break;
+        }
+      }
+      
+      return consecutiveDays;
+    };
+
+    const calculateDayHours = (shift) => {
+      if (!shift) return 0;
+
+      const startTime = new Date(`2000-01-01 ${shift.start_time}`);
+      const endTime = new Date(`2000-01-01 ${shift.end_time}`);
+      let hours = (endTime - startTime) / (1000 * 60 * 60);
+
+      if (shift.break_start_time && shift.break_end_time) {
+        const breakStart = new Date(`2000-01-01 ${shift.break_start_time}`);
+        const breakEnd = new Date(`2000-01-01 ${shift.break_end_time}`);
+        const breakHours = (breakEnd - breakStart) / (1000 * 60 * 60);
+        hours -= breakHours;
+      }
+
+      return Math.round(hours * 10) / 10;
+    };
+
+    const fetchStoreDetails = async (storeId) => {
+      try {
+        const storeData = await store.dispatch("store/fetchStore", storeId);
+        currentStore.value = storeData;
+        
+        await store.dispatch("store/fetchStoreStaffRequirements", storeId);
+        const requirements = await store.dispatch("store/fetchStoreStaffRequirements", storeId);
+        storeRequirements.value = requirements;
+      } catch (error) {
+        console.error("店舗詳細情報の取得に失敗しました:", error);
+      }
+    };
+
+    const hasStaffingShortage = (date, requirement) => {
+      const assignedCount = getAssignedStaffCount(date, requirement);
+      return assignedCount < requirement.required_staff_count;
+    };
+
+    const getAssignedStaffCount = (date, requirement) => {
+      const dayShifts = shifts.value.find(shift => shift.date === date);
+      if (!dayShifts) return 0;
+
+      const reqStartTime = parseTimeToFloat(requirement.start_time);
+      const reqEndTime = parseTimeToFloat(requirement.end_time);
+
+      return dayShifts.assignments.filter(assignment => {
+        const shiftStartTime = parseTimeToFloat(assignment.start_time);
+        const shiftEndTime = parseTimeToFloat(assignment.end_time);
+
+        return shiftStartTime <= reqStartTime && shiftEndTime >= reqEndTime;
+      }).length;
+    };
+
+    const hasShiftViolation = (date, staffId) => {
+      const shift = getShiftForStaff(date, staffId);
+      if (!shift) return false;
+
+      const staff = staffList.value.find(s => s.id === staffId);
+      if (!staff) return false;
+
+      const dayHours = calculateDayHours(shift);
+      const maxDayHours = staff.max_hours_per_day || 8;
+      const consecutiveDays = getConsecutiveWorkDays(staffId, date);
+      const maxConsecutiveDays = staff.max_consecutive_days || 5;
+
+      return dayHours > maxDayHours || consecutiveDays > maxConsecutiveDays;
+    };
+
+    const getShiftViolations = (date, staffId) => {
+      const violations = [];
+      const shift = getShiftForStaff(date, staffId);
+      if (!shift) return violations;
+
+      const staff = staffList.value.find(s => s.id === staffId);
+      if (!staff) return violations;
+
+      const dayHours = calculateDayHours(shift);
+      const maxDayHours = staff.max_hours_per_day || 8;
+      const consecutiveDays = getConsecutiveWorkDays(staffId, date);
+      const maxConsecutiveDays = staff.max_consecutive_days || 5;
+
+      if (dayHours > maxDayHours) {
+        violations.push({
+          type: 'day_hours',
+          icon: '⏰',
+          message: `1日の勤務時間が上限を超過 (${dayHours}h > ${maxDayHours}h)`
+        });
+      }
+
+      if (consecutiveDays > maxConsecutiveDays) {
+        violations.push({
+          type: 'consecutive_days',
+          icon: '📅',
+          message: `連続勤務日数が上限を超過 (${consecutiveDays}日 > ${maxConsecutiveDays}日)`
+        });
+      }
+
+      return violations;
+    };
+
+    const hasStaffWarnings = (staffId) => {
+      const staff = staffList.value.find(s => s.id === staffId);
+      if (!staff) return false;
+
+      const totalHours = calculateTotalHours(staffId);
+      const maxMonthHours = staff.max_hours_per_month || 0;
+      const minMonthHours = staff.min_hours_per_month || 0;
+
+      return totalHours > maxMonthHours || totalHours < minMonthHours;
+    };
+
+    const getStaffWarnings = (staffId) => {
+      const warnings = [];
+      const staff = staffList.value.find(s => s.id === staffId);
+      if (!staff) return warnings;
+
+      const totalHours = calculateTotalHours(staffId);
+      const maxMonthHours = staff.max_hours_per_month || 0;
+      const minMonthHours = staff.min_hours_per_month || 0;
+
+      if (totalHours > maxMonthHours) {
+        warnings.push({
+          type: 'over_hours',
+          icon: '⚠️',
+          message: `月間勤務時間が上限を超過 (${totalHours}h > ${maxMonthHours}h)`
+        });
+      }
+
+      if (totalHours < minMonthHours) {
+        warnings.push({
+          type: 'under_hours',
+          icon: '📉',
+          message: `月間勤務時間が下限を下回り (${totalHours}h < ${minMonthHours}h)`
+        });
+      }
+
+      return warnings;
+    };
+
+    const hasDateWarnings = (date) => {
+      const requirements = getDailyRequirements(date);
+      return requirements.some(req => hasStaffingShortage(date, req)) ||
+             staffList.value.some(staff => hasShiftViolation(date, staff.id));
+    };
+
+    const getDateWarnings = (date) => {
+      const warnings = [];
+      const requirements = getDailyRequirements(date);
+
+      requirements.forEach(req => {
+        if (hasStaffingShortage(date, req)) {
+          const assigned = getAssignedStaffCount(date, req);
+          warnings.push({
+            type: 'staffing_shortage',
+            icon: 'pi pi-users',
+            message: `${formatTime(req.start_time)}-${formatTime(req.end_time)}: 人員不足 (${assigned}/${req.required_staff_count}名)`
+          });
+        }
+      });
+
+      staffList.value.forEach(staff => {
+        if (hasShiftViolation(date, staff.id)) {
+          warnings.push({
+            type: 'staff_violation',
+            icon: 'pi pi-exclamation-triangle',
+            message: `${staff.last_name} ${staff.first_name}: 勤務条件違反`
+          });
+        }
+      });
+
+      return warnings;
+    };
 
     const setViewMode = (mode) => {
       viewMode.value = mode;
@@ -924,6 +1254,9 @@ export default {
 
     const changeStore = async () => {
       selectedDate.value = null;
+      if (selectedStore.value) {
+        await fetchStoreDetails(selectedStore.value.id);
+      }
       await loadShiftData();
     };
 
@@ -1479,6 +1812,7 @@ export default {
 
         if (storeData.length > 0) {
           selectedStore.value = storeData[0];
+          await fetchStoreDetails(selectedStore.value.id);
           await loadShiftData();
         }
       } catch (error) {
@@ -1515,6 +1849,8 @@ export default {
       ganttContainer,
       ganttTimelineHeader,
       ganttBody,
+      storeRequirements,
+      currentStore,
       hasCurrentShift,
       setViewMode,
       selectDate,
@@ -1541,6 +1877,18 @@ export default {
       getShiftForStaff,
       formatTime,
       calculateTotalHours,
+      getDailyRequirements,
+      getConsecutiveWorkDays,
+      calculateDayHours,
+      fetchStoreDetails,
+      hasStaffingShortage,
+      getAssignedStaffCount,
+      hasShiftViolation,
+      getShiftViolations,
+      hasStaffWarnings,
+      getStaffWarnings,
+      hasDateWarnings,
+      getDateWarnings,
     };
   },
 };
@@ -1571,10 +1919,11 @@ export default {
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 2rem;
+  justify-content: space-between;
+  gap: 1rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
@@ -1582,6 +1931,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 1rem;
+  flex-shrink: 0;
 }
 
 .month-navigator {
@@ -1634,6 +1984,7 @@ export default {
 
 .store-selector {
   min-width: 200px;
+  flex-shrink: 0;
 }
 
 .view-controls {
@@ -1642,6 +1993,7 @@ export default {
   justify-content: center;
   align-items: center;
   gap: 1rem;
+  flex-shrink: 0;
 }
 
 .view-mode-tabs {
@@ -1665,6 +2017,7 @@ export default {
   color: #6c757d;
   transition: all 0.2s ease;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .view-tab:hover {
@@ -1688,8 +2041,8 @@ export default {
 
 .action-controls {
   display: flex;
-  justify-content: flex-end;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .action-button {
@@ -1702,6 +2055,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  white-space: nowrap;
 }
 
 .create-button {
@@ -1866,6 +2220,7 @@ export default {
   background: #f8f9fa;
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .date-cell-header:hover {
@@ -1885,11 +2240,9 @@ export default {
   background: #ffebee;
 }
 
-.date-cell-header.is-selected {
-}
-
-.date-cell-header.is-selected .date-number,
-.date-cell-header.is-selected .date-weekday {
+.date-cell-header.has-warnings {
+  background: #fff3cd;
+  border-left: 3px solid #ffc107;
 }
 
 .date-number {
@@ -1910,6 +2263,14 @@ export default {
   background: #dc3545;
   color: white;
   font-weight: 500;
+}
+
+.warning-indicator {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  color: #ffc107;
+  font-size: 0.7rem;
 }
 
 .calendar-body {
@@ -1956,6 +2317,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  flex: 1;
 }
 
 .staff-name {
@@ -1967,6 +2329,21 @@ export default {
 .staff-role {
   font-size: 0.7rem;
   color: #6c757d;
+}
+
+.staff-warnings {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.warning-badge {
+  font-size: 0.6rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: 2px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  cursor: help;
 }
 
 .shift-cell {
@@ -2011,7 +2388,9 @@ export default {
   background: #fff3cd;
 }
 
-.shift-cell.is-selected {
+.shift-cell.has-violation {
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
 }
 
 .shift-time-card {
@@ -2027,6 +2406,11 @@ export default {
   font-size: 0.65rem;
   min-width: 45px;
   transition: all 0.2s ease;
+  position: relative;
+}
+
+.shift-time-card.violation {
+  background: #dc3545;
 }
 
 .shift-time-card:hover {
@@ -2044,6 +2428,21 @@ export default {
   opacity: 0.8;
 }
 
+.violation-icon {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  color: #ffc107;
+  font-size: 0.6rem;
+  background: white;
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .no-shift {
   color: #adb5bd;
   font-size: 1rem;
@@ -2059,17 +2458,280 @@ export default {
   position: relative;
   height: calc(100vh - 450px);
   overflow: hidden;
+  display: flex;
+  gap: 1rem;
+}
+
+.gantt-info-panel {
+  width: 350px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.date-info-header {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.date-info-header h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.date-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.warning-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.warning-item.staffing_shortage {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+}
+
+.warning-item.staff_violation {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #dc3545;
+}
+
+.requirements-section,
+.staff-summary-section {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.section-title {
+  background: #f8f9fa;
+  padding: 0.75rem 1rem;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 1px solid #dee2e6;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-title i {
+  color: #007bff;
+}
+
+.requirements-list {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.requirement-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+  position: relative;
+}
+
+.requirement-item.shortage {
+  background: #fff3cd;
+  border-color: #ffc107;
+}
+
+.time-range {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #495057;
+}
+
+.staff-count {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.assigned-count {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #007bff;
+}
+
+.separator {
+  color: #6c757d;
+}
+
+.required-count {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.count-unit {
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
+.shortage-icon {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  color: #ffc107;
+  font-size: 0.7rem;
+}
+
+.no-requirements {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6c757d;
+  font-size: 0.8rem;
+  padding: 1rem;
+  text-align: center;
+  justify-content: center;
+}
+
+.staff-summary-grid {
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.staff-summary-card {
+  background: #fafafa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 0.75rem;
+}
+
+.staff-summary-card.has-warnings {
+  background: #fff5f5;
+  border-color: #fed7d7;
+}
+
+.staff-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.staff-avatar-tiny {
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  background: #007bff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  font-size: 0.65rem;
+}
+
+.staff-name-summary {
+  font-weight: 500;
+  color: #495057;
+  font-size: 0.8rem;
+  flex: 1;
+}
+
+.warning-indicator-small {
+  color: #ffc107;
+  font-size: 0.7rem;
+}
+
+.summary-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.stat-value {
+  font-weight: 600;
+  color: #007bff;
+  font-size: 0.9rem;
+}
+
+.stat-range {
+  color: #6c757d;
+  font-size: 0.75rem;
+}
+
+.today-shift {
+  padding: 0.25rem 0.5rem;
+  background: #e3f2fd;
+  border-radius: 3px;
+  margin-top: 0.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.today-hours {
+  font-weight: 600;
+  color: #28a745;
+  font-size: 0.8rem;
+}
+
+.violations {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.violation-badge {
+  font-size: 0.6rem;
+  padding: 0.1rem 0.2rem;
+  border-radius: 2px;
+  background: #f8d7da;
+  border: 1px solid #dc3545;
+  cursor: help;
 }
 
 .gantt-container {
+  flex: 1;
   height: 100%;
   display: flex;
   flex-direction: column;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .gantt-header {
   display: grid;
-  grid-template-columns: 180px 200px 1fr;
+  grid-template-columns: 180px 1fr;
   background: #f8f9fa;
   border-bottom: 1px solid #dee2e6;
   position: sticky;
@@ -2087,23 +2749,6 @@ export default {
   align-items: center;
   justify-content: center;
   border-right: 1px solid #dee2e6;
-}
-
-.gantt-date-header {
-  padding: 1rem;
-  background: #6c757d;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-right: 1px solid #dee2e6;
-}
-
-.gantt-date-title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-  text-align: center;
 }
 
 .gantt-timeline-header {
@@ -2135,13 +2780,17 @@ export default {
 
 .gantt-staff-row {
   display: grid;
-  grid-template-columns: 180px 200px 1fr;
+  grid-template-columns: 180px 1fr;
   border-bottom: 1px solid #f1f3f4;
   min-height: 60px;
 }
 
 .gantt-staff-row:hover {
   background: #f8f9fa;
+}
+
+.gantt-staff-row.has-warnings {
+  background: #fff5f5;
 }
 
 .gantt-staff-info {
@@ -2170,6 +2819,12 @@ export default {
   font-weight: 500;
   color: #495057;
   font-size: 0.75rem;
+  flex: 1;
+}
+
+.warning-indicator-gantt {
+  color: #ffc107;
+  font-size: 0.7rem;
 }
 
 .gantt-timeline {
@@ -2179,7 +2834,6 @@ export default {
   display: flex;
   align-items: center;
   padding: 0;
-  border-right: 1px solid #dee2e6;
 }
 
 .gantt-timeline:hover {
@@ -2226,6 +2880,10 @@ export default {
   background: #ffc107;
 }
 
+.gantt-shift-block.has-violation {
+  background: #dc3545;
+}
+
 .shift-time-text {
   font-size: 0.7rem;
   white-space: nowrap;
@@ -2234,86 +2892,19 @@ export default {
   padding: 0 0.5rem;
 }
 
-.shift-summary-panel {
-  padding: 1.25rem;
-  background: #f8f9fa;
-  border-top: 1px solid #dee2e6;
-}
-
-.summary-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #495057;
-  margin-bottom: 1rem;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.75rem;
-}
-
-.summary-card {
+.gantt-violation-icon {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  color: #ffc107;
+  font-size: 0.6rem;
   background: white;
-  border-radius: 6px;
-  padding: 0.75rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid #dee2e6;
-  transition: all 0.2s ease;
-}
-
-.summary-card:hover {
-  border-color: #adb5bd;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.summary-staff {
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-.staff-info-column {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.staff-conditions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.condition-item {
-  font-size: 0.65rem;
-  color: #6c757d;
-  background: #f8f9fa;
-  padding: 0.1rem 0.3rem;
-  border-radius: 3px;
-  border: 1px solid #e9ecef;
-}
-
-.summary-hours {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  margin-left: 0.5rem;
-}
-
-.hours-number {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #007bff;
-}
-
-.hours-unit {
-  font-size: 0.65rem;
-  color: #6c757d;
+  justify-content: center;
 }
 
 .shift-editor-dialog .p-dialog-content {
@@ -2459,9 +3050,19 @@ export default {
 
 @media (max-width: 1024px) {
   .control-panel {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+  }
+
+  .period-controls {
+    justify-content: center;
+  }
+
+  .view-controls {
+    flex-direction: row;
+    justify-content: center;
     gap: 1rem;
-    text-align: center;
   }
 
   .action-controls {
@@ -2469,33 +3070,61 @@ export default {
     flex-wrap: wrap;
   }
 
-  .summary-grid {
-    grid-template-columns: 1fr;
+  .store-selector {
+    min-width: 250px;
   }
 
-  .gantt-header {
-    grid-template-columns: 120px 150px 1fr;
+  .gantt-view {
+    flex-direction: column;
+    height: auto;
   }
 
-  .gantt-staff-row {
-    grid-template-columns: 120px 150px 1fr;
+  .gantt-info-panel {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    max-height: 250px;
   }
 
-  .gantt-staff-header,
-  .gantt-staff-info {
-    padding: 0.5rem;
+  .requirements-section,
+  .staff-summary-section {
+    min-width: 280px;
+    flex-shrink: 0;
   }
 
-  .gantt-date-header {
-    padding: 0.5rem;
-  }
-
-  .gantt-date-title {
-    font-size: 0.8rem;
+  .gantt-container {
+    height: calc(100vh - 600px);
   }
 }
 
 @media (max-width: 768px) {
+  .control-panel {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .period-controls {
+    gap: 0.75rem;
+  }
+
+  .store-selector {
+    min-width: 200px;
+  }
+
+  .action-controls {
+    gap: 0.5rem;
+  }
+
+  .action-button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+  }
+
+  .view-tab {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
   .shift-management {
     padding: 1rem;
   }
@@ -2549,25 +3178,35 @@ export default {
     height: calc(100vh - 550px);
   }
 
+  .gantt-info-panel {
+    flex-direction: column;
+    max-height: 300px;
+  }
+
+  .requirements-section,
+  .staff-summary-section {
+    min-width: unset;
+  }
+
+  .staff-summary-grid {
+    max-height: 200px;
+  }
+
+  .gantt-container {
+    height: calc(100vh - 700px);
+  }
+
   .gantt-header {
-    grid-template-columns: 100px 120px 1fr;
+    grid-template-columns: 100px 1fr;
   }
 
   .gantt-staff-row {
-    grid-template-columns: 100px 120px 1fr;
+    grid-template-columns: 100px 1fr;
   }
 
   .gantt-staff-header,
   .gantt-staff-info {
     padding: 0.4rem;
-  }
-
-  .gantt-date-header {
-    padding: 0.4rem;
-  }
-
-  .gantt-date-title {
-    font-size: 0.7rem;
   }
 
   .staff-name-small {
@@ -2582,24 +3221,57 @@ export default {
   .date-selector {
     max-width: 150px;
   }
+}
 
-  .summary-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .summary-card {
+@media (max-width: 576px) {
+  .period-controls {
     flex-direction: column;
-    gap: 0.5rem;
-    text-align: center;
+    gap: 1rem;
   }
 
-  .summary-staff {
+  .view-controls {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .action-controls {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .action-button {
+    width: 100%;
     justify-content: center;
   }
 
-  .staff-conditions {
-    flex-direction: row;
-    gap: 0.25rem;
+  .store-selector {
+    min-width: 100%;
+  }
+
+  .date-dropdown {
+    width: 100%;
+  }
+
+  .gantt-view {
+    height: auto;
+    gap: 0.5rem;
+  }
+
+  .section-title {
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .requirements-list {
+    padding: 0.5rem;
+  }
+
+  .staff-summary-card {
+    padding: 0.5rem;
+  }
+
+  .gantt-container {
+    height: 300px;
   }
 }
 </style>
