@@ -159,7 +159,7 @@
                 'is-holiday': day.isNationalHoliday,
                 'is-today': day.isToday,
                 'is-selected': selectedDate === day.date,
-                'has-warnings': hasDateWarnings(day.date)
+                'has-warnings': hasDateWarnings(day.date),
               }"
               @click="selectDate(day.date)"
             >
@@ -168,11 +168,16 @@
               <div v-if="day.isNationalHoliday" class="holiday-indicator">
                 祝
               </div>
-              <div v-if="hasDateWarnings(day.date)" class="warning-indicator">
+              <!-- ↓ ここを修正 -->
+              <div
+                v-if="hasDateWarnings(day.date)"
+                class="warning-indicator"
+                :data-warning-count="getDateWarnings(day.date).length"
+              >
                 <i class="pi pi-exclamation-triangle"></i>
                 <div class="warning-tooltip">
-                  <div 
-                    v-for="warning in getDateWarnings(day.date)" 
+                  <div
+                    v-for="warning in getDateWarnings(day.date)"
                     :key="warning.type"
                     class="warning-tooltip-item"
                     :class="warning.type"
@@ -197,12 +202,16 @@
                   >
                   <span class="staff-role">{{ staff.position || "一般" }}</span>
                   <div class="staff-hours-info">
-                    <span class="current-hours">{{ calculateTotalHours(staff.id) }}h</span>
-                    <span class="hours-range">/ {{ staff.max_hours_per_month || 0 }}h</span>
+                    <span class="current-hours"
+                      >{{ calculateTotalHours(staff.id) }}h</span
+                    >
+                    <span class="hours-range"
+                      >/ {{ staff.max_hours_per_month || 0 }}h</span
+                    >
                   </div>
                   <div v-if="hasStaffWarnings(staff.id)" class="staff-warnings">
-                    <div 
-                      v-for="warning in getStaffWarnings(staff.id)" 
+                    <div
+                      v-for="warning in getStaffWarnings(staff.id)"
                       :key="warning.type"
                       class="warning-badge"
                       :title="warning.message"
@@ -226,7 +235,7 @@
                   'has-shift': getShiftForStaff(day.date, staff.id),
                   'past-editable': isEditMode && isPastDate(day.date),
                   'is-selected': selectedDate === day.date,
-                  'has-violation': hasShiftViolation(day.date, staff.id)
+                  'has-violation': hasShiftViolation(day.date, staff.id),
                 }"
                 @click="openShiftEditor(day, staff)"
               >
@@ -234,7 +243,7 @@
                   v-if="getShiftForStaff(day.date, staff.id)"
                   class="shift-time-card"
                   :class="{
-                    'violation': hasShiftViolation(day.date, staff.id)
+                    violation: hasShiftViolation(day.date, staff.id),
                   }"
                 >
                   <div class="shift-start">
@@ -250,11 +259,17 @@
                       formatTime(getShiftForStaff(day.date, staff.id).end_time)
                     }}
                   </div>
-                  <div v-if="hasShiftViolation(day.date, staff.id)" class="violation-icon">
+                  <div
+                    v-if="hasShiftViolation(day.date, staff.id)"
+                    class="violation-icon"
+                  >
                     <i class="pi pi-exclamation-triangle"></i>
                     <div class="violation-tooltip">
-                      <div 
-                        v-for="violation in getShiftViolations(day.date, staff.id)" 
+                      <div
+                        v-for="violation in getShiftViolations(
+                          day.date,
+                          staff.id
+                        )"
                         :key="violation.type"
                         class="violation-tooltip-item"
                       >
@@ -275,8 +290,8 @@
           <div class="date-info-header">
             <h3>{{ formatDateForGantt(selectedDate) }}</h3>
             <div v-if="hasDateWarnings(selectedDate)" class="date-warnings">
-              <div 
-                v-for="warning in getDateWarnings(selectedDate)" 
+              <div
+                v-for="warning in getDateWarnings(selectedDate)"
                 :key="warning.type"
                 class="warning-item"
                 :class="warning.type"
@@ -292,25 +307,36 @@
               <i class="pi pi-users"></i>
               人員要件
             </h4>
-            <div v-if="getDailyRequirements(selectedDate).length > 0" class="requirements-list">
-              <div 
-                v-for="req in getDailyRequirements(selectedDate)" 
+            <div
+              v-if="getDailyRequirements(selectedDate).length > 0"
+              class="requirements-list"
+            >
+              <div
+                v-for="req in getDailyRequirements(selectedDate)"
                 :key="`req-${req.start_time}-${req.end_time}`"
                 class="requirement-item"
                 :class="{
-                  'shortage': hasStaffingShortage(selectedDate, req)
+                  shortage: hasStaffingShortage(selectedDate, req),
                 }"
               >
                 <div class="time-range">
-                  {{ formatTime(req.start_time) }} - {{ formatTime(req.end_time) }}
+                  {{ formatTime(req.start_time) }} -
+                  {{ formatTime(req.end_time) }}
                 </div>
                 <div class="staff-count">
-                  <span class="assigned-count">{{ getAssignedStaffCount(selectedDate, req) }}</span>
+                  <span class="assigned-count">{{
+                    getAssignedStaffCount(selectedDate, req)
+                  }}</span>
                   <span class="separator">/</span>
-                  <span class="required-count">{{ req.required_staff_count }}</span>
+                  <span class="required-count">{{
+                    req.required_staff_count
+                  }}</span>
                   <span class="count-unit">名</span>
                 </div>
-                <div v-if="hasStaffingShortage(selectedDate, req)" class="shortage-icon">
+                <div
+                  v-if="hasStaffingShortage(selectedDate, req)"
+                  class="shortage-icon"
+                >
                   <i class="pi pi-exclamation-triangle"></i>
                 </div>
               </div>
@@ -327,12 +353,12 @@
               スタッフ状況
             </h4>
             <div class="staff-summary-grid">
-              <div 
-                v-for="staff in staffList" 
+              <div
+                v-for="staff in staffList"
                 :key="`summary-${staff.id}`"
                 class="staff-summary-card"
                 :class="{
-                  'has-warnings': hasStaffWarnings(staff.id)
+                  'has-warnings': hasStaffWarnings(staff.id),
                 }"
               >
                 <div class="staff-header">
@@ -342,24 +368,45 @@
                   <div class="staff-name-summary">
                     {{ staff.last_name }} {{ staff.first_name }}
                   </div>
-                  <div v-if="hasStaffWarnings(staff.id)" class="warning-indicator-small">
+                  <div
+                    v-if="hasStaffWarnings(staff.id)"
+                    class="warning-indicator-small"
+                  >
                     <i class="pi pi-exclamation-triangle"></i>
                   </div>
                 </div>
-                
+
                 <div class="summary-stats">
                   <div class="stat-item">
-                    <span class="stat-value">{{ calculateTotalHours(staff.id) }}h</span>
-                    <span class="stat-range">/{{ staff.max_hours_per_month || 0 }}h</span>
+                    <span class="stat-value"
+                      >{{ calculateTotalHours(staff.id) }}h</span
+                    >
+                    <span class="stat-range"
+                      >/{{ staff.max_hours_per_month || 0 }}h</span
+                    >
                   </div>
-                  
-                  <div v-if="getShiftForStaff(selectedDate, staff.id)" class="today-shift">
+
+                  <div
+                    v-if="getShiftForStaff(selectedDate, staff.id)"
+                    class="today-shift"
+                  >
                     <span class="today-hours">
-                      本日: {{ calculateDayHours(getShiftForStaff(selectedDate, staff.id)) }}h
+                      本日:
+                      {{
+                        calculateDayHours(
+                          getShiftForStaff(selectedDate, staff.id)
+                        )
+                      }}h
                     </span>
-                    <div v-if="hasShiftViolation(selectedDate, staff.id)" class="violations">
-                      <div 
-                        v-for="violation in getShiftViolations(selectedDate, staff.id)" 
+                    <div
+                      v-if="hasShiftViolation(selectedDate, staff.id)"
+                      class="violations"
+                    >
+                      <div
+                        v-for="violation in getShiftViolations(
+                          selectedDate,
+                          staff.id
+                        )"
                         :key="violation.type"
                         class="violation-badge"
                         :title="violation.message"
@@ -388,15 +435,24 @@
                 class="gantt-hour-cell"
                 :style="getTimeHeaderStyle()"
               >
-                <div class="hour-label">{{ hour.toString().padStart(2, "0") }}:00</div>
-                <div v-if="hasHourRequirements(selectedDate, hour)" class="hour-requirements">
-                  <div 
-                    v-for="req in getHourRequirements(selectedDate, hour)" 
+                <div class="hour-label">
+                  {{ hour.toString().padStart(2, "0") }}:00
+                </div>
+                <div
+                  v-if="hasHourRequirements(selectedDate, hour)"
+                  class="hour-requirements"
+                >
+                  <div
+                    v-for="req in getHourRequirements(selectedDate, hour)"
                     :key="`${req.start_time}-${req.end_time}`"
                     class="hour-requirement-badge"
-                    :class="{ 'shortage': hasRequirementShortage(selectedDate, req) }"
+                    :class="{
+                      shortage: hasRequirementShortage(selectedDate, req),
+                    }"
                   >
-                    {{ getAssignedStaffCount(selectedDate, req) }}/{{ req.required_staff_count }}
+                    {{ getAssignedStaffCount(selectedDate, req) }}/{{
+                      req.required_staff_count
+                    }}
                   </div>
                 </div>
               </div>
@@ -410,7 +466,7 @@
                 :key="`gantt-${selectedDate}-${staff.id}`"
                 class="gantt-staff-row"
                 :class="{
-                  'has-warnings': hasStaffWarnings(staff.id)
+                  'has-warnings': hasStaffWarnings(staff.id),
                 }"
               >
                 <div class="gantt-staff-info">
@@ -422,11 +478,18 @@
                       >{{ staff.last_name }} {{ staff.first_name }}</span
                     >
                     <div class="staff-hours-small">
-                      <span class="current-hours">{{ calculateTotalHours(staff.id) }}h</span>
-                      <span class="hours-range">/{{ staff.max_hours_per_month || 0 }}h</span>
+                      <span class="current-hours"
+                        >{{ calculateTotalHours(staff.id) }}h</span
+                      >
+                      <span class="hours-range"
+                        >/{{ staff.max_hours_per_month || 0 }}h</span
+                      >
                     </div>
                   </div>
-                  <div v-if="hasStaffWarnings(staff.id)" class="warning-indicator-gantt">
+                  <div
+                    v-if="hasStaffWarnings(staff.id)"
+                    class="warning-indicator-gantt"
+                  >
                     <i class="pi pi-exclamation-triangle"></i>
                   </div>
                 </div>
@@ -454,7 +517,10 @@
                       'is-editable': isEditMode,
                       'is-past-editable':
                         isEditMode && isPastDate(selectedDate),
-                      'has-violation': hasShiftViolation(selectedDate, staff.id)
+                      'has-violation': hasShiftViolation(
+                        selectedDate,
+                        staff.id
+                      ),
                     }"
                     @click.stop="openShiftEditor({ date: selectedDate }, staff)"
                   >
@@ -471,7 +537,10 @@
                         )
                       }}
                     </span>
-                    <div v-if="hasShiftViolation(selectedDate, staff.id)" class="gantt-violation-icon">
+                    <div
+                      v-if="hasShiftViolation(selectedDate, staff.id)"
+                      class="gantt-violation-icon"
+                    >
                       <i class="pi pi-exclamation-triangle"></i>
                     </div>
                   </div>
@@ -716,23 +785,23 @@ export default {
       }
 
       const dayOfWeek = new Date(date).getDay();
-      
+
       const specificRequirements = storeRequirements.value.filter(
-        req => req.specific_date && req.specific_date === date
+        (req) => req.specific_date && req.specific_date === date
       );
-      
+
       if (specificRequirements.length > 0) {
         return specificRequirements;
       }
-      
+
       return storeRequirements.value.filter(
-        req => req.day_of_week === dayOfWeek && !req.specific_date
+        (req) => req.day_of_week === dayOfWeek && !req.specific_date
       );
     };
 
     const hasHourRequirements = (date, hour) => {
       const requirements = getDailyRequirements(date);
-      return requirements.some(req => {
+      return requirements.some((req) => {
         const reqStartHour = parseTimeToFloat(req.start_time);
         const reqEndHour = parseTimeToFloat(req.end_time);
         return hour >= reqStartHour && hour < reqEndHour;
@@ -741,12 +810,12 @@ export default {
 
     const hasHourShortage = (date, hour) => {
       const requirements = getHourRequirements(date, hour);
-      return requirements.some(req => hasRequirementShortage(date, req));
+      return requirements.some((req) => hasRequirementShortage(date, req));
     };
 
     const getHourRequirements = (date, hour) => {
       const requirements = getDailyRequirements(date);
-      return requirements.filter(req => {
+      return requirements.filter((req) => {
         const reqStartHour = parseTimeToFloat(req.start_time);
         const reqEndHour = parseTimeToFloat(req.end_time);
         return hour >= reqStartHour && hour < reqEndHour;
@@ -764,15 +833,23 @@ export default {
       const currentDateObj = new Date(currentDate);
       let consecutiveDays = 0;
       let checkDate = new Date(currentDateObj);
-      
+
       while (true) {
-        const dateStr = `${checkDate.getFullYear()}-${(checkDate.getMonth() + 1).toString().padStart(2, '0')}-${checkDate.getDate().toString().padStart(2, '0')}`;
-        
-        const hasShift = shifts.value.some(dayShift => 
-          dayShift.date === dateStr && 
-          dayShift.assignments.some(assignment => assignment.staff_id === staffId)
+        const dateStr = `${checkDate.getFullYear()}-${(checkDate.getMonth() + 1)
+          .toString()
+          .padStart(2, "0")}-${checkDate
+          .getDate()
+          .toString()
+          .padStart(2, "0")}`;
+
+        const hasShift = shifts.value.some(
+          (dayShift) =>
+            dayShift.date === dateStr &&
+            dayShift.assignments.some(
+              (assignment) => assignment.staff_id === staffId
+            )
         );
-        
+
         if (hasShift) {
           consecutiveDays++;
           checkDate.setDate(checkDate.getDate() - 1);
@@ -780,18 +857,26 @@ export default {
           break;
         }
       }
-      
+
       checkDate = new Date(currentDateObj);
       checkDate.setDate(checkDate.getDate() + 1);
-      
+
       while (true) {
-        const dateStr = `${checkDate.getFullYear()}-${(checkDate.getMonth() + 1).toString().padStart(2, '0')}-${checkDate.getDate().toString().padStart(2, '0')}`;
-        
-        const hasShift = shifts.value.some(dayShift => 
-          dayShift.date === dateStr && 
-          dayShift.assignments.some(assignment => assignment.staff_id === staffId)
+        const dateStr = `${checkDate.getFullYear()}-${(checkDate.getMonth() + 1)
+          .toString()
+          .padStart(2, "0")}-${checkDate
+          .getDate()
+          .toString()
+          .padStart(2, "0")}`;
+
+        const hasShift = shifts.value.some(
+          (dayShift) =>
+            dayShift.date === dateStr &&
+            dayShift.assignments.some(
+              (assignment) => assignment.staff_id === staffId
+            )
         );
-        
+
         if (hasShift) {
           consecutiveDays++;
           checkDate.setDate(checkDate.getDate() + 1);
@@ -799,7 +884,7 @@ export default {
           break;
         }
       }
-      
+
       return consecutiveDays;
     };
 
@@ -824,12 +909,16 @@ export default {
       try {
         const storeData = await store.dispatch("store/fetchStore", storeId);
         currentStore.value = storeData;
-        
-        await store.dispatch("store/fetchStoreStaffRequirements", storeId);
-        const requirements = await store.dispatch("store/fetchStoreStaffRequirements", storeId);
-        storeRequirements.value = requirements;
+
+        const requirements = await store.dispatch(
+          "store/fetchStoreStaffRequirements",
+          storeId
+        );
+        console.log("取得した人員要件:", requirements);
+        storeRequirements.value = requirements || [];
       } catch (error) {
         console.error("店舗詳細情報の取得に失敗しました:", error);
+        storeRequirements.value = [];
       }
     };
 
@@ -839,17 +928,20 @@ export default {
     };
 
     const getAssignedStaffCount = (date, requirement) => {
-      const dayShifts = shifts.value.find(shift => shift.date === date);
+      const dayShifts = shifts.value.find((shift) => shift.date === date);
       if (!dayShifts) return 0;
 
       const reqStartTime = parseTimeToFloat(requirement.start_time);
       const reqEndTime = parseTimeToFloat(requirement.end_time);
 
-      return dayShifts.assignments.filter(assignment => {
+      // 要件の時間帯に勤務しているスタッフをカウント
+      return dayShifts.assignments.filter((assignment) => {
         const shiftStartTime = parseTimeToFloat(assignment.start_time);
         const shiftEndTime = parseTimeToFloat(assignment.end_time);
 
-        return shiftStartTime <= reqStartTime && shiftEndTime >= reqEndTime;
+        // シフトが要件の時間帯と重なっているかチェック
+        // (シフト開始が要件終了より前) かつ (シフト終了が要件開始より後)
+        return shiftStartTime < reqEndTime && shiftEndTime > reqStartTime;
       }).length;
     };
 
@@ -857,7 +949,7 @@ export default {
       const shift = getShiftForStaff(date, staffId);
       if (!shift) return false;
 
-      const staff = staffList.value.find(s => s.id === staffId);
+      const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
 
       const dayHours = calculateDayHours(shift);
@@ -873,7 +965,7 @@ export default {
       const shift = getShiftForStaff(date, staffId);
       if (!shift) return violations;
 
-      const staff = staffList.value.find(s => s.id === staffId);
+      const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return violations;
 
       const dayHours = calculateDayHours(shift);
@@ -883,17 +975,17 @@ export default {
 
       if (dayHours > maxDayHours) {
         violations.push({
-          type: 'day_hours',
-          icon: '⏰',
-          message: `1日の勤務時間が上限を超過 (${dayHours}h > ${maxDayHours}h)`
+          type: "day_hours",
+          icon: "⏰",
+          message: `1日の勤務時間が上限を超過 (${dayHours}h > ${maxDayHours}h)`,
         });
       }
 
       if (consecutiveDays > maxConsecutiveDays) {
         violations.push({
-          type: 'consecutive_days',
-          icon: '📅',
-          message: `連続勤務日数が上限を超過 (${consecutiveDays}日 > ${maxConsecutiveDays}日)`
+          type: "consecutive_days",
+          icon: "📅",
+          message: `連続勤務日数が上限を超過 (${consecutiveDays}日 > ${maxConsecutiveDays}日)`,
         });
       }
 
@@ -901,7 +993,7 @@ export default {
     };
 
     const hasStaffWarnings = (staffId) => {
-      const staff = staffList.value.find(s => s.id === staffId);
+      const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
 
       const totalHours = calculateTotalHours(staffId);
@@ -913,7 +1005,7 @@ export default {
 
     const getStaffWarnings = (staffId) => {
       const warnings = [];
-      const staff = staffList.value.find(s => s.id === staffId);
+      const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return warnings;
 
       const totalHours = calculateTotalHours(staffId);
@@ -922,17 +1014,17 @@ export default {
 
       if (totalHours > maxMonthHours) {
         warnings.push({
-          type: 'over_hours',
-          icon: '⚠️',
-          message: `月間勤務時間が上限を超過 (${totalHours}h > ${maxMonthHours}h)`
+          type: "over_hours",
+          icon: "⚠️",
+          message: `月間勤務時間が上限を超過 (${totalHours}h > ${maxMonthHours}h)`,
         });
       }
 
       if (totalHours < minMonthHours) {
         warnings.push({
-          type: 'under_hours',
-          icon: '📉',
-          message: `月間勤務時間が下限を下回り (${totalHours}h < ${minMonthHours}h)`
+          type: "under_hours",
+          icon: "📉",
+          message: `月間勤務時間が下限を下回り (${totalHours}h < ${minMonthHours}h)`,
         });
       }
 
@@ -941,31 +1033,35 @@ export default {
 
     const hasDateWarnings = (date) => {
       const requirements = getDailyRequirements(date);
-      return requirements.some(req => hasStaffingShortage(date, req)) ||
-             staffList.value.some(staff => hasShiftViolation(date, staff.id));
+      return (
+        requirements.some((req) => hasStaffingShortage(date, req)) ||
+        staffList.value.some((staff) => hasShiftViolation(date, staff.id))
+      );
     };
 
     const getDateWarnings = (date) => {
       const warnings = [];
       const requirements = getDailyRequirements(date);
 
-      requirements.forEach(req => {
+      requirements.forEach((req) => {
         if (hasStaffingShortage(date, req)) {
           const assigned = getAssignedStaffCount(date, req);
           warnings.push({
-            type: 'staffing_shortage',
-            icon: 'pi pi-users',
-            message: `${formatTime(req.start_time)}-${formatTime(req.end_time)}: 人員不足 (${assigned}/${req.required_staff_count}名)`
+            type: "staffing_shortage",
+            icon: "pi pi-users",
+            message: `${formatTime(req.start_time)}-${formatTime(
+              req.end_time
+            )}: 人員不足 (${assigned}/${req.required_staff_count}名)`,
           });
         }
       });
 
-      staffList.value.forEach(staff => {
+      staffList.value.forEach((staff) => {
         if (hasShiftViolation(date, staff.id)) {
           warnings.push({
-            type: 'staff_violation',
-            icon: 'pi pi-exclamation-triangle',
-            message: `${staff.last_name} ${staff.first_name}: 勤務条件違反`
+            type: "staff_violation",
+            icon: "pi pi-exclamation-triangle",
+            message: `${staff.last_name} ${staff.first_name}: 勤務条件違反`,
           });
         }
       });
@@ -1882,6 +1978,20 @@ export default {
           selectedStore.value = storeData[0];
           await fetchStoreDetails(selectedStore.value.id);
           await loadShiftData();
+
+          const today = new Date();
+          const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
+            .toString()
+            .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+
+          const todayExists = daysInMonth.value.some(
+            (day) => day.date === todayString
+          );
+          if (todayExists) {
+            selectedDate.value = todayString;
+          } else if (daysInMonth.value.length > 0) {
+            selectedDate.value = daysInMonth.value[0].date;
+          }
         }
       } catch (error) {
         console.error("初期化エラー:", error);
@@ -2251,15 +2361,17 @@ export default {
 .calendar-container {
   overflow: auto;
   max-height: calc(100vh - 400px);
+  background-color: #495057;
 }
 
 .calendar-header {
   display: flex;
-  background: #f8f9fa;
+  background: #495057;
   border-bottom: 1px solid #dee2e6;
   position: sticky;
   top: 0;
   z-index: 10;
+  padding-top: 25px;  /* 上部に余白を追加 */
 }
 
 .staff-column-header {
@@ -2277,22 +2389,6 @@ export default {
   left: 0;
   z-index: 11;
   border-right: 1px solid #dee2e6;
-}
-
-.date-cell-header {
-  min-width: 70px;
-  width: 70px;
-  padding: 0.75rem 0.5rem;
-  text-align: center;
-  border-right: 1px solid #dee2e6;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  background: #f8f9fa;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
 }
 
 .date-cell-header:hover {
@@ -2313,7 +2409,6 @@ export default {
 }
 
 .date-cell-header.has-warnings {
-  border-left: 3px solid #ffc107;
 }
 
 .date-number {
@@ -2336,13 +2431,51 @@ export default {
   font-weight: 500;
 }
 
+
+.date-cell-header {
+  min-width: 70px;
+  width: 70px;
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  border-right: 1px solid #dee2e6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: visible;  /* 外側の要素を表示可能にする */
+}
+
 .warning-indicator {
   position: absolute;
-  top: 0.25rem;
-  right: 0.25rem;
-  color: #ffc107;
-  font-size: 0.7rem;
-  cursor: pointer;
+  top: -20px;  /* 日付エリアの上部外側に配置 */
+  left: 50%;  /* 中央揃え */
+  transform: translateX(-50%);  /* 中央揃えの調整 */
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: #fff3cd;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  border: 1px solid #ffc107;
+  z-index: 15;
+  font-size: 0.6rem;
+  white-space: nowrap;
+}
+
+.warning-indicator::before {
+  content: attr(data-warning-count);
+  font-weight: 600;
+  color: #856404;
+}
+
+.warning-indicator i {
+  color: #856404;
+  font-size: 0.6rem;
 }
 
 .warning-tooltip {
@@ -2393,7 +2526,7 @@ export default {
 
 .staff-row {
   display: flex;
-  border-bottom: 1px solid #f1f3f4;
+  border-bottom: 1px solid #b6b6b6;
 }
 
 .staff-row:hover {
@@ -2483,6 +2616,7 @@ export default {
   width: 70px;
   min-height: 60px;
   border-right: 1px solid #f1f3f4;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2521,8 +2655,6 @@ export default {
 }
 
 .shift-cell.has-violation {
-  background: #fff5f5;
-  border: 1px solid #fed7d7;
 }
 
 .shift-time-card {
@@ -2630,7 +2762,6 @@ export default {
   display: flex;
   gap: 1rem;
   overflow-x: auto;
-  max-height: 200px;
 }
 
 .date-info-header {
@@ -3287,7 +3418,6 @@ export default {
     width: 100%;
     flex-direction: row;
     overflow-x: auto;
-    max-height: 200px;
   }
 
   .requirements-section,
@@ -3347,6 +3477,23 @@ export default {
   .shift-cell {
     min-width: 50px;
     width: 50px;
+  }
+
+  .date-cell-header {
+    min-width: 70px;
+    width: 70px;
+    padding: 1.25rem 0.5rem;
+    text-align: center;
+    border-right: 1px solid #dee2e6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    background: #f8f9fa;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: visible; /* ← この行を追加 */
   }
 
   .staff-avatar {
