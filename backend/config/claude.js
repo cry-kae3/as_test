@@ -6,7 +6,7 @@ const anthropic = new Anthropic({
 });
 
 const DEFAULT_AI_PARAMS = {
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-3-5-sonnet-20241022',  // 最新のClaude 3.5 Sonnet
     max_tokens: 10000,
     temperature: 0.2,
 };

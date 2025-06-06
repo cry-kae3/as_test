@@ -1,17 +1,49 @@
-const claudeConfig = require('../config/claude');
+const axios = require('axios');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const { Store, Staff, StaffDayPreference, StaffDayOffRequest,
     StoreClosedDay, StoreStaffRequirement, Shift, ShiftAssignment } = require('../models');
 const { Op, sequelize } = require('sequelize');
 const moment = require('moment-timezone');
 
 class ShiftGeneratorService {
+    constructor() {
+        this.claudeApiUrl = 'https://api.anthropic.com/v1/messages';
+        this.claudeApiKey = process.env.CLAUDE_API_KEY;
+        this.claudeModel = 'claude-sonnet-4-20250514';
+
+        this.setupSSLCertificates();
+    }
+
+    setupSSLCertificates() {
+        const fs = require('fs');
+        const path = require('path');
+
+        try {
+            const certPath = process.env.NODE_EXTRA_CA_CERTS || '/usr/local/share/ca-certificates/Fortinet_CA_SSL.crt';
+
+            if (fs.existsSync(certPath)) {
+                this.caCert = fs.readFileSync(certPath);
+                console.log('企業CA証明書を読み込みました:', certPath);
+            } else {
+                const localCertPath = path.join(__dirname, '../../Fortinet_CA_SSL.cer');
+                if (fs.existsSync(localCertPath)) {
+                    this.caCert = fs.readFileSync(localCertPath);
+                    console.log('ローカルCA証明書を読み込みました:', localCertPath);
+                }
+            }
+        } catch (error) {
+            console.warn('CA証明書の読み込みに失敗しました:', error.message);
+        }
+    }
+
     async generateShift(storeId, year, month) {
         try {
-            console.log('Claude config:', claudeConfig);
-            console.log('Anthropic client:', claudeConfig.anthropic);
+            console.log('シフト生成を開始します');
 
-            if (!claudeConfig.anthropic) {
-                throw new Error('Anthropic client is not properly initialized');
+            if (!this.claudeApiKey) {
+                throw new Error('Claude API キーが設定されていません');
             }
 
             const store = await Store.findByPk(storeId, {
@@ -58,50 +90,12 @@ class ShiftGeneratorService {
             const prompt = this._generatePrompt(storeData, staffData, calendarData, requirementsData, year, month);
 
             console.log('Claude APIにリクエスト送信中...');
-            console.log('Available methods:', Object.getOwnPropertyNames(claudeConfig.anthropic));
-            console.log('Messages object:', claudeConfig.anthropic.messages);
 
-            let response;
-            try {
-                if (claudeConfig.anthropic.messages && claudeConfig.anthropic.messages.create) {
-                    response = await claudeConfig.anthropic.messages.create({
-                        ...claudeConfig.DEFAULT_AI_PARAMS,
-                        system: "あなたはシフト最適化と生成の専門家です。労働基準法を遵守しながら、人員要件と従業員の希望休みを考慮して最適なシフトを作成します。JSONフォーマット形式で出力してください。",
-                        messages: [
-                            {
-                                role: "user",
-                                content: prompt
-                            }
-                        ],
-                        temperature: 0.1
-                    });
-                } else if (claudeConfig.anthropic.completions && claudeConfig.anthropic.completions.create) {
-                    response = await claudeConfig.anthropic.completions.create({
-                        model: claudeConfig.DEFAULT_AI_PARAMS.model,
-                        max_tokens_to_sample: claudeConfig.DEFAULT_AI_PARAMS.max_tokens,
-                        temperature: 0.1,
-                        prompt: `\n\nHuman: あなたはシフト最適化と生成の専門家です。労働基準法を遵守しながら、人員要件と従業員の希望休みを考慮して最適なシフトを作成します。JSONフォーマット形式で出力してください。\n\n${prompt}\n\nAssistant:`
-                    });
-                } else {
-                    throw new Error('No suitable API method found on Anthropic client');
-                }
-            } catch (apiError) {
-                console.error('Claude API呼び出しエラー:', apiError);
-                throw new Error(`Claude API呼び出しに失敗しました: ${apiError.message}`);
-            }
+            const response = await this._callClaudeAPI(prompt);
 
             console.log('Claude APIからレスポンスを受信しました');
 
-            let responseText;
-            if (response.content && Array.isArray(response.content)) {
-                responseText = response.content[0].text;
-            } else if (response.completion) {
-                responseText = response.completion;
-            } else {
-                throw new Error('Unexpected response format from Claude API');
-            }
-
-            const shiftData = this._parseAIResponse(responseText);
+            const shiftData = this._parseAIResponse(response);
 
             const validationResult = await this.validateShift(shiftData, storeId, year, month);
 
@@ -116,6 +110,97 @@ class ShiftGeneratorService {
         } catch (error) {
             console.error('シフト生成エラー:', error);
             throw error;
+        }
+    }
+
+    async _callClaudeAPI(prompt) {
+        try {
+            const requestData = {
+                model: this.claudeModel,
+                max_tokens: 10000,
+                temperature: 0.1,
+                system: "あなたはシフト最適化と生成の専門家です。労働基準法を遵守しながら、人員要件と従業員の希望休みを考慮して最適なシフトを作成します。JSONフォーマット形式で出力してください。",
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt
+                    }
+                ]
+            };
+
+            console.log('Claude API リクエスト送信中...');
+            console.log('API URL:', this.claudeApiUrl);
+            console.log('API Key exists:', !!this.claudeApiKey);
+            console.log('API Key length:', this.claudeApiKey ? this.claudeApiKey.length : 0);
+
+            const httpsAgentOptions = {
+                rejectUnauthorized: process.env.NODE_ENV === 'production'
+            };
+
+            if (this.caCert) {
+                httpsAgentOptions.ca = this.caCert;
+                httpsAgentOptions.rejectUnauthorized = true;
+            }
+
+            const httpsAgent = new https.Agent(httpsAgentOptions);
+
+            const axiosConfig = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': this.claudeApiKey,
+                    'anthropic-version': '2023-06-01'
+                },
+                timeout: 60000,
+                httpsAgent: httpsAgent
+            };
+
+            if (process.env.HTTP_PROXY || process.env.HTTPS_PROXY) {
+                const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+                console.log('Using proxy:', proxyUrl);
+                const proxyParts = proxyUrl.match(/^https?:\/\/([^:]+):(\d+)/);
+                if (proxyParts) {
+                    axiosConfig.proxy = {
+                        host: proxyParts[1],
+                        port: parseInt(proxyParts[2])
+                    };
+                }
+            }
+
+            console.log('Sending request to Claude API...');
+            const response = await axios.post(this.claudeApiUrl, requestData, axiosConfig);
+            console.log('Claude API response received');
+
+            if (response.data && response.data.content && Array.isArray(response.data.content)) {
+                return response.data.content[0].text;
+            } else {
+                throw new Error('Unexpected response format from Claude API');
+            }
+        } catch (error) {
+            if (error.response) {
+                console.error('Claude API エラーレスポンス:', {
+                    status: error.response.status,
+                    statusText: error.response.statusText,
+                    data: error.response.data
+                });
+
+                if (error.response.status === 401) {
+                    throw new Error('Claude API認証エラー: APIキーを確認してください');
+                } else if (error.response.status === 429) {
+                    throw new Error('Claude APIレート制限エラー: しばらく待ってからお試しください');
+                } else if (error.response.status === 500) {
+                    throw new Error('Claude APIサーバーエラー: しばらく待ってからお試しください');
+                } else {
+                    throw new Error(`Claude APIエラー: ${error.response.data?.error?.message || error.response.statusText}`);
+                }
+            } else if (error.request) {
+                console.error('Claude API リクエストエラー:', error.message);
+                console.error('Error code:', error.code);
+                console.error('Error config:', error.config);
+                throw new Error('Claude APIへの接続に失敗しました。ネットワーク設定を確認してください。');
+            } else {
+                console.error('予期しないエラー:', error);
+                throw error;
+            }
         }
     }
 
