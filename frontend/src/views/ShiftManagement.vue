@@ -285,10 +285,10 @@
                 <div v-else class="no-shift">
                   <span v-if="isEditMode && canStaffWorkOnDate(staff, day.date)" 
                         class="work-available-indicator"
-                        :title="getWorkAvailabilityTooltip(staff, day.date)">✓</span>
+                        :title="getWorkAvailabilityTooltip(staff, day.date)">+</span>
                   <span v-else-if="isEditMode && !canStaffWorkOnDate(staff, day.date)" 
                         class="work-unavailable-indicator"
-                        :title="getWorkUnavailabilityReason(staff, day.date)">✗</span>
+                        :title="getWorkUnavailabilityReason(staff, day.date)">×</span>
                   <span v-else-if="isEditMode">+</span>
                 </div>
               </div>
@@ -1685,7 +1685,7 @@ export default {
       printWindow.print();
     };
 
-        const generatePrintContent = () => {
+    const generatePrintContent = () => {
       const storeName = selectedStore.value ? selectedStore.value.name : "";
       const period = `${currentYear.value}年${currentMonth.value}月`;
 
@@ -2809,12 +2809,10 @@ export default {
 }
 
 .shift-cell.can-work {
-  background: rgba(16, 185, 129, 0.1);
   border: 1px dashed #10b981;
 }
 
 .shift-cell.unavailable {
-  background: rgba(239, 68, 68, 0.1);
   border: 1px dashed #ef4444;
 }
 
