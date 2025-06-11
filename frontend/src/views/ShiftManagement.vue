@@ -153,38 +153,43 @@
             <div
               v-for="day in daysInMonth"
               :key="day.date"
-              class="date-cell-header"
-              :class="{
-                'is-weekend': day.isWeekend,
-                'is-holiday': day.isNationalHoliday,
-                'is-today': day.isToday,
-                'is-selected': selectedDate === day.date,
-                'has-warnings': hasDateWarnings(day.date),
-              }"
-              @click="selectDate(day.date)"
+              class="date-cell-wrapper"
             >
-              <div class="date-number">{{ day.day }}</div>
-              <div class="date-weekday">{{ day.dayOfWeekLabel }}</div>
-              <div v-if="day.isNationalHoliday" class="holiday-indicator">
-                祝
-              </div>
-              <!-- ↓ ここを修正 -->
-              <div
-                v-if="hasDateWarnings(day.date)"
-                class="warning-indicator"
-                :data-warning-count="getDateWarnings(day.date).length"
-              >
-                <i class="pi pi-exclamation-triangle"></i>
-                <div class="warning-tooltip">
-                  <div
-                    v-for="warning in getDateWarnings(day.date)"
-                    :key="warning.type"
-                    class="warning-tooltip-item"
-                    :class="warning.type"
-                  >
-                    <i :class="warning.icon"></i>
-                    <span>{{ warning.message }}</span>
+              <div class="date-warning-row">
+                <div
+                  v-if="hasDateWarnings(day.date)"
+                  class="warning-indicator"
+                  :data-warning-count="getDateWarnings(day.date).length"
+                >
+                  <i class="pi pi-exclamation-triangle"></i>
+                  <div class="warning-tooltip">
+                    <div
+                      v-for="warning in getDateWarnings(day.date)"
+                      :key="warning.type"
+                      class="warning-tooltip-item"
+                      :class="warning.type"
+                    >
+                      <i :class="warning.icon"></i>
+                      <span>{{ warning.message }}</span>
+                    </div>
                   </div>
+                </div>
+              </div>
+              <div
+                class="date-cell-header"
+                :class="{
+                  'is-weekend': day.isWeekend,
+                  'is-holiday': day.isNationalHoliday,
+                  'is-today': day.isToday,
+                  'is-selected': selectedDate === day.date,
+                  'has-warnings': hasDateWarnings(day.date),
+                }"
+                @click="selectDate(day.date)"
+              >
+                <div class="date-number">{{ day.day }}</div>
+                <div class="date-weekday">{{ day.dayOfWeekLabel }}</div>
+                <div v-if="day.isNationalHoliday" class="holiday-indicator">
+                  祝
                 </div>
               </div>
             </div>
@@ -934,13 +939,10 @@ export default {
       const reqStartTime = parseTimeToFloat(requirement.start_time);
       const reqEndTime = parseTimeToFloat(requirement.end_time);
 
-      // 要件の時間帯に勤務しているスタッフをカウント
       return dayShifts.assignments.filter((assignment) => {
         const shiftStartTime = parseTimeToFloat(assignment.start_time);
         const shiftEndTime = parseTimeToFloat(assignment.end_time);
 
-        // シフトが要件の時間帯と重なっているかチェック
-        // (シフト開始が要件終了より前) かつ (シフト終了が要件開始より後)
         return shiftStartTime < reqEndTime && shiftEndTime > reqStartTime;
       }).length;
     };
@@ -1773,313 +1775,315 @@ export default {
         toast.add({
           severity: "warn",
           summary: "入力エラー",
-          detail: "終了時間は開始時間より後にしてください",
-          life: 3000,
-        });
-        return;
-      }
+         detail: "終了時間は開始時間より後にしてください",
+         life: 3000,
+       });
+       return;
+     }
 
-      if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
-        toast.add({
-          severity: "warn",
-          summary: "入力エラー",
-          detail: "過去の日付を編集する場合は変更理由を入力してください",
-          life: 3000,
-        });
-        return;
-      }
+     if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
+       toast.add({
+         severity: "warn",
+         summary: "入力エラー",
+         detail: "過去の日付を編集する場合は変更理由を入力してください",
+         life: 3000,
+       });
+       return;
+     }
 
-      saving.value = true;
+     saving.value = true;
 
-      try {
-        const shiftData = {
-          store_id: selectedStore.value.id,
-          staff_id: shiftEditorDialog.staff.id,
-          date: shiftEditorDialog.date,
-          start_time: startTime,
-          end_time: endTime,
-          break_start_time: null,
-          break_end_time: null,
-          notes: null,
-        };
+     try {
+       const shiftData = {
+         store_id: selectedStore.value.id,
+         staff_id: shiftEditorDialog.staff.id,
+         date: shiftEditorDialog.date,
+         start_time: startTime,
+         end_time: endTime,
+         break_start_time: null,
+         break_end_time: null,
+         notes: null,
+       };
 
-        if (shiftEditorDialog.isPast) {
-          shiftData.change_reason = shiftEditorDialog.changeReason;
-        }
+       if (shiftEditorDialog.isPast) {
+         shiftData.change_reason = shiftEditorDialog.changeReason;
+       }
 
-        console.log("Sending shift data:", shiftData);
+       console.log("Sending shift data:", shiftData);
 
-        const existingShift = getShiftForStaff(
-          shiftEditorDialog.date,
-          shiftEditorDialog.staff.id
-        );
+       const existingShift = getShiftForStaff(
+         shiftEditorDialog.date,
+         shiftEditorDialog.staff.id
+       );
 
-        if (existingShift) {
-          await store.dispatch("shift/updateShiftAssignment", {
-            year: currentYear.value,
-            month: currentMonth.value,
-            assignmentId: existingShift.id,
-            assignmentData: shiftData,
-          });
-        } else {
-          await store.dispatch("shift/createShiftAssignment", {
-            year: currentYear.value,
-            month: currentMonth.value,
-            assignmentData: shiftData,
-          });
-        }
+       if (existingShift) {
+         await store.dispatch("shift/updateShiftAssignment", {
+           year: currentYear.value,
+           month: currentMonth.value,
+           assignmentId: existingShift.id,
+           assignmentData: shiftData,
+         });
+       } else {
+         await store.dispatch("shift/createShiftAssignment", {
+           year: currentYear.value,
+           month: currentMonth.value,
+           assignmentData: shiftData,
+         });
+       }
 
-        await loadShiftData();
-        shiftEditorDialog.visible = false;
+       await loadShiftData();
+       shiftEditorDialog.visible = false;
 
-        const successMessage = shiftEditorDialog.isPast
-          ? "過去のシフトを変更しました（変更履歴に記録されます）"
-          : "シフトを保存しました";
+       const successMessage = shiftEditorDialog.isPast
+         ? "過去のシフトを変更しました（変更履歴に記録されます）"
+         : "シフトを保存しました";
 
-        toast.add({
-          severity: "success",
-          summary: "保存完了",
-          detail: successMessage,
-          life: 3000,
-        });
-      } catch (error) {
-        console.error("シフト保存エラー:", error);
+       toast.add({
+         severity: "success",
+         summary: "保存完了",
+         detail: successMessage,
+         life: 3000,
+       });
+     } catch (error) {
+       console.error("シフト保存エラー:", error);
 
-        if (error.response) {
-          console.error("Response data:", error.response.data);
-          console.error("Response status:", error.response.status);
-        }
+       if (error.response) {
+         console.error("Response data:", error.response.data);
+         console.error("Response status:", error.response.status);
+       }
 
-        let errorMessage = "シフトの保存に失敗しました";
-        if (
-          error.response &&
-          error.response.data &&
-          error.response.data.message
-        ) {
-          errorMessage = error.response.data.message;
-        }
+       let errorMessage = "シフトの保存に失敗しました";
+       if (
+         error.response &&
+         error.response.data &&
+         error.response.data.message
+       ) {
+         errorMessage = error.response.data.message;
+       }
 
-        toast.add({
-          severity: "error",
-          summary: "エラー",
-          detail: errorMessage,
-          life: 3000,
-        });
-      } finally {
-        saving.value = false;
-      }
-    };
+       toast.add({
+         severity: "error",
+         summary: "エラー",
+         detail: errorMessage,
+         life: 3000,
+       });
+     } finally {
+       saving.value = false;
+     }
+   };
 
-    const clearShift = async () => {
-      if (!shiftEditorDialog.hasShift) {
-        shiftEditorDialog.visible = false;
-        return;
-      }
+   const clearShift = async () => {
+     if (!shiftEditorDialog.hasShift) {
+       shiftEditorDialog.visible = false;
+       return;
+     }
 
-      if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
-        toast.add({
-          severity: "warn",
-          summary: "入力エラー",
-          detail: "過去の日付を編集する場合は変更理由を入力してください",
-          life: 3000,
-        });
-        return;
-      }
+     if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
+       toast.add({
+         severity: "warn",
+         summary: "入力エラー",
+         detail: "過去の日付を編集する場合は変更理由を入力してください",
+         life: 3000,
+       });
+       return;
+     }
 
-      saving.value = true;
+     saving.value = true;
 
-      try {
-        const existingShift = getShiftForStaff(
-          shiftEditorDialog.date,
-          shiftEditorDialog.staff.id
-        );
+     try {
+       const existingShift = getShiftForStaff(
+         shiftEditorDialog.date,
+         shiftEditorDialog.staff.id
+       );
 
-        if (existingShift) {
-          await store.dispatch("shift/deleteShiftAssignment", {
-            year: currentYear.value,
-            month: currentMonth.value,
-            assignmentId: existingShift.id,
-            change_reason: shiftEditorDialog.isPast
-              ? shiftEditorDialog.changeReason
-              : null,
-          });
+       if (existingShift) {
+         await store.dispatch("shift/deleteShiftAssignment", {
+           year: currentYear.value,
+           month: currentMonth.value,
+           assignmentId: existingShift.id,
+           change_reason: shiftEditorDialog.isPast
+             ? shiftEditorDialog.changeReason
+             : null,
+         });
 
-          await loadShiftData();
-          shiftEditorDialog.visible = false;
+         await loadShiftData();
+         shiftEditorDialog.visible = false;
 
-          const successMessage = shiftEditorDialog.isPast
-            ? "過去のシフトを削除しました（変更履歴に記録されます）"
-            : "シフトを削除しました";
+         const successMessage = shiftEditorDialog.isPast
+           ? "過去のシフトを削除しました（変更履歴に記録されます）"
+           : "シフトを削除しました";
 
-          toast.add({
-            severity: "success",
-            summary: "削除完了",
-            detail: successMessage,
-            life: 3000,
-          });
-        }
-      } catch (error) {
-        console.error("シフト削除エラー:", error);
-        toast.add({
-          severity: "error",
-          summary: "エラー",
-          detail: "シフトの削除に失敗しました",
-          life: 3000,
-        });
-      } finally {
-        saving.value = false;
-      }
-    };
+         toast.add({
+           severity: "success",
+           summary: "削除完了",
+           detail: successMessage,
+           life: 3000,
+         });
+       }
+     } catch (error) {
+       console.error("シフト削除エラー:", error);
+       toast.add({
+         severity: "error",
+         summary: "エラー",
+         detail: "シフトの削除に失敗しました",
+         life: 3000,
+       });
+     } finally {
+       saving.value = false;
+     }
+   };
 
-    const getShiftForStaff = (date, staffId) => {
-      const dayShifts = shifts.value.find((s) => s.date === date);
-      if (!dayShifts) return null;
+   const getShiftForStaff = (date, staffId) => {
+     const dayShifts = shifts.value.find((s) => s.date === date);
+     if (!dayShifts) return null;
 
-      return dayShifts.assignments.find((a) => a.staff_id === staffId);
-    };
+     return dayShifts.assignments.find((a) => a.staff_id === staffId);
+   };
 
-    const formatTime = (time) => {
-      if (!time) return "";
-      return time.slice(0, 5);
-    };
+   const formatTime = (time) => {
+     if (!time) return "";
+     return time.slice(0, 5);
+   };
 
-    const calculateTotalHours = (staffId) => {
-      let totalHours = 0;
+   const calculateTotalHours = (staffId) => {
+     let totalHours = 0;
 
-      shifts.value.forEach((dayShift) => {
-        const assignment = dayShift.assignments.find(
-          (a) => a.staff_id === staffId
-        );
-        if (assignment) {
-          const startTime = new Date(`2000-01-01 ${assignment.start_time}`);
-          const endTime = new Date(`2000-01-01 ${assignment.end_time}`);
-          const hours = (endTime - startTime) / (1000 * 60 * 60);
-          totalHours += hours;
-        }
-      });
+     shifts.value.forEach((dayShift) => {
+       const assignment = dayShift.assignments.find(
+         (a) => a.staff_id === staffId
+       );
+       if (assignment) {
+         const startTime = new Date(`2000-01-01 ${assignment.start_time}`);
+         const endTime = new Date(`2000-01-01 ${assignment.end_time}`);
+         const hours = (endTime - startTime) / (1000 * 60 * 60);
+         totalHours += hours;
+       }
+     });
 
-      return Math.round(totalHours * 10) / 10;
-    };
+     return Math.round(totalHours * 10) / 10;
+   };
 
-    watch([currentYear, currentMonth], () => {
-      loadShiftData();
-    });
+   watch([currentYear, currentMonth], () => {
+     loadShiftData();
+   });
 
-    onMounted(async () => {
-      try {
-        generateTimeOptions();
-        await fetchSystemSettings();
-        await fetchHolidays(currentYear.value);
+   onMounted(async () => {
+     try {
+       generateTimeOptions();
+       await fetchSystemSettings();
+       await fetchHolidays(currentYear.value);
 
-        const storeData = await store.dispatch("store/fetchStores");
-        stores.value = storeData;
+       const storeData = await store.dispatch("store/fetchStores");
+       stores.value = storeData;
 
-        if (storeData.length > 0) {
-          selectedStore.value = storeData[0];
-          await fetchStoreDetails(selectedStore.value.id);
-          await loadShiftData();
+       if (storeData.length > 0) {
+         selectedStore.value = storeData[0];
+         await fetchStoreDetails(selectedStore.value.id);
+         await loadShiftData();
 
-          const today = new Date();
-          const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
-            .toString()
-            .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+         const today = new Date();
+         const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
+           .toString()
+           .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
 
-          const todayExists = daysInMonth.value.some(
-            (day) => day.date === todayString
-          );
-          if (todayExists) {
-            selectedDate.value = todayString;
-          } else if (daysInMonth.value.length > 0) {
-            selectedDate.value = daysInMonth.value[0].date;
-          }
-        }
-      } catch (error) {
-        console.error("初期化エラー:", error);
-        toast.add({
-          severity: "error",
-          summary: "エラー",
-          detail: "データの取得に失敗しました",
-          life: 3000,
-        });
-      }
-    });
+         const todayExists = daysInMonth.value.some(
+           (day) => day.date === todayString
+         );
+         if (todayExists) {
+           selectedDate.value = todayString;
+         } else if (daysInMonth.value.length > 0) {
+           selectedDate.value = daysInMonth.value[0].date;
+         }
+       }
+     } catch (error) {
+       console.error("初期化エラー:", error);
+       toast.add({
+         severity: "error",
+         summary: "エラー",
+         detail: "データの取得に失敗しました",
+         life: 3000,
+       });
+     }
+   });
 
-    return {
-      loading,
-      saving,
-      isEditMode,
-      viewMode,
-      selectedDate,
-      timelineHours,
-      hourOptions,
-      minuteOptions,
-      currentYear,
-      currentMonth,
-      selectedStore,
-      stores,
-      staffList,
-      shifts,
-      daysInMonth,
-      currentShift,
-      systemSettings,
-      shiftEditorDialog,
-      dateOptions,
-      ganttContainer,
-      ganttTimelineHeader,
-      ganttBody,
-      storeRequirements,
-      currentStore,
-      hasCurrentShift,
-      setViewMode,
-      selectDate,
-      syncGanttScroll,
-      formatDateForGantt,
-      getTimeHeaderStyle,
-      getGanttBarStyle,
-      parseTimeToFloat,
-      parseTimeToComponents,
-      combineTimeComponents,
-      openGanttShiftEditor,
-      isPastDate,
-      toggleEditMode,
-      openShiftEditor,
-      closeShiftEditor,
-      previousMonth,
-      nextMonth,
-      changeStore,
-      createShift,
-      regenerateShift,
-      printShift,
-      saveShift,
-      clearShift,
-      getShiftForStaff,
-      formatTime,
-      calculateTotalHours,
-      getDailyRequirements,
-      getConsecutiveWorkDays,
-      calculateDayHours,
-      fetchStoreDetails,
-      hasStaffingShortage,
-      getAssignedStaffCount,
-      hasShiftViolation,
-      getShiftViolations,
-      hasStaffWarnings,
-      getStaffWarnings,
-      hasDateWarnings,
-      getDateWarnings,
-      hasHourRequirements,
-      hasHourShortage,
-      getHourRequirements,
-      hasRequirementShortage,
-    };
-  },
+   return {
+     loading,
+     saving,
+     isEditMode,
+     viewMode,
+     selectedDate,
+     timelineHours,
+     hourOptions,
+     minuteOptions,
+     currentYear,
+     currentMonth,
+     selectedStore,
+     stores,
+     staffList,
+     shifts,
+     daysInMonth,
+     currentShift,
+     systemSettings,
+     shiftEditorDialog,
+     dateOptions,
+     ganttContainer,
+     ganttTimelineHeader,
+     ganttBody,
+     storeRequirements,
+     currentStore,
+     hasCurrentShift,
+     setViewMode,
+     selectDate,
+     syncGanttScroll,
+     formatDateForGantt,
+     getTimeHeaderStyle,
+     getGanttBarStyle,
+     parseTimeToFloat,
+     parseTimeToComponents,
+     combineTimeComponents,
+     openGanttShiftEditor,
+     isPastDate,
+     toggleEditMode,
+     openShiftEditor,
+     closeShiftEditor,
+     previousMonth,
+     nextMonth,
+     changeStore,
+     createShift,
+     regenerateShift,
+     printShift,
+     saveShift,
+     clearShift,
+     getShiftForStaff,
+     formatTime,
+     calculateTotalHours,
+     getDailyRequirements,
+     getConsecutiveWorkDays,
+     calculateDayHours,
+     fetchStoreDetails,
+     hasStaffingShortage,
+     getAssignedStaffCount,
+     hasShiftViolation,
+     getShiftViolations,
+     hasStaffWarnings,
+     getStaffWarnings,
+     hasDateWarnings,
+     getDateWarnings,
+     hasHourRequirements,
+     hasHourShortage,
+     getHourRequirements,
+     hasRequirementShortage,
+   };
+ },
 };
 </script>
 
+
 <style scoped>
+/* ===== 基本レイアウト ===== */
 .shift-management {
   min-height: 100vh;
-  background: #f8f9fa;
+  background: #f5f7fa;
   padding: 1.5rem;
 }
 
@@ -2091,14 +2095,13 @@ export default {
   font-size: 2rem;
   font-weight: 600;
   color: #2c3e50;
-  margin-bottom: 1rem;
-  letter-spacing: -0.025em;
+  margin: 0;
 }
 
+/* ===== コントロールパネル ===== */
 .control-panel {
   background: white;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
   display: flex;
@@ -2106,14 +2109,13 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .period-controls {
   display: flex;
   align-items: center;
   gap: 1rem;
-  flex-shrink: 0;
 }
 
 .month-navigator {
@@ -2122,172 +2124,167 @@ export default {
   gap: 0.75rem;
   background: #f8f9fa;
   padding: 0.5rem;
-  border-radius: 6px;
-  border: 1px solid #dee2e6;
+  border-radius: 8px;
 }
 
 .nav-button {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
   background: white;
-  border: 1px solid #ced4da;
-  color: #6c757d;
+  border: 1px solid #e0e0e0;
+  color: #666;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 0.875rem;
+  transition: all 0.2s;
+  cursor: pointer;
 }
 
-.nav-button:hover {
-  background: #007bff;
-  border-color: #007bff;
+.nav-button:hover:not(:disabled) {
+  background: #3b82f6;
+  border-color: #3b82f6;
   color: white;
+}
+
+.nav-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .period-display {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 80px;
+  min-width: 100px;
 }
 
 .year {
-  font-size: 0.75rem;
-  color: #6c757d;
+  font-size: 0.8rem;
+  color: #666;
 }
 
 .month {
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  color: #495057;
+  color: #2c3e50;
 }
 
 .store-selector {
-  min-width: 200px;
-  flex-shrink: 0;
+  min-width: 220px;
 }
 
+/* ビューコントロール */
 .view-controls {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
   align-items: center;
   gap: 1rem;
-  flex-shrink: 0;
 }
 
 .view-mode-tabs {
   display: flex;
-  background: #f8f9fa;
-  border-radius: 6px;
+  background: #f0f0f0;
+  border-radius: 8px;
   padding: 0.25rem;
-  border: 1px solid #dee2e6;
 }
 
 .view-tab {
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 1rem;
   border: none;
   background: transparent;
-  border-radius: 4px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-weight: 500;
-  font-size: 0.875rem;
-  color: #6c757d;
-  transition: all 0.2s ease;
-  cursor: pointer;
-  white-space: nowrap;
 }
 
 .view-tab:hover {
-  color: #495057;
+  color: #333;
 }
 
 .view-tab.active {
   background: white;
-  color: #007bff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  color: #3b82f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .date-selector {
-  width: 100%;
-  max-width: 250px;
+  min-width: 200px;
 }
 
-.date-dropdown {
-  width: 100%;
-}
-
+/* アクションボタン */
 .action-controls {
   display: flex;
   gap: 0.75rem;
-  flex-shrink: 0;
 }
 
 .action-button {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
   font-weight: 500;
   font-size: 0.875rem;
-  border: 1px solid #ced4da;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  white-space: nowrap;
 }
 
 .create-button {
-  background: #28a745;
+  background: #10b981;
   color: white;
-  border-color: #28a745;
+  border: 1px solid #10b981;
 }
 
-.create-button:hover {
-  background: #218838;
-  border-color: #1e7e34;
+.create-button:hover:not(:disabled) {
+  background: #059669;
+  border-color: #059669;
 }
 
 .edit-button {
   background: white;
-  color: #6c757d;
+  color: #666;
+  border: 1px solid #e0e0e0;
 }
 
-.edit-button:hover {
+.edit-button:hover:not(:disabled) {
   background: #f8f9fa;
-  color: #495057;
+  border-color: #ccc;
 }
 
 .edit-button.active {
-  background: #17a2b8;
+  background: #3b82f6;
   color: white;
-  border-color: #17a2b8;
+  border-color: #3b82f6;
 }
 
 .regenerate-button,
 .print-button {
   background: white;
-  color: #6c757d;
+  color: #666;
+  border: 1px solid #e0e0e0;
 }
 
-.regenerate-button:hover,
-.print-button:hover {
+.regenerate-button:hover:not(:disabled),
+.print-button:hover:not(:disabled) {
   background: #f8f9fa;
-  color: #495057;
+  border-color: #ccc;
 }
 
+/* ===== 状態表示 ===== */
 .loading-state,
 .empty-state,
 .gantt-no-date {
   background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 4rem 2rem;
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .loading-state {
@@ -2299,86 +2296,81 @@ export default {
 
 .loading-text {
   font-size: 1rem;
-  color: #6c757d;
-  font-weight: 500;
+  color: #666;
 }
 
 .empty-icon {
-  width: 60px;
-  height: 60px;
+  width: 80px;
+  height: 80px;
   margin: 0 auto 1.5rem;
   border-radius: 50%;
-  background: #f8f9fa;
+  background: #f0f4ff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
-  color: #adb5bd;
+  font-size: 2rem;
+  color: #3b82f6;
 }
 
 .empty-state h3,
 .gantt-no-date h3 {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 600;
-  color: #495057;
+  color: #2c3e50;
   margin-bottom: 0.5rem;
 }
 
 .empty-state p,
 .gantt-no-date p {
-  color: #6c757d;
-  margin-bottom: 1.5rem;
+  color: #666;
+  margin-bottom: 2rem;
 }
 
+/* ===== メインコンテンツ ===== */
 .shift-content {
   background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .edit-mode-indicator {
-  background: #e7f3ff;
-  border-bottom: 1px solid #b3d4fc;
-  padding: 0.75rem 1rem;
+  background: #e0f2fe;
+  padding: 0.75rem 1.5rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #0056b3;
+  color: #0369a1;
   font-weight: 500;
   font-size: 0.875rem;
 }
 
-.edit-mode-indicator i {
-  color: #007bff;
-}
-
+/* ===== カレンダービュー ===== */
 .calendar-view {
-  position: relative;
+  display: flex;
+  height: calc(100vh - 300px);
 }
 
 .calendar-container {
+  flex: 1;
   overflow: auto;
-  max-height: calc(100vh - 400px);
-  background-color: #495057;
+  background: #fafafa;
 }
 
 .calendar-header {
   display: flex;
-  background: #495057;
-  border-bottom: 1px solid #dee2e6;
+  background: white;
+  border-bottom: 2px solid #e5e7eb;
   position: sticky;
   top: 0;
   z-index: 10;
-  padding-top: 25px;  /* 上部に余白を追加 */
 }
 
 .staff-column-header {
-  min-width: 220px;
-  width: 220px;
+  min-width: 240px;
+  width: 240px;
   padding: 1rem;
-  background: #495057;
+  background: #1e293b;
   color: white;
   font-weight: 600;
   font-size: 0.9rem;
@@ -2388,108 +2380,120 @@ export default {
   position: sticky;
   left: 0;
   z-index: 11;
-  border-right: 1px solid #dee2e6;
 }
 
-.date-cell-header:hover {
-  background: #e9ecef;
+/* 日付セルのラッパー */
+.date-cell-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+  width: 80px;
+  border-right: 1px solid #e5e7eb;
 }
 
-.date-cell-header.is-today {
-  background: #e3f2fd;
-  border-bottom: 2px solid #1976d2;
+/* 警告表示エリア */
+.date-warning-row {
+  height: 30px;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.date-cell-header.is-weekend {
-  background: #fff3e0;
-}
-
-.date-cell-header.is-holiday {
-  background: #ffebee;
-}
-
-.date-cell-header.has-warnings {
-}
-
-.date-number {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #495057;
-}
-
-.date-weekday {
-  font-size: 0.7rem;
-  color: #6c757d;
-}
-
-.holiday-indicator {
-  font-size: 0.6rem;
-  padding: 0.1rem 0.2rem;
-  border-radius: 2px;
-  background: #dc3545;
-  color: white;
-  font-weight: 500;
-}
-
-
+/* 日付セル */
 .date-cell-header {
-  min-width: 70px;
-  width: 70px;
-  padding: 0.75rem 0.5rem;
+  flex: 1;
+  padding: 0.75rem 0.25rem;
   text-align: center;
-  border-right: 1px solid #dee2e6;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
-  background: #f8f9fa;
+  gap: 0.25rem;
+  background: white;
   cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  overflow: visible;  /* 外側の要素を表示可能にする */
+  transition: all 0.2s;
 }
 
+.date-cell-header:hover {
+  background: #f3f4f6;
+}
+
+.date-cell-header.is-today {
+  background: #dbeafe;
+  font-weight: 600;
+}
+
+.date-cell-header.is-weekend {
+  background: #fef3c7;
+}
+
+.date-cell-header.is-holiday {
+  background: #fee2e2;
+}
+
+.date-cell-header.is-selected {
+  background: #bfdbfe;
+  box-shadow: inset 0 0 0 2px #3b82f6;
+}
+
+.date-number {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.date-weekday {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.holiday-indicator {
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: #dc2626;
+  color: white;
+  font-weight: 600;
+}
+
+/* 警告インジケーター */
 .warning-indicator {
-  position: absolute;
-  top: -20px;  /* 日付エリアの上部外側に配置 */
-  left: 50%;  /* 中央揃え */
-  transform: translateX(-50%);  /* 中央揃えの調整 */
   display: flex;
   align-items: center;
-  gap: 0.2rem;
-  background: #fff3cd;
-  padding: 0.1rem 0.4rem;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  border: 1px solid #ffc107;
-  z-index: 15;
-  font-size: 0.6rem;
-  white-space: nowrap;
+  gap: 0.25rem;
+  background: #fbbf24;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #78350f;
+  position: relative;
+  cursor: pointer;
 }
 
 .warning-indicator::before {
   content: attr(data-warning-count);
-  font-weight: 600;
-  color: #856404;
+  margin-right: 0.125rem;
 }
 
 .warning-indicator i {
-  color: #856404;
-  font-size: 0.6rem;
+  font-size: 0.75rem;
 }
 
 .warning-tooltip {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 0.5rem;
   background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  padding: 0.5rem;
-  z-index: 20;
-  width: 200px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-width: 250px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   display: none;
+  z-index: 20;
 }
 
 .warning-indicator:hover .warning-tooltip {
@@ -2500,10 +2504,10 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem;
-  border-radius: 3px;
-  font-size: 0.75rem;
-  margin-bottom: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
 }
 
 .warning-tooltip-item:last-child {
@@ -2511,34 +2515,36 @@ export default {
 }
 
 .warning-tooltip-item.staffing_shortage {
-  background: #fff3cd;
-  color: #856404;
+  background: #fef3c7;
+  color: #78350f;
 }
 
 .warning-tooltip-item.staff_violation {
-  background: #f8d7da;
-  color: #721c24;
+  background: #fee2e2;
+  color: #7f1d1d;
 }
 
+/* カレンダーボディ */
 .calendar-body {
-  display: block;
+  background: white;
 }
 
 .staff-row {
   display: flex;
-  border-bottom: 1px solid #b6b6b6;
+  border-bottom: 1px solid #e5e7eb;
+  transition: background 0.2s;
 }
 
 .staff-row:hover {
-  background: #f8f9fa;
+  background: #f9fafb;
 }
 
 .staff-info {
-  min-width: 220px;
-  width: 220px;
+  min-width: 240px;
+  width: 240px;
   padding: 1rem;
-  background: #fafafa;
-  border-right: 1px solid #dee2e6;
+  background: white;
+  border-right: 2px solid #e5e7eb;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -2548,34 +2554,35 @@ export default {
 }
 
 .staff-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  background: #007bff;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
+  flex-shrink: 0;
 }
 
 .staff-details {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  flex: 1;
+  gap: 0.125rem;
 }
 
 .staff-name {
-  font-weight: 500;
-  color: #495057;
-  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.9rem;
 }
 
 .staff-role {
-  font-size: 0.7rem;
-  color: #6c757d;
+  font-size: 0.75rem;
+  color: #64748b;
 }
 
 .staff-hours-info {
@@ -2586,14 +2593,14 @@ export default {
 }
 
 .current-hours {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #007bff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #3b82f6;
 }
 
 .hours-range {
   font-size: 0.7rem;
-  color: #6c757d;
+  color: #94a3b8;
 }
 
 .staff-warnings {
@@ -2603,42 +2610,42 @@ export default {
 }
 
 .warning-badge {
-  font-size: 0.6rem;
-  padding: 0.1rem 0.2rem;
-  border-radius: 2px;
-  background: #fff3cd;
-  border: 1px solid #ffc107;
+  font-size: 0.7rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: #fbbf24;
+  color: #78350f;
+  font-weight: 600;
   cursor: help;
 }
 
+/* シフトセル */
 .shift-cell {
-  min-width: 70px;
-  width: 70px;
-  min-height: 60px;
-  border-right: 1px solid #f1f3f4;
-  background: #fff;
+  min-width: 80px;
+  width: 80px;
+  min-height: 70px;
+  border-right: 1px solid #e5e7eb;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  transition: all 0.2s ease;
-  cursor: default;
+  transition: all 0.2s;
 }
 
 .shift-cell.is-today {
-  background: #e3f2fd;
+  background: #dbeafe;
 }
 
 .shift-cell.is-weekend {
-  background: #fff8e1;
+  background: #fef3c7;
 }
 
 .shift-cell.is-holiday {
-  background: #fce4ec;
+  background: #fee2e2;
 }
 
 .shift-cell.is-past {
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .shift-cell.is-editable {
@@ -2646,80 +2653,85 @@ export default {
 }
 
 .shift-cell.is-editable:hover {
-  background: #f0f8ff;
+  background: #e0f2fe;
   transform: scale(1.02);
 }
 
 .shift-cell.past-editable:hover {
-  background: #fff3cd;
+  background: #fef3c7;
 }
 
-.shift-cell.has-violation {
+.shift-cell.is-selected {
+  box-shadow: inset 0 0 0 2px #3b82f6;
 }
 
+/* シフトタイムカード */
 .shift-time-card {
-  background: #28a745;
+  background: #10b981;
   color: white;
-  padding: 0.4rem 0.3rem;
-  border-radius: 4px;
+  padding: 0.5rem 0.375rem;
+  border-radius: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.1rem;
-  font-weight: 500;
-  font-size: 0.65rem;
-  min-width: 45px;
-  transition: all 0.2s ease;
+  gap: 0.125rem;
+  font-weight: 600;
+  font-size: 0.75rem;
+  min-width: 60px;
+  transition: all 0.2s;
   position: relative;
-}
-
-.shift-time-card.violation {
-  background: #dc3545;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .shift-time-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.shift-time-card.violation {
+  background: #ef4444;
 }
 
 .shift-start,
 .shift-end {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 0.8rem;
 }
 
 .shift-separator {
-  font-size: 0.55rem;
+  font-size: 0.6rem;
   opacity: 0.8;
 }
 
 .violation-icon {
   position: absolute;
-  top: -0.25rem;
-  right: -0.25rem;
-  color: #ffc107;
-  font-size: 0.6rem;
-  background: white;
+  top: -4px;
+  right: -4px;
+  background: #fbbf24;
+  color: #78350f;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  width: 12px;
-  height: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 0.6rem;
   cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .violation-tooltip {
   position: absolute;
   top: 100%;
   right: 0;
+  margin-top: 0.5rem;
   background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  padding: 0.5rem;
-  z-index: 20;
-  width: 180px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   display: none;
+  z-index: 20;
 }
 
 .violation-icon:hover .violation-tooltip {
@@ -2727,8 +2739,8 @@ export default {
 }
 
 .violation-tooltip-item {
-  font-size: 0.75rem;
-  color: #721c24;
+  font-size: 0.8rem;
+  color: #7f1d1d;
   margin-bottom: 0.25rem;
 }
 
@@ -2737,45 +2749,40 @@ export default {
 }
 
 .no-shift {
-  color: #adb5bd;
-  font-size: 1rem;
-  transition: all 0.2s ease;
+  color: #cbd5e1;
+  font-size: 1.2rem;
+  transition: all 0.2s;
 }
 
 .shift-cell.is-editable .no-shift {
-  color: #28a745;
-  font-weight: 500;
+  color: #10b981;
+  font-weight: 600;
 }
 
-.gantt-view {
-  position: relative;
-  height: calc(100vh - 450px);
-  overflow: hidden;
+/* ===== ガントチャート情報パネル ===== */
+.gantt-info-panel {
+  width: 320px;
+  background: #f8f9fa;
+  border-left: 2px solid #e5e7eb;
+  padding: 1rem;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.gantt-info-panel {
-  width: 100%;
-  flex-shrink: 0;
-  display: flex;
-  gap: 1rem;
-  overflow-x: auto;
-}
-
 .date-info-header {
   background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .date-info-header h3 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.75rem 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #495057;
+  color: #1e293b;
 }
 
 .date-warnings {
@@ -2788,48 +2795,44 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
 }
 
 .warning-item.staffing_shortage {
-  background: #fff3cd;
-  color: #856404;
-  border: 1px solid #ffc107;
+  background: #fef3c7;
+  color: #78350f;
 }
 
 .warning-item.staff_violation {
-  background: #f8d7da;
-  color: #721c24;
-  border: 1px solid #dc3545;
+  background: #fee2e2;
+  color: #7f1d1d;
 }
 
+/* 要件セクション */
 .requirements-section,
 .staff-summary-section {
   background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
-  min-width: 300px;
-  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .section-title {
-  background: #f8f9fa;
+  background: #f3f4f6;
   padding: 0.75rem 1rem;
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: #495057;
-  border-bottom: 1px solid #dee2e6;
+  color: #1e293b;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
 .section-title i {
-  color: #007bff;
+  color: #3b82f6;
 }
 
 .requirements-list {
@@ -2843,22 +2846,21 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem;
-  background: #f8f9fa;
-  border-radius: 4px;
-  border: 1px solid #e9ecef;
-  position: relative;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
 }
 
 .requirement-item.shortage {
-  background: #fff3cd;
-  border-color: #ffc107;
+  background: #fef3c7;
+  border-color: #fbbf24;
 }
 
 .time-range {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: #495057;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
 }
 
 .staff-count {
@@ -2868,64 +2870,68 @@ export default {
 }
 
 .assigned-count {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #007bff;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #3b82f6;
 }
 
 .separator {
-  color: #6c757d;
+  color: #94a3b8;
 }
 
 .required-count {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #495057;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #64748b;
 }
 
 .count-unit {
-  font-size: 0.75rem;
-  color: #6c757d;
+  font-size: 0.8rem;
+  color: #94a3b8;
 }
 
 .shortage-icon {
-  position: absolute;
-  top: 0.25rem;
-  right: 0.25rem;
-  color: #ffc107;
-  font-size: 0.7rem;
+  color: #f59e0b;
+  font-size: 0.9rem;
+  margin-left: 0.5rem;
 }
 
 .no-requirements {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  color: #6c757d;
-  font-size: 0.8rem;
-  padding: 1rem;
-  text-align: center;
   justify-content: center;
+  gap: 0.5rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  padding: 2rem;
 }
 
+/* スタッフサマリー */
 .staff-summary-grid {
-  padding: 0.5rem;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
 }
 
 .staff-summary-card {
-  background: #fafafa;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
   padding: 0.75rem;
+  transition: all 0.2s;
+}
+
+.staff-summary-card:hover {
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .staff-summary-card.has-warnings {
-  background: #fff5f5;
-  border-color: #fed7d7;
+  background: #fef3c7;
+  border-color: #fbbf24;
 }
 
 .staff-header {
@@ -2936,28 +2942,28 @@ export default {
 }
 
 .staff-avatar-tiny {
-  width: 24px;
-  height: 24px;
-  border-radius: 3px;
-  background: #007bff;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 500;
-  font-size: 0.65rem;
+  font-weight: 600;
+  font-size: 0.7rem;
 }
 
 .staff-name-summary {
-  font-weight: 500;
-  color: #495057;
-  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.85rem;
   flex: 1;
 }
 
 .warning-indicator-small {
-  color: #ffc107;
-  font-size: 0.7rem;
+  color: #f59e0b;
+  font-size: 0.8rem;
 }
 
 .summary-stats {
@@ -2973,21 +2979,21 @@ export default {
 }
 
 .stat-value {
-  font-weight: 600;
-  color: #007bff;
-  font-size: 0.9rem;
+  font-weight: 700;
+  color: #3b82f6;
+  font-size: 1rem;
 }
 
 .stat-range {
-  color: #6c757d;
-  font-size: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
 }
 
 .today-shift {
-  padding: 0.25rem 0.5rem;
-  background: #e3f2fd;
-  border-radius: 3px;
-  margin-top: 0.25rem;
+  padding: 0.375rem 0.625rem;
+  background: #dbeafe;
+  border-radius: 6px;
+  margin-top: 0.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2995,8 +3001,8 @@ export default {
 
 .today-hours {
   font-weight: 600;
-  color: #28a745;
-  font-size: 0.8rem;
+  color: #059669;
+  font-size: 0.85rem;
 }
 
 .violations {
@@ -3005,30 +3011,38 @@ export default {
 }
 
 .violation-badge {
-  font-size: 0.6rem;
-  padding: 0.1rem 0.2rem;
-  border-radius: 2px;
-  background: #f8d7da;
-  border: 1px solid #dc3545;
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: 600;
   cursor: help;
+}
+
+/* ===== ガントチャートビュー ===== */
+.gantt-view {
+  height: calc(100vh - 300px);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .gantt-container {
   flex: 1;
-  height: 100%;
   display: flex;
   flex-direction: column;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
+  background: white;
+  border-radius: 8px;
   overflow: hidden;
-  min-height: 400px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .gantt-header {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
+  grid-template-columns: 240px 1fr;
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -3036,58 +3050,56 @@ export default {
 
 .gantt-staff-header {
   padding: 1rem;
-  background: #495057;
+  background: #1e293b;
   color: white;
   font-weight: 600;
   font-size: 0.9rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-right: 1px solid #dee2e6;
+  border-right: 2px solid #e5e7eb;
 }
 
 .gantt-timeline-header {
   display: flex;
-  overflow: hidden;
-  background: #f8f9fa;
+  overflow-x: hidden;
+  background: #f9fafb;
 }
 
 .gantt-hour-cell {
   text-align: center;
-  padding: 0.5rem 0.25rem;
-  border-right: 1px solid #dee2e6;
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: #495057;
-  background: #f8f9fa;
+  padding: 0.75rem 0.25rem;
+  border-right: 1px solid #e5e7eb;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  position: relative;
 }
 
 .hour-label {
-  font-weight: 600;
+  font-weight: 700;
+  color: #1e293b;
 }
 
 .hour-requirements {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.125rem;
 }
 
 .hour-requirement-badge {
-  font-size: 0.6rem;
-  padding: 0.1rem 0.2rem;
-  border-radius: 2px;
-  background: #28a745;
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: #10b981;
   color: white;
-  border: 1px solid #28a745;
+  font-weight: 600;
 }
 
 .hour-requirement-badge.shortage {
-  background: #dc3545;
-  border-color: #dc3545;
+  background: #ef4444;
 }
 
 .gantt-body {
@@ -3097,82 +3109,81 @@ export default {
 }
 
 .gantt-staff-rows {
-  display: flex;
-  flex-direction: column;
+  min-height: 100%;
 }
 
 .gantt-staff-row {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  border-bottom: 1px solid #f1f3f4;
-  min-height: 60px;
+  grid-template-columns: 240px 1fr;
+  border-bottom: 1px solid #e5e7eb;
+  min-height: 70px;
 }
 
 .gantt-staff-row:hover {
-  background: #f8f9fa;
+  background: #f9fafb;
 }
 
 .gantt-staff-row.has-warnings {
-  background: #fff5f5;
+  background: #fef3c7;
 }
 
 .gantt-staff-info {
-  padding: 0.75rem;
-  background: #fafafa;
-  border-right: 1px solid #dee2e6;
+  padding: 1rem;
+  background: white;
+  border-right: 2px solid #e5e7eb;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .staff-avatar-small {
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  background: #007bff;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 500;
-  font-size: 0.7rem;
+  font-weight: 600;
+  font-size: 0.75rem;
 }
 
 .gantt-staff-details {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  flex: 1;
+  gap: 0.125rem;
 }
 
 .staff-name-small {
-  font-weight: 500;
-  color: #495057;
-  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.85rem;
 }
 
 .staff-hours-small {
   display: flex;
   align-items: baseline;
   gap: 0.25rem;
+  font-size: 0.75rem;
 }
 
 .warning-indicator-gantt {
-  color: #ffc107;
-  font-size: 0.7rem;
+  color: #f59e0b;
+  font-size: 0.85rem;
 }
 
 .gantt-timeline {
   position: relative;
   cursor: pointer;
-  min-height: 60px;
+  min-height: 70px;
   display: flex;
   align-items: center;
-  padding: 0;
 }
 
 .gantt-timeline:hover {
-  background: rgba(0, 123, 255, 0.05);
+  background: rgba(59, 130, 246, 0.05);
 }
 
 .gantt-grid {
@@ -3182,104 +3193,108 @@ export default {
   right: 0;
   bottom: 0;
   display: flex;
+  pointer-events: none;
 }
 
 .gantt-hour-line {
-  border-right: 1px solid #f1f3f4;
+  border-right: 1px solid #f3f4f6;
   height: 100%;
 }
 
 .gantt-shift-block {
   position: absolute;
-  top: 8px;
-  bottom: 8px;
-  background: #28a745;
-  border-radius: 4px;
+  top: 10px;
+  bottom: 10px;
+  background: #10b981;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: 500;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   cursor: pointer;
   z-index: 3;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
 }
 
 .gantt-shift-block:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .gantt-shift-block.is-past-editable {
-  background: #ffc107;
+  background: #f59e0b;
 }
 
 .gantt-shift-block.has-violation {
-  background: #dc3545;
+  background: #ef4444;
 }
 
 .shift-time-text {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 0.5rem;
+  padding: 0 0.75rem;
 }
 
 .gantt-violation-icon {
   position: absolute;
-  top: -0.25rem;
-  right: -0.25rem;
-  color: #ffc107;
-  font-size: 0.6rem;
-  background: white;
+  top: -4px;
+  right: -4px;
+  background: #fbbf24;
+  color: #78350f;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  width: 12px;
-  height: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 0.6rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
+/* ===== ダイアログ ===== */
 .shift-editor-dialog .p-dialog-content {
-  border-radius: 8px;
+  padding: 1.5rem;
 }
 
 .shift-editor-form {
-  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .status-alert {
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
+  padding: 1rem;
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
   font-weight: 500;
   font-size: 0.875rem;
 }
 
 .status-alert.warning {
-  background: #fff3cd;
-  color: #856404;
-  border: 1px solid #ffeaa7;
+  background: #fef3c7;
+  color: #78350f;
+  border: 1px solid #fbbf24;
 }
 
 .time-inputs-section {
-  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .time-input-group {
-  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .form-label {
-  display: block;
-  margin-bottom: 0.5rem;
   font-weight: 600;
-  color: #495057;
+  color: #1e293b;
   font-size: 0.875rem;
 }
 
@@ -3287,46 +3302,53 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #f8f9fa;
-  padding: 0.5rem;
-  border-radius: 6px;
-  border: 1px solid #ced4da;
-  max-width: 250px;
+  background: #f9fafb;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  max-width: 300px;
 }
 
 .time-dropdown {
   flex: 1;
-  border: none;
-  background: transparent;
 }
 
 .time-separator {
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  color: #6c757d;
+  color: #64748b;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .form-textarea {
   width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   font-size: 0.875rem;
+  resize: vertical;
+}
+
+.form-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .checkbox-group {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .checkbox-label {
   font-weight: 500;
-  color: #495057;
+  color: #475569;
   cursor: pointer;
   font-size: 0.875rem;
 }
@@ -3334,295 +3356,172 @@ export default {
 .dialog-actions {
   display: flex;
   gap: 0.75rem;
-  justify-content: center;
+  justify-content: flex-end;
   padding-top: 0.5rem;
 }
 
 .delete-button,
 .cancel-button,
 .save-button {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
   font-weight: 500;
-  border: 1px solid;
-  transition: all 0.2s ease;
-  cursor: pointer;
   font-size: 0.875rem;
+  transition: all 0.2s;
+  cursor: pointer;
 }
 
 .delete-button {
-  background: #dc3545;
+  background: #ef4444;
   color: white;
-  border-color: #dc3545;
+  border: 1px solid #ef4444;
+  margin-right: auto;
 }
 
-.delete-button:hover {
-  background: #c82333;
-  border-color: #bd2130;
+.delete-button:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
 }
 
 .cancel-button {
-  background: #f8f9fa;
-  color: #6c757d;
-  border-color: #ced4da;
+  background: white;
+  color: #64748b;
+  border: 1px solid #e5e7eb;
 }
 
-.cancel-button:hover {
-  background: #e9ecef;
-  color: #495057;
+.cancel-button:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #cbd5e1;
 }
 
 .save-button {
-  background: #28a745;
+  background: #10b981;
   color: white;
-  border-color: #28a745;
+  border: 1px solid #10b981;
 }
 
-.save-button:hover {
-  background: #218838;
-  border-color: #1e7e34;
+.save-button:hover:not(:disabled) {
+  background: #059669;
+  border-color: #059669;
 }
 
-@media (max-width: 1024px) {
+/* ===== レスポンシブ対応 ===== */
+@media (max-width: 1280px) {
+  .calendar-view {
+    flex-direction: column;
+  }
+
+  .gantt-info-panel {
+    width: 100%;
+    flex-direction: row;
+    border-left: none;
+    border-top: 2px solid #e5e7eb;
+    overflow-x: auto;
+    padding: 1rem;
+  }
+
+  .requirements-section,
+  .staff-summary-section {
+    min-width: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .shift-management {
+    padding: 1rem;
+  }
+
   .control-panel {
     flex-direction: column;
     align-items: stretch;
     gap: 1.5rem;
   }
 
-  .period-controls {
+  .period-controls,
+  .view-controls,
+  .action-controls {
+    width: 100%;
     justify-content: center;
   }
 
   .view-controls {
-    flex-direction: row;
-    justify-content: center;
-    gap: 1rem;
+    flex-direction: column;
+  }
+
+  .date-selector {
+    width: 100%;
   }
 
   .action-controls {
-    justify-content: center;
     flex-wrap: wrap;
   }
 
-  .store-selector {
-    min-width: 250px;
-  }
-
-  .gantt-view {
-    flex-direction: column;
-    height: auto;
-  }
-
-  .gantt-info-panel {
-    width: 100%;
-    flex-direction: row;
-    overflow-x: auto;
-  }
-
-  .requirements-section,
-  .staff-summary-section {
-    min-width: 280px;
-    flex-shrink: 0;
-  }
-
-  .gantt-container {
-    height: calc(100vh - 500px);
-  }
-}
-
-@media (max-width: 768px) {
-  .control-panel {
-    padding: 1rem;
-    gap: 1rem;
-  }
-
-  .period-controls {
-    gap: 0.75rem;
-  }
-
-  .store-selector {
-    min-width: 200px;
-  }
-
-  .action-controls {
-    gap: 0.5rem;
-  }
-
   .action-button {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.8rem;
-  }
-
-  .view-tab {
-    padding: 0.4rem 0.6rem;
-    font-size: 0.8rem;
-  }
-
-  .shift-management {
-    padding: 1rem;
-  }
-
-  .page-title {
-    font-size: 1.5rem;
+    flex: 1;
+    min-width: 120px;
   }
 
   .staff-column-header,
-  .staff-info {
+  .staff-info,
+  .gantt-staff-header,
+  .gantt-staff-info {
     min-width: 160px;
     width: 160px;
   }
 
-  .date-cell-header,
+  .date-cell-wrapper,
   .shift-cell {
-    min-width: 50px;
-    width: 50px;
-  }
-
-  .date-cell-header {
-    min-width: 70px;
-    width: 70px;
-    padding: 1.25rem 0.5rem;
-    text-align: center;
-    border-right: 1px solid #dee2e6;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.2rem;
-    background: #f8f9fa;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    position: relative;
-    overflow: visible; /* ← この行を追加 */
-  }
-
-  .staff-avatar {
-    width: 28px;
-    height: 28px;
-    font-size: 0.7rem;
-  }
-
-  .staff-name {
-    font-size: 0.75rem;
-  }
-
-  .shift-time-card {
-    padding: 0.3rem 0.2rem;
-    font-size: 0.6rem;
-    min-width: 36px;
-  }
-
-  .time-selector {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .time-dropdown {
-    width: 100%;
-  }
-
-  .calendar-container {
-    max-height: calc(100vh - 500px);
-  }
-
-  .gantt-view {
-    height: calc(100vh - 550px);
+    min-width: 60px;
+    width: 60px;
   }
 
   .gantt-info-panel {
     flex-direction: column;
-    max-height: 300px;
-  }
-
-  .requirements-section,
-  .staff-summary-section {
-    min-width: unset;
-  }
-
-  .staff-summary-grid {
-    max-height: 200px;
-  }
-
-  .gantt-container {
-    height: calc(100vh - 700px);
-  }
-
-  .gantt-header {
-    grid-template-columns: 120px 1fr;
-  }
-
-  .gantt-staff-row {
-    grid-template-columns: 120px 1fr;
-  }
-
-  .gantt-staff-header,
-  .gantt-staff-info {
-    padding: 0.4rem;
-  }
-
-  .staff-name-small {
-    font-size: 0.65rem;
-  }
-
-  .view-controls {
-    flex-direction: row;
-    gap: 0.5rem;
-  }
-
-  .date-selector {
-    max-width: 150px;
+    max-height: 50vh;
   }
 }
 
-@media (max-width: 576px) {
-  .period-controls {
-    flex-direction: column;
-    gap: 1rem;
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 1.5rem;
   }
 
-  .view-controls {
-    flex-direction: column;
-    gap: 0.75rem;
+  .period-display {
+    min-width: 80px;
   }
 
-  .action-controls {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .action-button {
-    width: 100%;
-    justify-content: center;
+  .month {
+    font-size: 1rem;
   }
 
   .store-selector {
     min-width: 100%;
   }
 
-  .date-dropdown {
+  .action-button {
     width: 100%;
+    justify-content: center;
   }
 
-  .gantt-view {
-    height: auto;
-    gap: 0.5rem;
-  }
-
-  .section-title {
-    padding: 0.5rem;
+  .staff-avatar {
+    width: 32px;
+    height: 32px;
     font-size: 0.8rem;
   }
 
-  .requirements-list {
-    padding: 0.5rem;
+  .shift-time-card {
+    min-width: 50px;
+    font-size: 0.65rem;
+    padding: 0.375rem 0.25rem;
   }
 
-  .staff-summary-card {
-    padding: 0.5rem;
+  .time-selector {
+    flex-direction: column;
+    max-width: 100%;
   }
 
-  .gantt-container {
-    height: 300px;
+  .time-dropdown {
+    width: 100%;
   }
 }
 </style>
