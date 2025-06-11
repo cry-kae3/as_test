@@ -208,10 +208,10 @@
                   <span class="staff-role">{{ staff.position || "一般" }}</span>
                   <div class="staff-hours-info">
                     <span class="current-hours"
-                      >{{ calculateTotalHours(staff.id) }}h</span
+                      >{{ formatHours(calculateTotalHours(staff.id)) }}</span
                     >
                     <span class="hours-range"
-                      >/ {{ staff.max_hours_per_month || 0 }}h</span
+                      >/ {{ formatHours(staff.max_hours_per_month || 0) }}</span
                     >
                   </div>
                   <div
@@ -238,6 +238,8 @@
                   'past-editable': isEditMode && isPastDate(day.date),
                   'is-selected': selectedDate === day.date,
                   'has-violation': hasShiftViolation(day.date, staff.id),
+                  'can-work': canStaffWorkOnDate(staff, day.date) && !getShiftForStaff(day.date, staff.id),
+                  'unavailable': !canStaffWorkOnDate(staff, day.date) && !getShiftForStaff(day.date, staff.id),
                 }"
                 @click="openShiftEditor(day, staff)"
               >
@@ -281,7 +283,13 @@
                   </div>
                 </div>
                 <div v-else class="no-shift">
-                  <span v-if="isEditMode">+</span>
+                  <span v-if="isEditMode && canStaffWorkOnDate(staff, day.date)" 
+                        class="work-available-indicator"
+                        :title="getWorkAvailabilityTooltip(staff, day.date)">✓</span>
+                  <span v-else-if="isEditMode && !canStaffWorkOnDate(staff, day.date)" 
+                        class="work-unavailable-indicator"
+                        :title="getWorkUnavailabilityReason(staff, day.date)">✗</span>
+                  <span v-else-if="isEditMode">+</span>
                 </div>
               </div>
             </div>
@@ -381,10 +389,10 @@
                 <div class="summary-stats">
                   <div class="stat-item">
                     <span class="stat-value"
-                      >{{ calculateTotalHours(staff.id) }}h</span
+                      >{{ formatHours(calculateTotalHours(staff.id)) }}</span
                     >
                     <span class="stat-range"
-                      >/{{ staff.max_hours_per_month || 0 }}h</span
+                      >/{{ formatHours(staff.max_hours_per_month || 0) }}</span
                     >
                   </div>
 
@@ -395,10 +403,12 @@
                     <span class="today-hours">
                       本日:
                       {{
-                        calculateDayHours(
-                          getShiftForStaff(selectedDate, staff.id)
+                        formatHours(
+                          calculateDayHours(
+                            getShiftForStaff(selectedDate, staff.id)
+                          )
                         )
-                      }}h
+                      }}
                     </span>
                     <div
                       v-if="hasShiftViolation(selectedDate, staff.id)"
@@ -482,10 +492,10 @@
                     <span class="staff-role-small">{{ staff.position || "一般" }}</span>
                     <div class="staff-hours-small">
                       <span class="current-hours"
-                        >{{ calculateTotalHours(staff.id) }}h</span
+                        >{{ formatHours(calculateTotalHours(staff.id)) }}</span
                       >
                       <span class="hours-range"
-                        >/{{ staff.max_hours_per_month || 0 }}h</span
+                        >/{{ formatHours(staff.max_hours_per_month || 0) }}</span
                       >
                     </div>
                   </div>
@@ -510,6 +520,13 @@
                       :style="getTimeHeaderStyle()"
                     ></div>
                   </div>
+
+                  <div 
+                    v-if="!getShiftForStaff(selectedDate, staff.id)"
+                    class="gantt-availability-indicator"
+                    :style="getGanttAvailabilityStyle(staff, selectedDate)"
+                    :title="getGanttAvailabilityTooltip(staff, selectedDate)"
+                  ></div>
 
                   <div
                     v-if="getShiftForStaff(selectedDate, staff.id)"
@@ -824,6 +841,132 @@ export default {
         const reqEndHour = parseTimeToFloat(req.end_time);
         return hour >= reqStartHour && hour < reqEndHour;
       });
+    };
+
+    const formatHours = (hours) => {
+      const totalHours = Math.floor(hours);
+      const minutes = Math.round((hours - totalHours) * 60);
+      
+      if (minutes === 0) {
+        return `${totalHours}時間`;
+      } else {
+        return `${totalHours}時間${minutes}分`;
+      }
+    };
+
+    const canStaffWorkOnDate = (staff, date) => {
+      const hasDayOffRequest = staff.dayOffRequests && staff.dayOffRequests.some(request => 
+        request.date === date && (request.status === 'approved' || request.status === 'pending')
+      );
+      
+      if (hasDayOffRequest) {
+        return false;
+      }
+      
+      const dayOfWeek = new Date(date).getDay();
+      const dayPreference = staff.dayPreferences && staff.dayPreferences.find(pref => 
+        pref.day_of_week === dayOfWeek
+      );
+      
+      if (dayPreference && !dayPreference.available) {
+        return false;
+      }
+      
+      const consecutiveDays = getConsecutiveWorkDays(staff.id, date);
+      const maxConsecutiveDays = staff.max_consecutive_days || 5;
+      
+      if (consecutiveDays >= maxConsecutiveDays) {
+        return false;
+      }
+      
+      return true;
+    };
+
+    const getWorkAvailabilityTooltip = (staff, date) => {
+      const dayOfWeek = new Date(date).getDay();
+      const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+      const dayPreference = staff.dayPreferences && staff.dayPreferences.find(pref => 
+        pref.day_of_week === dayOfWeek
+      );
+      
+      let tooltip = `${dayNames[dayOfWeek]}曜日：勤務可能`;
+      
+      if (dayPreference && dayPreference.preferred_start_time && dayPreference.preferred_end_time) {
+        tooltip += `\n希望時間：${formatTime(dayPreference.preferred_start_time)}-${formatTime(dayPreference.preferred_end_time)}`;
+      }
+      
+      return tooltip;
+    };
+
+    const getWorkUnavailabilityReason = (staff, date) => {
+      const dayOffRequest = staff.dayOffRequests && staff.dayOffRequests.find(request => 
+        request.date === date && (request.status === 'approved' || request.status === 'pending')
+      );
+      
+      if (dayOffRequest) {
+        return `休み希望：${dayOffRequest.reason || 'お休み'}`;
+      }
+      
+      const dayOfWeek = new Date(date).getDay();
+      const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+      const dayPreference = staff.dayPreferences && staff.dayPreferences.find(pref => 
+        pref.day_of_week === dayOfWeek
+      );
+      
+      if (dayPreference && !dayPreference.available) {
+        return `${dayNames[dayOfWeek]}曜日：勤務不可`;
+      }
+      
+      const consecutiveDays = getConsecutiveWorkDays(staff.id, date);
+      const maxConsecutiveDays = staff.max_consecutive_days || 5;
+      
+      if (consecutiveDays >= maxConsecutiveDays) {
+        return `連続勤務日数上限：${consecutiveDays}/${maxConsecutiveDays}日`;
+      }
+      
+      return '勤務不可';
+    };
+
+    const getGanttAvailabilityStyle = (staff, date) => {
+      if (!canStaffWorkOnDate(staff, date)) {
+        return { display: 'none' };
+      }
+      
+      const dayOfWeek = new Date(date).getDay();
+      const dayPreference = staff.dayPreferences && staff.dayPreferences.find(pref => 
+        pref.day_of_week === dayOfWeek
+      );
+      
+      if (!dayPreference || !dayPreference.preferred_start_time || !dayPreference.preferred_end_time) {
+        return { display: 'none' };
+      }
+      
+      const startHourFloat = parseTimeToFloat(dayPreference.preferred_start_time);
+      const endHourFloat = parseTimeToFloat(dayPreference.preferred_end_time);
+      
+      const hourWidth = 60;
+      const left = startHourFloat * hourWidth;
+      const width = (endHourFloat - startHourFloat) * hourWidth;
+      
+      return {
+        left: `${left}px`,
+        width: `${width}px`,
+        display: 'block'
+      };
+    };
+
+    const getGanttAvailabilityTooltip = (staff, date) => {
+      const dayOfWeek = new Date(date).getDay();
+      const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+      const dayPreference = staff.dayPreferences && staff.dayPreferences.find(pref => 
+        pref.day_of_week === dayOfWeek
+      );
+      
+      if (!dayPreference || !dayPreference.preferred_start_time || !dayPreference.preferred_end_time) {
+        return '';
+      }
+      
+      return `${staff.last_name} ${staff.first_name}\n${dayNames[dayOfWeek]}曜日 希望時間：${formatTime(dayPreference.preferred_start_time)}-${formatTime(dayPreference.preferred_end_time)}`;
     };
 
     const hasRequirementShortage = (date, requirement) => {
@@ -1542,7 +1685,7 @@ export default {
       printWindow.print();
     };
 
-    const generatePrintContent = () => {
+        const generatePrintContent = () => {
       const storeName = selectedStore.value ? selectedStore.value.name : "";
       const period = `${currentYear.value}年${currentMonth.value}月`;
 
@@ -1722,7 +1865,7 @@ export default {
         printHtml += `
           <tr>
             <td>${staff.last_name} ${staff.first_name}</td>
-            <td>${calculateTotalHours(staff.id)}時間</td>
+            <td>${formatHours(calculateTotalHours(staff.id))}</td>
           </tr>
         `;
       });
@@ -1774,309 +1917,314 @@ export default {
         toast.add({
           severity: "warn",
           summary: "入力エラー",
-         detail: "終了時間は開始時間より後にしてください",
-         life: 3000,
-       });
-       return;
-     }
+          detail: "終了時間は開始時間より後にしてください",
+          life: 3000,
+        });
+        return;
+      }
 
-     if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
-       toast.add({
-         severity: "warn",
-         summary: "入力エラー",
-         detail: "過去の日付を編集する場合は変更理由を入力してください",
-         life: 3000,
-       });
-       return;
-     }
+      if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "過去の日付を編集する場合は変更理由を入力してください",
+          life: 3000,
+        });
+        return;
+      }
 
-     saving.value = true;
+      saving.value = true;
 
-     try {
-       const shiftData = {
-         store_id: selectedStore.value.id,
-         staff_id: shiftEditorDialog.staff.id,
-         date: shiftEditorDialog.date,
-         start_time: startTime,
-         end_time: endTime,
-         break_start_time: null,
-         break_end_time: null,
-         notes: null,
-       };
+      try {
+        const shiftData = {
+          store_id: selectedStore.value.id,
+          staff_id: shiftEditorDialog.staff.id,
+          date: shiftEditorDialog.date,
+          start_time: startTime,
+          end_time: endTime,
+          break_start_time: null,
+          break_end_time: null,
+          notes: null,
+        };
 
-       if (shiftEditorDialog.isPast) {
-         shiftData.change_reason = shiftEditorDialog.changeReason;
-       }
+        if (shiftEditorDialog.isPast) {
+          shiftData.change_reason = shiftEditorDialog.changeReason;
+        }
 
-       console.log("Sending shift data:", shiftData);
+        console.log("Sending shift data:", shiftData);
 
-       const existingShift = getShiftForStaff(
-         shiftEditorDialog.date,
-         shiftEditorDialog.staff.id
-       );
+        const existingShift = getShiftForStaff(
+          shiftEditorDialog.date,
+          shiftEditorDialog.staff.id
+        );
 
-       if (existingShift) {
-         await store.dispatch("shift/updateShiftAssignment", {
-           year: currentYear.value,
-           month: currentMonth.value,
-           assignmentId: existingShift.id,
-           assignmentData: shiftData,
-         });
-       } else {
-         await store.dispatch("shift/createShiftAssignment", {
-           year: currentYear.value,
-           month: currentMonth.value,
-           assignmentData: shiftData,
-         });
-       }
+        if (existingShift) {
+          await store.dispatch("shift/updateShiftAssignment", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            assignmentId: existingShift.id,
+            assignmentData: shiftData,
+          });
+        } else {
+          await store.dispatch("shift/createShiftAssignment", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            assignmentData: shiftData,
+          });
+        }
 
-       await loadShiftData();
-       shiftEditorDialog.visible = false;
+        await loadShiftData();
+        shiftEditorDialog.visible = false;
 
-       const successMessage = shiftEditorDialog.isPast
-         ? "過去のシフトを変更しました（変更履歴に記録されます）"
-         : "シフトを保存しました";
+        const successMessage = shiftEditorDialog.isPast
+          ? "過去のシフトを変更しました（変更履歴に記録されます）"
+          : "シフトを保存しました";
 
-       toast.add({
-         severity: "success",
-         summary: "保存完了",
-         detail: successMessage,
-         life: 3000,
-       });
-     } catch (error) {
-       console.error("シフト保存エラー:", error);
+        toast.add({
+          severity: "success",
+          summary: "保存完了",
+          detail: successMessage,
+          life: 3000,
+        });
+      } catch (error) {
+        console.error("シフト保存エラー:", error);
 
-       if (error.response) {
-         console.error("Response data:", error.response.data);
-         console.error("Response status:", error.response.status);
-       }
+        if (error.response) {
+          console.error("Response data:", error.response.data);
+          console.error("Response status:", error.response.status);
+        }
 
-       let errorMessage = "シフトの保存に失敗しました";
-       if (
-         error.response &&
-         error.response.data &&
-         error.response.data.message
-       ) {
-         errorMessage = error.response.data.message;
-       }
+        let errorMessage = "シフトの保存に失敗しました";
+        if (
+          error.response &&
+          error.response.data &&
+          error.response.data.message
+        ) {
+          errorMessage = error.response.data.message;
+        }
 
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: errorMessage,
-         life: 3000,
-       });
-     } finally {
-       saving.value = false;
-     }
-   };
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: errorMessage,
+          life: 3000,
+        });
+      } finally {
+        saving.value = false;
+      }
+    };
 
-   const clearShift = async () => {
-     if (!shiftEditorDialog.hasShift) {
-       shiftEditorDialog.visible = false;
-       return;
-     }
+    const clearShift = async () => {
+      if (!shiftEditorDialog.hasShift) {
+        shiftEditorDialog.visible = false;
+        return;
+      }
 
-     if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
-       toast.add({
-         severity: "warn",
-         summary: "入力エラー",
-         detail: "過去の日付を編集する場合は変更理由を入力してください",
-         life: 3000,
-       });
-       return;
-     }
+      if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "過去の日付を編集する場合は変更理由を入力してください",
+          life: 3000,
+        });
+        return;
+      }
 
-     saving.value = true;
+      saving.value = true;
 
-     try {
-       const existingShift = getShiftForStaff(
-         shiftEditorDialog.date,
-         shiftEditorDialog.staff.id
-       );
+      try {
+        const existingShift = getShiftForStaff(
+          shiftEditorDialog.date,
+          shiftEditorDialog.staff.id
+        );
 
-       if (existingShift) {
-         await store.dispatch("shift/deleteShiftAssignment", {
-           year: currentYear.value,
-           month: currentMonth.value,
-           assignmentId: existingShift.id,
-           change_reason: shiftEditorDialog.isPast
-             ? shiftEditorDialog.changeReason
-             : null,
-         });
+        if (existingShift) {
+          await store.dispatch("shift/deleteShiftAssignment", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            assignmentId: existingShift.id,
+            change_reason: shiftEditorDialog.isPast
+              ? shiftEditorDialog.changeReason
+              : null,
+          });
 
-         await loadShiftData();
-         shiftEditorDialog.visible = false;
+          await loadShiftData();
+          shiftEditorDialog.visible = false;
 
-         const successMessage = shiftEditorDialog.isPast
-           ? "過去のシフトを削除しました（変更履歴に記録されます）"
-           : "シフトを削除しました";
+          const successMessage = shiftEditorDialog.isPast
+            ? "過去のシフトを削除しました（変更履歴に記録されます）"
+            : "シフトを削除しました";
 
-         toast.add({
-           severity: "success",
-           summary: "削除完了",
-           detail: successMessage,
-           life: 3000,
-         });
-       }
-     } catch (error) {
-       console.error("シフト削除エラー:", error);
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: "シフトの削除に失敗しました",
-         life: 3000,
-       });
-     } finally {
-       saving.value = false;
-     }
-   };
+          toast.add({
+            severity: "success",
+            summary: "削除完了",
+            detail: successMessage,
+            life: 3000,
+          });
+        }
+      } catch (error) {
+        console.error("シフト削除エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "シフトの削除に失敗しました",
+          life: 3000,
+        });
+      } finally {
+        saving.value = false;
+      }
+    };
 
-   const getShiftForStaff = (date, staffId) => {
-     const dayShifts = shifts.value.find((s) => s.date === date);
-     if (!dayShifts) return null;
+    const getShiftForStaff = (date, staffId) => {
+      const dayShifts = shifts.value.find((s) => s.date === date);
+      if (!dayShifts) return null;
 
-     return dayShifts.assignments.find((a) => a.staff_id === staffId);
-   };
+      return dayShifts.assignments.find((a) => a.staff_id === staffId);
+    };
 
-   const formatTime = (time) => {
-     if (!time) return "";
-     return time.slice(0, 5);
-   };
+    const formatTime = (time) => {
+      if (!time) return "";
+      return time.slice(0, 5);
+    };
 
-   const calculateTotalHours = (staffId) => {
-     let totalHours = 0;
+    const calculateTotalHours = (staffId) => {
+      let totalHours = 0;
 
-     shifts.value.forEach((dayShift) => {
-       const assignment = dayShift.assignments.find(
-         (a) => a.staff_id === staffId
-       );
-       if (assignment) {
-         const startTime = new Date(`2000-01-01 ${assignment.start_time}`);
-         const endTime = new Date(`2000-01-01 ${assignment.end_time}`);
-         const hours = (endTime - startTime) / (1000 * 60 * 60);
-         totalHours += hours;
-       }
-     });
+      shifts.value.forEach((dayShift) => {
+        const assignment = dayShift.assignments.find(
+          (a) => a.staff_id === staffId
+        );
+        if (assignment) {
+          const startTime = new Date(`2000-01-01 ${assignment.start_time}`);
+          const endTime = new Date(`2000-01-01 ${assignment.end_time}`);
+          const hours = (endTime - startTime) / (1000 * 60 * 60);
+          totalHours += hours;
+        }
+      });
 
-     return Math.round(totalHours * 10) / 10;
-   };
+      return Math.round(totalHours * 10) / 10;
+    };
 
-   watch([currentYear, currentMonth], () => {
-     loadShiftData();
-   });
+    watch([currentYear, currentMonth], () => {
+      loadShiftData();
+    });
 
-   onMounted(async () => {
-     try {
-       generateTimeOptions();
-       await fetchSystemSettings();
-       await fetchHolidays(currentYear.value);
+    onMounted(async () => {
+      try {
+        generateTimeOptions();
+        await fetchSystemSettings();
+        await fetchHolidays(currentYear.value);
 
-       const storeData = await store.dispatch("store/fetchStores");
-       stores.value = storeData;
+        const storeData = await store.dispatch("store/fetchStores");
+        stores.value = storeData;
 
-       if (storeData.length > 0) {
-         selectedStore.value = storeData[0];
-         await fetchStoreDetails(selectedStore.value.id);
-         await loadShiftData();
+        if (storeData.length > 0) {
+          selectedStore.value = storeData[0];
+          await fetchStoreDetails(selectedStore.value.id);
+          await loadShiftData();
 
-         const today = new Date();
-         const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
-           .toString()
-           .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+          const today = new Date();
+          const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
+            .toString()
+            .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
 
-         const todayExists = daysInMonth.value.some(
-           (day) => day.date === todayString
-         );
-         if (todayExists) {
-           selectedDate.value = todayString;
-         } else if (daysInMonth.value.length > 0) {
-           selectedDate.value = daysInMonth.value[0].date;
-         }
-       }
-     } catch (error) {
-       console.error("初期化エラー:", error);
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: "データの取得に失敗しました",
-         life: 3000,
-       });
-     }
-   });
+          const todayExists = daysInMonth.value.some(
+            (day) => day.date === todayString
+          );
+          if (todayExists) {
+            selectedDate.value = todayString;
+          } else if (daysInMonth.value.length > 0) {
+            selectedDate.value = daysInMonth.value[0].date;
+          }
+        }
+      } catch (error) {
+        console.error("初期化エラー:", error);
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "データの取得に失敗しました",
+          life: 3000,
+        });
+      }
+    });
 
-   return {
-     loading,
-     saving,
-     isEditMode,
-     viewMode,
-     selectedDate,
-     timelineHours,
-     hourOptions,
-     minuteOptions,
-     currentYear,
-     currentMonth,
-     selectedStore,
-     stores,
-     staffList,
-     shifts,
-     daysInMonth,
-     currentShift,
-     systemSettings,
-     shiftEditorDialog,
-     dateOptions,
-     ganttContainer,
-     ganttTimelineHeader,
-     ganttBody,
-     storeRequirements,
-     currentStore,
-     hasCurrentShift,
-     setViewMode,
-     selectDate,
-     syncGanttScroll,
-     formatDateForGantt,
-     getTimeHeaderStyle,
-     getGanttBarStyle,
-     parseTimeToFloat,
-     parseTimeToComponents,
-     combineTimeComponents,
-     openGanttShiftEditor,
-     isPastDate,
-     toggleEditMode,
-     openShiftEditor,
-     closeShiftEditor,
-     previousMonth,
-     nextMonth,
-     changeStore,
-     createShift,
-     regenerateShift,
-     printShift,
-     saveShift,
-     clearShift,
-     getShiftForStaff,
-     formatTime,
-     calculateTotalHours,
-     getDailyRequirements,
-     getConsecutiveWorkDays,
-     calculateDayHours,
-     fetchStoreDetails,
-     hasStaffingShortage,
-     getAssignedStaffCount,
-     hasShiftViolation,
-     getShiftViolations,
-     hasStaffWarnings,
-     getStaffWarnings,
-     hasDateWarnings,
-     getDateWarnings,
-     hasHourRequirements,
-     hasHourShortage,
-     getHourRequirements,
-     hasRequirementShortage,
-   };
- },
+    return {
+      loading,
+      saving,
+      isEditMode,
+      viewMode,
+      selectedDate,
+      timelineHours,
+      hourOptions,
+      minuteOptions,
+      currentYear,
+      currentMonth,
+      selectedStore,
+      stores,
+      staffList,
+      shifts,
+      daysInMonth,
+      currentShift,
+      systemSettings,
+      shiftEditorDialog,
+      dateOptions,
+      ganttContainer,
+      ganttTimelineHeader,
+      ganttBody,
+      storeRequirements,
+      currentStore,
+      hasCurrentShift,
+      setViewMode,
+      selectDate,
+      syncGanttScroll,
+      formatDateForGantt,
+      getTimeHeaderStyle,
+      getGanttBarStyle,
+      parseTimeToFloat,
+      parseTimeToComponents,
+      combineTimeComponents,
+      openGanttShiftEditor,
+      isPastDate,
+      toggleEditMode,
+      openShiftEditor,
+      closeShiftEditor,
+      previousMonth,
+      nextMonth,
+      changeStore,
+      createShift,
+      regenerateShift,
+      printShift,
+      saveShift,
+      clearShift,
+      getShiftForStaff,
+      formatTime,
+      calculateTotalHours,
+      getDailyRequirements,
+      getConsecutiveWorkDays,
+      calculateDayHours,
+      fetchStoreDetails,
+      hasStaffingShortage,
+      getAssignedStaffCount,
+      hasShiftViolation,
+      getShiftViolations,
+      hasStaffWarnings,
+      getStaffWarnings,
+      hasDateWarnings,
+      getDateWarnings,
+      hasHourRequirements,
+      hasHourShortage,
+      getHourRequirements,
+      hasRequirementShortage,
+      formatHours,
+      canStaffWorkOnDate,
+      getWorkAvailabilityTooltip,
+      getWorkUnavailabilityReason,
+      getGanttAvailabilityStyle,
+      getGanttAvailabilityTooltip
+    };
+  },
 };
 </script>
-
 
 <style scoped>
 .shift-management {
@@ -2660,6 +2808,16 @@ export default {
   box-shadow: inset 0 0 0 2px #3b82f6;
 }
 
+.shift-cell.can-work {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px dashed #10b981;
+}
+
+.shift-cell.unavailable {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px dashed #ef4444;
+}
+
 .shift-time-card {
   background: #10b981;
   color: white;
@@ -2751,6 +2909,18 @@ export default {
 .shift-cell.is-editable .no-shift {
   color: #10b981;
   font-weight: 600;
+}
+
+.work-available-indicator {
+  color: #10b981;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.work-unavailable-indicator {
+  color: #ef4444;
+  font-weight: 700;
+  font-size: 1.2rem;
 }
 
 .gantt-info-panel {
@@ -3250,6 +3420,17 @@ export default {
   justify-content: center;
   font-size: 0.6rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.gantt-availability-indicator {
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 2px dashed #10b981;
+  border-radius: 4px;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .shift-editor-dialog .p-dialog-content {
