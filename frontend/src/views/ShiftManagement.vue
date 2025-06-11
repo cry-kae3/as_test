@@ -214,15 +214,12 @@
                       >/ {{ staff.max_hours_per_month || 0 }}h</span
                     >
                   </div>
-                  <div v-if="hasStaffWarnings(staff.id)" class="staff-warnings">
-                    <div
-                      v-for="warning in getStaffWarnings(staff.id)"
-                      :key="warning.type"
-                      class="warning-badge"
-                      :title="warning.message"
-                    >
-                      {{ warning.icon }}
-                    </div>
+                  <div
+                    v-if="hasStaffWarnings(staff.id)"
+                    class="warning-indicator-staff"
+                    :title="getStaffWarnings(staff.id).map(w => w.message).join(', ')"
+                  >
+                    <i class="pi pi-exclamation-triangle"></i>
                   </div>
                 </div>
               </div>
@@ -416,7 +413,7 @@
                         class="violation-badge"
                         :title="violation.message"
                       >
-                        {{ violation.icon }}
+                        <i class="pi pi-exclamation-triangle"></i>
                       </div>
                     </div>
                   </div>
@@ -482,6 +479,7 @@
                     <span class="staff-name-small"
                       >{{ staff.last_name }} {{ staff.first_name }}</span
                     >
+                    <span class="staff-role-small">{{ staff.position || "一般" }}</span>
                     <div class="staff-hours-small">
                       <span class="current-hours"
                         >{{ calculateTotalHours(staff.id) }}h</span
@@ -494,6 +492,7 @@
                   <div
                     v-if="hasStaffWarnings(staff.id)"
                     class="warning-indicator-gantt"
+                    :title="getStaffWarnings(staff.id).map(w => w.message).join(', ')"
                   >
                     <i class="pi pi-exclamation-triangle"></i>
                   </div>
@@ -978,7 +977,7 @@ export default {
       if (dayHours > maxDayHours) {
         violations.push({
           type: "day_hours",
-          icon: "⏰",
+          icon: "pi pi-exclamation-triangle",
           message: `1日の勤務時間が上限を超過 (${dayHours}h > ${maxDayHours}h)`,
         });
       }
@@ -986,7 +985,7 @@ export default {
       if (consecutiveDays > maxConsecutiveDays) {
         violations.push({
           type: "consecutive_days",
-          icon: "📅",
+          icon: "pi pi-exclamation-triangle",
           message: `連続勤務日数が上限を超過 (${consecutiveDays}日 > ${maxConsecutiveDays}日)`,
         });
       }
@@ -1017,7 +1016,7 @@ export default {
       if (totalHours > maxMonthHours) {
         warnings.push({
           type: "over_hours",
-          icon: "⚠️",
+          icon: "pi pi-exclamation-triangle",
           message: `月間勤務時間が上限を超過 (${totalHours}h > ${maxMonthHours}h)`,
         });
       }
@@ -1025,7 +1024,7 @@ export default {
       if (totalHours < minMonthHours) {
         warnings.push({
           type: "under_hours",
-          icon: "📉",
+          icon: "pi pi-exclamation-triangle",
           message: `月間勤務時間が下限を下回り (${totalHours}h < ${minMonthHours}h)`,
         });
       }
@@ -2080,7 +2079,6 @@ export default {
 
 
 <style scoped>
-/* ===== 基本レイアウト ===== */
 .shift-management {
   min-height: 100vh;
   background: #f5f7fa;
@@ -2098,7 +2096,6 @@ export default {
   margin: 0;
 }
 
-/* ===== コントロールパネル ===== */
 .control-panel {
   background: white;
   border-radius: 12px;
@@ -2174,7 +2171,6 @@ export default {
   min-width: 220px;
 }
 
-/* ビューコントロール */
 .view-controls {
   display: flex;
   align-items: center;
@@ -2217,7 +2213,6 @@ export default {
   min-width: 200px;
 }
 
-/* アクションボタン */
 .action-controls {
   display: flex;
   gap: 0.75rem;
@@ -2276,7 +2271,6 @@ export default {
   border-color: #ccc;
 }
 
-/* ===== 状態表示 ===== */
 .loading-state,
 .empty-state,
 .gantt-no-date {
@@ -2326,7 +2320,6 @@ export default {
   margin-bottom: 2rem;
 }
 
-/* ===== メインコンテンツ ===== */
 .shift-content {
   background: white;
   border-radius: 12px;
@@ -2345,7 +2338,6 @@ export default {
   font-size: 0.875rem;
 }
 
-/* ===== カレンダービュー ===== */
 .calendar-view {
   display: flex;
   height: calc(100vh - 300px);
@@ -2382,7 +2374,6 @@ export default {
   z-index: 11;
 }
 
-/* 日付セルのラッパー */
 .date-cell-wrapper {
   display: flex;
   flex-direction: column;
@@ -2391,7 +2382,6 @@ export default {
   border-right: 1px solid #e5e7eb;
 }
 
-/* 警告表示エリア */
 .date-warning-row {
   height: 30px;
   background: #f8f9fa;
@@ -2401,7 +2391,6 @@ export default {
   border-bottom: 1px solid #e5e7eb;
 }
 
-/* 日付セル */
 .date-cell-header {
   flex: 1;
   padding: 0.75rem 0.25rem;
@@ -2457,7 +2446,6 @@ export default {
   font-weight: 600;
 }
 
-/* 警告インジケーター */
 .warning-indicator {
   display: flex;
   align-items: center;
@@ -2524,7 +2512,6 @@ export default {
   color: #7f1d1d;
 }
 
-/* カレンダーボディ */
 .calendar-body {
   background: white;
 }
@@ -2609,6 +2596,12 @@ export default {
   margin-top: 0.25rem;
 }
 
+.warning-indicator-staff {
+  color: #f59e0b;
+  font-size: 0.8rem;
+  cursor: help;
+}
+
 .warning-badge {
   font-size: 0.7rem;
   padding: 0.125rem 0.375rem;
@@ -2617,9 +2610,11 @@ export default {
   color: #78350f;
   font-weight: 600;
   cursor: help;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
-/* シフトセル */
 .shift-cell {
   min-width: 80px;
   width: 80px;
@@ -2665,7 +2660,6 @@ export default {
   box-shadow: inset 0 0 0 2px #3b82f6;
 }
 
-/* シフトタイムカード */
 .shift-time-card {
   background: #10b981;
   color: white;
@@ -2759,7 +2753,6 @@ export default {
   font-weight: 600;
 }
 
-/* ===== ガントチャート情報パネル ===== */
 .gantt-info-panel {
   width: 320px;
   background: #f8f9fa;
@@ -2810,7 +2803,6 @@ export default {
   color: #7f1d1d;
 }
 
-/* 要件セクション */
 .requirements-section,
 .staff-summary-section {
   background: white;
@@ -2906,7 +2898,6 @@ export default {
   padding: 2rem;
 }
 
-/* スタッフサマリー */
 .staff-summary-grid {
   padding: 0.75rem;
   display: flex;
@@ -3018,9 +3009,11 @@ export default {
   color: #dc2626;
   font-weight: 600;
   cursor: help;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
-/* ===== ガントチャートビュー ===== */
 .gantt-view {
   height: calc(100vh - 300px);
   display: flex;
@@ -3162,6 +3155,11 @@ export default {
   font-size: 0.85rem;
 }
 
+.staff-role-small {
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
 .staff-hours-small {
   display: flex;
   align-items: baseline;
@@ -3172,6 +3170,7 @@ export default {
 .warning-indicator-gantt {
   color: #f59e0b;
   font-size: 0.85rem;
+  cursor: help;
 }
 
 .gantt-timeline {
@@ -3253,7 +3252,6 @@ export default {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-/* ===== ダイアログ ===== */
 .shift-editor-dialog .p-dialog-content {
   padding: 1.5rem;
 }
@@ -3405,7 +3403,6 @@ export default {
   border-color: #059669;
 }
 
-/* ===== レスポンシブ対応 ===== */
 @media (max-width: 1280px) {
   .calendar-view {
     flex-direction: column;
