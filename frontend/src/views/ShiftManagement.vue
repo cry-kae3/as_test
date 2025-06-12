@@ -1,3 +1,4 @@
+<!-- frontend/src/views/ShiftManagement.vue -->
 <template>
   <div class="shift-management">
     <div class="header-section">
@@ -56,14 +57,32 @@
           </button>
         </div>
         <div v-if="viewMode === 'gantt'" class="date-selector">
-          <Dropdown
-            v-model="selectedDate"
-            :options="dateOptions"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="日付を選択"
-            class="date-dropdown"
-          />
+          <div class="gantt-date-navigator">
+            <Button
+              icon="pi pi-chevron-left"
+              class="nav-button"
+              @click="previousDate"
+              :disabled="loading"
+            />
+            <div class="selected-date-display">
+              {{ formatDateForGantt(selectedDate) }}
+            </div>
+            <Button
+              icon="pi pi-chevron-right"
+              class="nav-button"
+              @click="nextDate"
+              :disabled="loading"
+            />
+            <Calendar
+              v-model="ganttSelectedDate"
+              @update:modelValue="onGanttDateSelected"
+              :minDate="ganttMinDate"
+              :maxDate="ganttMaxDate"
+              showIcon
+              class="date-picker"
+              placeholder="日付選択"
+            />
+          </div>
         </div>
       </div>
 
@@ -210,9 +229,10 @@
                     <span class="current-hours"
                       >{{ formatHours(calculateTotalHours(staff.id)) }}</span
                     >
-                    <span class="hours-range"
-                      >/ {{ formatHours(staff.max_hours_per_month || 0) }}</span
-                    >
+                    <span class="hours-range">
+                      / {{ formatHours(staff.min_hours_per_month || 0) }} 
+                      - {{ formatHours(staff.max_hours_per_month || 0) }}
+                    </span>
                   </div>
                   <div
                     v-if="hasStaffWarnings(staff.id)"
@@ -298,7 +318,21 @@
 
         <div class="gantt-info-panel">
           <div class="date-info-header">
-            <h3>{{ formatDateForGantt(selectedDate) }}</h3>
+            <div class="date-navigation-header">
+              <Button
+                icon="pi pi-chevron-left"
+                class="nav-button-small"
+                @click="previousDate"
+                :disabled="loading"
+              />
+              <h3>{{ formatDateForGantt(selectedDate) }}</h3>
+              <Button
+                icon="pi pi-chevron-right"
+                class="nav-button-small"
+                @click="nextDate"
+                :disabled="loading"
+              />
+            </div>
             <div v-if="hasDateWarnings(selectedDate)" class="date-warnings">
               <div
                 v-for="warning in getDateWarnings(selectedDate)"
@@ -391,9 +425,10 @@
                     <span class="stat-value"
                       >{{ formatHours(calculateTotalHours(staff.id)) }}</span
                     >
-                    <span class="stat-range"
-                      >/{{ formatHours(staff.max_hours_per_month || 0) }}</span
-                    >
+                    <span class="stat-range">
+                      / {{ formatHours(staff.min_hours_per_month || 0) }} 
+                      - {{ formatHours(staff.max_hours_per_month || 0) }}
+                    </span>
                   </div>
 
                   <div
@@ -494,9 +529,10 @@
                       <span class="current-hours"
                         >{{ formatHours(calculateTotalHours(staff.id)) }}</span
                       >
-                      <span class="hours-range"
-                        >/{{ formatHours(staff.max_hours_per_month || 0) }}</span
-                      >
+                      <span class="hours-range">
+                        / {{ formatHours(staff.min_hours_per_month || 0) }} 
+                        - {{ formatHours(staff.max_hours_per_month || 0) }}
+                      </span>
                     </div>
                   </div>
                   <div
@@ -708,6 +744,7 @@ import Toast from "primevue/toast";
 import Checkbox from "primevue/checkbox";
 import Textarea from "primevue/textarea";
 import SelectButton from "primevue/selectbutton";
+import Calendar from "primevue/calendar";
 import api from "@/services/api";
 
 export default {
@@ -721,6 +758,7 @@ export default {
     Checkbox,
     Textarea,
     SelectButton,
+    Calendar,
   },
   setup() {
     const store = useStore();
@@ -732,6 +770,9 @@ export default {
     const isEditMode = ref(false);
     const viewMode = ref("calendar");
     const selectedDate = ref(null);
+    const ganttSelectedDate = ref(null);
+    const ganttMinDate = ref(null);
+    const ganttMaxDate = ref(null);
     const currentYear = ref(new Date().getFullYear());
     const currentMonth = ref(new Date().getMonth() + 1);
     const selectedStore = ref(null);
@@ -799,6 +840,46 @@ export default {
     const hasCurrentShift = computed(() => {
       return currentShift.value !== null;
     });
+
+    const updateGanttDateRange = () => {
+      if (daysInMonth.value.length > 0) {
+        ganttMinDate.value = new Date(daysInMonth.value[0].date);
+        ganttMaxDate.value = new Date(daysInMonth.value[daysInMonth.value.length - 1].date);
+      }
+    };
+
+    const onGanttDateSelected = (date) => {
+      if (date) {
+        const dateStr = `${date.getFullYear()}-${(date.getMonth() + 1)
+          .toString()
+          .padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`;
+        
+        const validDate = daysInMonth.value.find(day => day.date === dateStr);
+        if (validDate) {
+          selectedDate.value = dateStr;
+        }
+      }
+    };
+
+    const previousDate = () => {
+      if (!selectedDate.value || daysInMonth.value.length === 0) return;
+      
+      const currentIndex = daysInMonth.value.findIndex(day => day.date === selectedDate.value);
+      if (currentIndex > 0) {
+        selectedDate.value = daysInMonth.value[currentIndex - 1].date;
+        ganttSelectedDate.value = new Date(selectedDate.value);
+      }
+    };
+
+    const nextDate = () => {
+      if (!selectedDate.value || daysInMonth.value.length === 0) return;
+      
+      const currentIndex = daysInMonth.value.findIndex(day => day.date === selectedDate.value);
+      if (currentIndex < daysInMonth.value.length - 1) {
+        selectedDate.value = daysInMonth.value[currentIndex + 1].date;
+        ganttSelectedDate.value = new Date(selectedDate.value);
+      }
+    };
 
     const getDailyRequirements = (date) => {
       if (!storeRequirements.value || storeRequirements.value.length === 0) {
@@ -1160,7 +1241,7 @@ export default {
         warnings.push({
           type: "over_hours",
           icon: "pi pi-exclamation-triangle",
-          message: `月間勤務時間が上限を超過 (${totalHours}h > ${maxMonthHours}h)`,
+          message: `月間勤務時間が上限を超過 (${formatHours(totalHours)} > ${formatHours(maxMonthHours)})`,
         });
       }
 
@@ -1168,7 +1249,7 @@ export default {
         warnings.push({
           type: "under_hours",
           icon: "pi pi-exclamation-triangle",
-          message: `月間勤務時間が下限を下回り (${totalHours}h < ${minMonthHours}h)`,
+          message: `月間勤務時間が下限を下回り (${formatHours(totalHours)} < ${formatHours(minMonthHours)})`,
         });
       }
 
@@ -1219,6 +1300,7 @@ export default {
 
     const selectDate = (date) => {
       selectedDate.value = date;
+      ganttSelectedDate.value = new Date(date);
       viewMode.value = "gantt";
       nextTick(() => {
         if (ganttBody.value) {
@@ -1484,6 +1566,7 @@ export default {
         }
 
         generateDaysInMonth();
+        updateGanttDateRange();
       } catch (error) {
         console.error("シフトデータの取得に失敗しました:", error);
         toast.add({
@@ -1544,6 +1627,7 @@ export default {
         currentMonth.value--;
       }
       selectedDate.value = null;
+      ganttSelectedDate.value = null;
       await fetchHolidays(currentYear.value);
       await loadShiftData();
     };
@@ -1556,12 +1640,14 @@ export default {
         currentMonth.value++;
       }
       selectedDate.value = null;
+      ganttSelectedDate.value = null;
       await fetchHolidays(currentYear.value);
       await loadShiftData();
     };
 
     const changeStore = async () => {
       selectedDate.value = null;
+      ganttSelectedDate.value = null;
       if (selectedStore.value) {
         await fetchStoreDetails(selectedStore.value.id);
       }
@@ -2133,8 +2219,10 @@ export default {
           );
           if (todayExists) {
             selectedDate.value = todayString;
+            ganttSelectedDate.value = new Date(todayString);
           } else if (daysInMonth.value.length > 0) {
             selectedDate.value = daysInMonth.value[0].date;
+            ganttSelectedDate.value = new Date(selectedDate.value);
           }
         }
       } catch (error) {
@@ -2154,6 +2242,12 @@ export default {
       isEditMode,
       viewMode,
       selectedDate,
+      ganttSelectedDate,
+      onGanttDateSelected,
+      previousDate,
+      nextDate,
+      ganttMinDate,
+      ganttMaxDate,
       timelineHours,
       hourOptions,
       minuteOptions,
@@ -2272,7 +2366,7 @@ export default {
   border-radius: 8px;
 }
 
-.nav-button {
+.nav-button, .nav-button-small {
   width: 36px;
   height: 36px;
   border-radius: 6px;
@@ -2286,13 +2380,18 @@ export default {
   cursor: pointer;
 }
 
-.nav-button:hover:not(:disabled) {
+.nav-button-small {
+  width: 28px;
+  height: 28px;
+}
+
+.nav-button:hover:not(:disabled), .nav-button-small:hover:not(:disabled) {
   background: #3b82f6;
   border-color: #3b82f6;
   color: white;
 }
 
-.nav-button:disabled {
+.nav-button:disabled, .nav-button-small:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -2359,6 +2458,27 @@ export default {
 
 .date-selector {
   min-width: 200px;
+}
+
+.gantt-date-navigator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f8f9fa;
+  padding: 0.5rem;
+  border-radius: 8px;
+}
+
+.selected-date-display {
+  min-width: 120px;
+  text-align: center;
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.875rem;
+}
+
+.date-picker {
+  min-width: 120px;
 }
 
 .action-controls {
@@ -2808,14 +2928,6 @@ export default {
   box-shadow: inset 0 0 0 2px #3b82f6;
 }
 
-.shift-cell.can-work {
-  border: 1px dashed #10b981;
-}
-
-.shift-cell.unavailable {
-  border: 1px dashed #ef4444;
-}
-
 .shift-time-card {
   background: #10b981;
   color: white;
@@ -2939,11 +3051,20 @@ export default {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.date-info-header h3 {
-  margin: 0 0 0.75rem 0;
+.date-navigation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.date-navigation-header h3 {
+  margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
   color: #1e293b;
+  flex: 1;
+  text-align: center;
 }
 
 .date-warnings {
@@ -3628,6 +3749,10 @@ export default {
     width: 100%;
   }
 
+  .gantt-date-navigator {
+    justify-content: center;
+  }
+
   .action-controls {
     flex-wrap: wrap;
   }
@@ -3698,6 +3823,11 @@ export default {
 
   .time-dropdown {
     width: 100%;
+  }
+
+  .gantt-date-navigator {
+    flex-wrap: wrap;
+    gap: 0.25rem;
   }
 }
 </style>
