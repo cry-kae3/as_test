@@ -88,6 +88,15 @@
             :disabled="loading"
           />
 
+          <!-- 新規追加：削除ボタン -->
+          <Button
+              label="シフト削除"
+              icon="pi pi-trash"
+              class="action-button delete-button"
+              @click="deleteShift"
+              :disabled="loading"
+            />
+
           <Button
             label="印刷"
             icon="pi pi-print"
@@ -2820,6 +2829,53 @@ export default {
       return time.slice(0, 5);
     };
 
+    
+const deleteShift = async () => {
+  confirm.require({
+    message: `${currentYear.value}年${currentMonth.value}月のシフトを完全に削除しますか？この操作は取り消せません。`,
+    header: 'シフト削除の確認',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    acceptLabel: '削除',
+    rejectLabel: 'キャンセル',
+    accept: async () => {
+      try {
+        loading.value = true;
+
+        await store.dispatch('shift/deleteShift', {
+          year: currentYear.value,
+          month: currentMonth.value,
+          storeId: selectedStore.value.id
+        });
+
+        // 削除後のステート初期化
+        currentShift.value = null;
+        shifts.value = [];
+        selectedDate.value = null;
+        ganttSelectedDate.value = null;
+        isEditMode.value = false;
+
+        toast.add({
+          severity: 'success',
+          summary: '削除完了',
+          detail: 'シフトを削除しました',
+          life: 3000
+        });
+      } catch (error) {
+        console.error('シフト削除エラー:', error);
+        toast.add({
+          severity: 'error',
+          summary: 'エラー',
+          detail: 'シフトの削除に失敗しました',
+          life: 3000
+        });
+      } finally {
+        loading.value = false;
+      }
+    }
+  });
+};
+
     watch([currentYear, currentMonth], () => {
       loadShiftData();
     });
@@ -4386,6 +4442,27 @@ export default {
 .save-button:hover:not(:disabled) {
   background: #059669;
   border-color: #059669;
+}
+
+
+.delete-button {
+  background: #ef4444;
+  color: white;
+  border: 1px solid #ef4444;
+}
+
+.delete-button:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(239, 68, 68, 0.3);
+}
+
+.delete-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 @media (max-width: 1280px) {

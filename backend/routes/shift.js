@@ -19,8 +19,6 @@ router.post('/:year/:month/confirm', shiftController.confirmShift);
 router.post('/:year/:month/assignments', shiftController.createShiftAssignment);
 router.put('/:year/:month/assignments/:assignmentId', shiftController.updateShiftAssignment);
 router.delete('/:year/:month/assignments/:assignmentId', shiftController.deleteShiftAssignment);
-
-router.delete('/:year/:month', authenticateUser, isManager, shiftController.deleteShift);
-
+router.delete('/:year/:month', shiftController.deleteShift);
 
 module.exports = router;

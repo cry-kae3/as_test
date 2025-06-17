@@ -81,7 +81,6 @@ const actions = {
                 status: response.data.status
             });
 
-            // 全店舗時間データも保存
             if (response.data.allStoreHours) {
                 commit('setAllStoreHours', response.data.allStoreHours);
             }
@@ -142,6 +141,28 @@ const actions = {
         }
     },
 
+    async deleteShift({ commit }, { year, month, storeId }) {
+        commit('setLoading', true);
+        commit('clearError');
+
+        try {
+            await api.delete(`/shifts/${year}/${month}?store_id=${storeId}`);
+
+            commit('removeShift', { year, month, storeId });
+            commit('setCurrentShift', null);
+            commit('setCurrentShiftData', null);
+            commit('setAllStoreHours', null);
+
+            return true;
+        } catch (error) {
+            const message = error.response?.data?.message || 'シフトの削除に失敗しました';
+            commit('setError', message);
+            throw error;
+        } finally {
+            commit('setLoading', false);
+        }
+    },
+
     async generateShift({ commit }, { storeId, year, month }) {
         commit('setGenerating', true);
         commit('clearError');
@@ -162,7 +183,6 @@ const actions = {
                 status: response.data.status
             });
 
-            // 全店舗時間データも保存
             if (response.data.allStoreHours) {
                 commit('setAllStoreHours', response.data.allStoreHours);
             }
@@ -276,12 +296,17 @@ const actions = {
         }
     },
 
-    async deleteShiftAssignment({ commit }, { year, month, assignmentId }) {
+    async deleteShiftAssignment({ commit }, { year, month, assignmentId, change_reason }) {
         commit('setLoading', true);
         commit('clearError');
 
         try {
-            await api.delete(`/shifts/${year}/${month}/assignments/${assignmentId}`);
+            const requestData = change_reason ? { change_reason } : {};
+
+            await api.delete(`/shifts/${year}/${month}/assignments/${assignmentId}`, {
+                data: requestData
+            });
+
             commit('removeShiftAssignment', assignmentId);
             return true;
         } catch (error) {
@@ -336,6 +361,13 @@ const mutations = {
         } else {
             state.shifts.push(shift);
         }
+    },
+    removeShift(state, { year, month, storeId }) {
+        state.shifts = state.shifts.filter(shift =>
+            !(shift.year === parseInt(year) &&
+                shift.month === parseInt(month) &&
+                shift.store_id === parseInt(storeId))
+        );
     },
     setValidationResults(state, results) {
         state.validationResults = results;

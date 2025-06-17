@@ -189,7 +189,6 @@ const getShiftByYearMonth = async (req, res) => {
             });
         });
 
-        // 全店舗のスタッフ時間情報を取得
         const staffIds = [...new Set(shift.assignments.map(a => a.staff_id))];
         let allStoreHours = null;
 
@@ -222,7 +221,6 @@ const getShiftByYearMonth = async (req, res) => {
     }
 };
 
-// 全店舗のスタッフ時間集計を取得する新しいエンドポイント
 const getStaffTotalHoursAllStores = async (req, res) => {
     try {
         const { year, month, store_id } = req.query;
@@ -231,7 +229,6 @@ const getStaffTotalHoursAllStores = async (req, res) => {
             return res.status(400).json({ message: '年、月、店舗IDが必要です' });
         }
 
-        // 権限チェック
         if (req.user.role === 'owner' || req.user.role === 'staff') {
             let ownerId = req.user.id;
 
@@ -251,7 +248,6 @@ const getStaffTotalHoursAllStores = async (req, res) => {
             }
         }
 
-        // 対象店舗のスタッフIDを取得
         const staff = await Staff.findAll({
             where: { store_id: parseInt(store_id) },
             attributes: ['id']
@@ -263,7 +259,6 @@ const getStaffTotalHoursAllStores = async (req, res) => {
             return res.status(200).json({});
         }
 
-        // 全店舗のスタッフ時間情報を取得
         const allStoreHours = await shiftGeneratorService.getStaffTotalHoursAllStores(
             staffIds,
             parseInt(year),
@@ -358,6 +353,70 @@ const createShift = async (req, res) => {
     }
 };
 
+const deleteShift = async (req, res) => {
+    try {
+        const { year, month } = req.params;
+        const { store_id } = req.query;
+
+        if (!store_id) {
+            return res.status(400).json({ message: '店舗IDが必要です' });
+        }
+
+        if (req.user.role === 'owner' || req.user.role === 'staff') {
+            let ownerId = req.user.id;
+
+            if (req.user.role === 'staff' && req.user.parent_user_id) {
+                ownerId = req.user.parent_user_id;
+            }
+
+            const store = await Store.findOne({
+                where: {
+                    id: store_id,
+                    owner_id: ownerId
+                }
+            });
+
+            if (!store) {
+                return res.status(403).json({ message: 'この店舗のシフトを削除する権限がありません' });
+            }
+        }
+
+        const shift = await Shift.findOne({
+            where: {
+                store_id: parseInt(store_id),
+                year: parseInt(year),
+                month: parseInt(month)
+            },
+            include: [
+                {
+                    model: ShiftAssignment,
+                    as: 'assignments'
+                }
+            ]
+        });
+
+        if (!shift) {
+            return res.status(404).json({ message: 'シフトが見つかりません' });
+        }
+
+        const { sequelize } = require('../config/db');
+
+        await sequelize.transaction(async (t) => {
+            await ShiftAssignment.destroy({
+                where: { shift_id: shift.id },
+                transaction: t
+            });
+
+            await shift.destroy({ transaction: t });
+        });
+
+        res.status(200).json({ message: 'シフトを削除しました' });
+    } catch (error) {
+        console.error('シフト削除エラー:', error);
+        res.status(500).json({ message: 'シフトの削除中にエラーが発生しました' });
+    }
+};
+
 const generateShift = async (req, res) => {
     try {
         const { store_id, year, month } = req.body;
@@ -389,7 +448,6 @@ const generateShift = async (req, res) => {
 
         const savedShift = await shiftGeneratorService.saveShift(shiftData, store_id, year, month);
 
-        // 全店舗のスタッフ時間情報を取得
         const staff = await Staff.findAll({
             where: { store_id: store_id },
             attributes: ['id']
@@ -847,6 +905,7 @@ module.exports = {
     getStaffTotalHoursAllStores,
     getSystemSettings,
     createShift,
+    deleteShift,
     generateShift,
     validateShift,
     confirmShift,
