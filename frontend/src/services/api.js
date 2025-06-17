@@ -1,0 +1,85 @@
+import axios from 'axios';
+import store from '@/store';
+
+const baseURL = typeof window !== 'undefined'
+    ? '/api'
+    : process.env.VUE_APP_API_URL;
+
+if (process.env.NODE_ENV === 'development') {
+    console.log('API baseURL:', baseURL);
+    console.log('VUE_APP_API_URL:', process.env.VUE_APP_API_URL);
+}
+
+const api = axios.create({
+    baseURL: baseURL,
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    timeout: 300000,
+    withCredentials: true
+});
+
+api.interceptors.request.use(
+    config => {
+        const sessionToken = localStorage.getItem('sessionToken');
+        if (sessionToken) {
+            config.headers['x-session-token'] = sessionToken;
+        }
+
+        const isImpersonating = store.getters['auth/isImpersonating'];
+        const impersonatedUser = store.getters['auth/impersonatedUser'];
+
+        console.log('APIリクエスト前:', {
+            isImpersonating,
+            impersonatedUser: impersonatedUser?.id,
+            url: config.url
+        });
+
+        if (isImpersonating && impersonatedUser) {
+            config.headers['x-impersonate-user-id'] = impersonatedUser.id;
+            console.log('なりすましヘッダー追加:', impersonatedUser.id);
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+            console.log('API Request:', config.method.toUpperCase(), config.url);
+        }
+
+        return config;
+    },
+    error => {
+        console.error('リクエストエラー:', error);
+        return Promise.reject(error);
+    }
+);
+
+api.interceptors.response.use(
+    response => {
+        if (process.env.NODE_ENV === 'development') {
+            console.log('API Response:', response.status, response.config.url);
+        }
+        return response;
+    },
+    error => {
+        console.error('APIエラー:', {
+            url: error.config?.url,
+            method: error.config?.method,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data
+        });
+
+        if (error.response && error.response.status === 401) {
+            localStorage.removeItem('sessionToken');
+            localStorage.removeItem('currentUser');
+            store.dispatch('auth/logout');
+
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
+        }
+
+        return Promise.reject(error);
+    }
+);
+
+export default api;
