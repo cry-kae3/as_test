@@ -1,0 +1,12 @@
+{
+  "timestamp": "2025-06-18T02:11:22.502Z",
+  "storeId": 1,
+  "year": 2025,
+  "month": 6,
+  "type": "SHIFT_GENERATION",
+  "phase": "COMPLETION",
+  "message": "シフト生成完了",
+  "generatedShifts": 31,
+  "warningsCount": 142
+}
+

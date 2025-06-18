@@ -1,0 +1,21 @@
+{
+  "timestamp": "2025-06-18T02:10:20.183Z",
+  "storeId": 1,
+  "year": 2025,
+  "month": 6,
+  "type": "SHIFT_GENERATION",
+  "phase": "SETTINGS",
+  "closingDay": 25,
+  "minDailyHours": "4.0",
+  "systemSettings": {
+    "id": 1,
+    "user_id": 1,
+    "closing_day": 25,
+    "min_daily_hours": "4.0",
+    "timezone": "Asia/Tokyo",
+    "additional_settings": {},
+    "createdAt": "2025-05-26T07:58:00.247Z",
+    "updatedAt": "2025-05-26T07:58:00.247Z"
+  }
+}
+
