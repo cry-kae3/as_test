@@ -78,13 +78,26 @@ class ShiftGeneratorService {
             const staff = await Staff.findAll({
                 where: { store_id: storeId },
                 include: [
-                    { model: StaffDayPreference, as: 'dayPreferences' }
+                    { model: StaffDayPreference, as: 'dayPreferences' },
+                    {
+                        model: Store,
+                        as: 'stores',
+                        through: { attributes: [] },
+                        attributes: ['id', 'name']
+                    }
                 ]
             });
 
             if (staff.length === 0) {
                 throw new Error('スタッフが登録されていません');
             }
+
+            console.log('=== スタッフ詳細情報 ===');
+            staff.forEach(s => {
+                console.log(`${s.last_name} ${s.first_name}:`);
+                console.log(`  最小時間: ${s.min_hours_per_month}h, 最大時間: ${s.max_hours_per_month}h`);
+                console.log(`  所属店舗: ${s.stores?.map(store => `${store.name}(${store.id})`).join(', ') || '設定なし'}`);
+            });
 
             const dayOffRequests = await StaffDayOffRequest.findAll({
                 where: {
@@ -96,15 +109,35 @@ class ShiftGeneratorService {
                 }
             });
 
-            const existingShifts = await this._getExistingShiftsForAllStores(staff, year, month, storeId);
+            const existingShifts = await this._getExistingShiftsForPeriod(staff, startDate, endDate, storeId);
+
+            console.log('=== 他店舗シフト詳細 ===');
+            Object.entries(existingShifts).forEach(([staffId, shifts]) => {
+                const staffMember = staff.find(s => s.id === parseInt(staffId));
+                if (shifts.length > 0) {
+                    const totalHours = shifts.reduce((sum, shift) => {
+                        const hours = this._calculateShiftHours(shift);
+                        return sum + hours;
+                    }, 0);
+                    console.log(`${staffMember?.last_name} ${staffMember?.first_name}: ${totalHours.toFixed(1)}時間 (${shifts.length}シフト)`);
+                }
+            });
 
             const storeData = this._formatStoreData(store);
-            const staffData = this._formatStaffData(staff, dayOffRequests, existingShifts);
+            const staffData = this._formatStaffDataWithValidation(staff, dayOffRequests, existingShifts, startDate, endDate);
+
+            console.log('=== フォーマット後スタッフデータ ===');
+            staffData.forEach(s => {
+                console.log(`${s.name}:`);
+                console.log(`  他店舗時間: ${s.other_store_hours.toFixed(1)}h`);
+                console.log(`  当店舗必要最小: ${s.min_hours_for_this_store.toFixed(1)}h`);
+                console.log(`  当店舗最大可能: ${s.max_hours_for_this_store.toFixed(1)}h`);
+            });
 
             const calendarData = this._generateCalendarDataWithClosingDay(startDate, endDate);
             const requirementsData = this._formatRequirementsDataWithPeriod(store, startDate, endDate);
 
-            const prompt = this._generatePrompt(storeData, staffData, calendarData, requirementsData, year, month, minDailyHours);
+            const prompt = this._generateEnhancedPrompt(storeData, staffData, calendarData, requirementsData, year, month, minDailyHours);
 
             console.log('Claude APIにリクエスト送信中...');
 
@@ -128,6 +161,227 @@ class ShiftGeneratorService {
             console.error('シフト生成エラー:', error);
             throw error;
         }
+    }
+
+    async _getExistingShiftsForPeriod(staff, startDate, endDate, excludeStoreId) {
+        console.log(`他店舗シフト取得: ${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}`);
+
+        const existingShifts = await ShiftAssignment.findAll({
+            where: {
+                staff_id: staff.map(s => s.id),
+                date: {
+                    [Op.between]: [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')]
+                }
+            },
+            include: [
+                {
+                    model: Shift,
+                    where: {
+                        store_id: { [Op.ne]: excludeStoreId }
+                    },
+                    include: [
+                        {
+                            model: Store,
+                            attributes: ['id', 'name']
+                        }
+                    ]
+                }
+            ]
+        });
+
+        const staffShifts = {};
+        staff.forEach(s => {
+            staffShifts[s.id] = [];
+        });
+
+        existingShifts.forEach(assignment => {
+            if (staffShifts[assignment.staff_id]) {
+                staffShifts[assignment.staff_id].push({
+                    date: moment(assignment.date).format('YYYY-MM-DD'),
+                    start_time: assignment.start_time,
+                    end_time: assignment.end_time,
+                    store_name: assignment.Shift.Store.name,
+                    break_start_time: assignment.break_start_time,
+                    break_end_time: assignment.break_end_time
+                });
+            }
+        });
+
+        return staffShifts;
+    }
+
+    _calculateShiftHours(shift) {
+        const startTime = moment(shift.start_time, 'HH:mm:ss');
+        const endTime = moment(shift.end_time, 'HH:mm:ss');
+
+        if (endTime.isBefore(startTime)) {
+            endTime.add(1, 'day');
+        }
+
+        let hours = endTime.diff(startTime, 'minutes') / 60;
+
+        if (shift.break_start_time && shift.break_end_time) {
+            const breakStart = moment(shift.break_start_time, 'HH:mm:ss');
+            const breakEnd = moment(shift.break_end_time, 'HH:mm:ss');
+
+            if (breakEnd.isBefore(breakStart)) {
+                breakEnd.add(1, 'day');
+            }
+
+            const breakHours = breakEnd.diff(breakStart, 'minutes') / 60;
+            hours -= breakHours;
+        }
+
+        return Math.max(0, hours);
+    }
+
+    _formatStaffDataWithValidation(staff, dayOffRequests, existingShifts, startDate, endDate) {
+        const staffData = staff.map(s => {
+            const daysOff = dayOffRequests
+                .filter(req => req.staff_id === s.id)
+                .map(req => ({
+                    date: moment(req.date).format('YYYY-MM-DD'),
+                    reason: req.reason,
+                    status: req.status
+                }));
+
+            const otherStoreShifts = existingShifts[s.id] || [];
+
+            const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+            const formattedPreferences = s.dayPreferences.map(pref => ({
+                day_of_week: pref.day_of_week,
+                day_name: dayNames[pref.day_of_week],
+                available: pref.available,
+                preferred_start_time: pref.preferred_start_time,
+                preferred_end_time: pref.preferred_end_time,
+                break_start_time: pref.break_start_time,
+                break_end_time: pref.break_end_time
+            }));
+
+            const otherStoreHours = otherStoreShifts.reduce((total, shift) => {
+                return total + this._calculateShiftHours(shift);
+            }, 0);
+
+            const minHours = s.min_hours_per_month || 0;
+            const maxHours = s.max_hours_per_month || 160;
+
+            const minHoursForThisStore = Math.max(0, minHours - otherStoreHours);
+            const maxHoursForThisStore = Math.max(0, maxHours - otherStoreHours);
+
+            console.log(`${s.last_name} ${s.first_name} 計算詳細:`);
+            console.log(`  全体最小: ${minHours}h, 全体最大: ${maxHours}h`);
+            console.log(`  他店舗実績: ${otherStoreHours.toFixed(1)}h`);
+            console.log(`  当店舗必要最小: ${minHoursForThisStore.toFixed(1)}h`);
+            console.log(`  当店舗最大可能: ${maxHoursForThisStore.toFixed(1)}h`);
+
+            return {
+                id: s.id,
+                name: `${s.last_name} ${s.first_name}`,
+                position: s.position || '一般スタッフ',
+                employment_type: s.employment_type || 'パート',
+                max_hours_per_month: maxHours,
+                min_hours_per_month: minHours,
+                other_store_hours: otherStoreHours,
+                min_hours_for_this_store: minHoursForThisStore,
+                max_hours_for_this_store: maxHoursForThisStore,
+                max_hours_per_day: s.max_hours_per_day || 8,
+                max_consecutive_days: s.max_consecutive_days || 5,
+                day_preferences: formattedPreferences,
+                days_off: daysOff,
+                other_store_shifts: otherStoreShifts
+            };
+        });
+
+        return staffData;
+    }
+
+    _generateEnhancedPrompt(storeData, staffData, calendarData, requirementsData, year, month, minDailyHours) {
+        const monthNames = [
+            '1月', '2月', '3月', '4月', '5月', '6月',
+            '7月', '8月', '9月', '10月', '11月', '12月'
+        ];
+
+        const staffDetails = staffData.map(staff => {
+            const dayPrefs = staff.day_preferences.map(pref =>
+                `${pref.day_name}:${pref.available ? `${pref.preferred_start_time || '未設定'}-${pref.preferred_end_time || '未設定'}` : '休み'}`
+            ).join(', ');
+
+            const dayOffs = staff.days_off.map(off => `${off.date}(${off.reason || ''})`).join(', ');
+
+            const otherStoreShifts = staff.other_store_shifts.map(shift =>
+                `${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`
+            ).join(', ');
+
+            return `
+    【スタッフ: ${staff.name}】
+    ID: ${staff.id}
+    役職: ${staff.position}
+    雇用形態: ${staff.employment_type}
+    
+    🚨【最重要】勤務時間制約🚨
+    - 月間全体最小時間: ${staff.min_hours_per_month}時間
+    - 月間全体最大時間: ${staff.max_hours_per_month}時間
+    - 他店舗での確定時間: ${staff.other_store_hours.toFixed(1)}時間
+    - 【絶対達成】当店舗で必要な最小時間: ${staff.min_hours_for_this_store.toFixed(1)}時間
+    - 【絶対厳守】当店舗での最大可能時間: ${staff.max_hours_for_this_store.toFixed(1)}時間
+    
+    その他制約:
+    - 1日最大勤務: ${staff.max_hours_per_day}時間
+    - 最大連続勤務: ${staff.max_consecutive_days}日
+    - 曜日別希望: ${dayPrefs}
+    - 休み希望: ${dayOffs || 'なし'}
+    - 他店舗シフト: ${otherStoreShifts || 'なし'}`;
+        }).join('\n');
+
+        const periodInfo = calendarData.length > 0 ?
+            `期間: ${calendarData[0].date} から ${calendarData[calendarData.length - 1].date}` :
+            `期間: ${year}年${month}月`;
+
+        return `
+    # シフト生成リクエスト
+    
+    ## 基本情報
+    年月: ${year}年${monthNames[month - 1]}
+    ${periodInfo}
+    店舗: ${storeData.name}
+    営業時間: ${storeData.opening_time}～${storeData.closing_time}
+    
+    ## スタッフ詳細情報
+    ${staffDetails}
+    
+    ## 🚨【最重要命令】🚨
+    
+    ### 絶対遵守事項
+    1. **各スタッフの「当店舗で必要な最小時間」を100%達成**
+    2. **各スタッフの「当店舗での最大可能時間」を絶対に超過しない**
+    3. **人員要件は参考程度に留め、スタッフの時間制約を最優先**
+    
+    ### シフト生成戦略
+    - 各スタッフが最小時間に満たない場合は、勤務可能日に追加でシフトを組む
+    - 1回の勤務は最低${minDailyHours}時間以上とする
+    - 短時間の細切れシフトではなく、まとまった時間で割り当てる
+    - 人員不足になっても構わないので、スタッフの時間制約を守る
+    
+    ## 出力形式
+    JSONのみで回答。説明不要。
+    
+    {
+      "shifts": [
+        {
+          "date": "YYYY-MM-DD",
+          "assignments": [
+            {
+              "staff_id": 1,
+              "staff_name": "田中 太郎",
+              "start_time": "09:00",
+              "end_time": "18:00",
+              "break_start_time": "12:00",
+              "break_end_time": "13:00"
+            }
+          ]
+        }
+      ]
+    }`;
     }
 
     getShiftPeriodByClosingDay(year, month, closingDay) {
@@ -301,14 +555,26 @@ class ShiftGeneratorService {
 
             const startTime = moment(assignment.start_time, 'HH:mm:ss');
             const endTime = moment(assignment.end_time, 'HH:mm:ss');
+
+            if (endTime.isBefore(startTime)) {
+                endTime.add(1, 'day');
+            }
+
             let hours = endTime.diff(startTime, 'minutes') / 60;
 
             if (assignment.break_start_time && assignment.break_end_time) {
                 const breakStart = moment(assignment.break_start_time, 'HH:mm:ss');
                 const breakEnd = moment(assignment.break_end_time, 'HH:mm:ss');
+
+                if (breakEnd.isBefore(breakStart)) {
+                    breakEnd.add(1, 'day');
+                }
+
                 const breakHours = breakEnd.diff(breakStart, 'minutes') / 60;
                 hours -= breakHours;
             }
+
+            hours = Math.max(0, hours);
 
             if (!staffTotalHours[staffId].storeBreakdown[storeId]) {
                 staffTotalHours[staffId].storeBreakdown[storeId] = {
@@ -350,17 +616,43 @@ class ShiftGeneratorService {
                 `${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`
             ).join(', ');
 
+            const currentOtherStoreHours = staff.other_store_shifts.reduce((total, shift) => {
+                const startTime = moment(shift.start_time, 'HH:mm');
+                const endTime = moment(shift.end_time, 'HH:mm');
+                if (endTime.isBefore(startTime)) endTime.add(1, 'day');
+
+                let hours = endTime.diff(startTime, 'minutes') / 60;
+
+                if (shift.break_start_time && shift.break_end_time) {
+                    const breakStart = moment(shift.break_start_time, 'HH:mm');
+                    const breakEnd = moment(shift.break_end_time, 'HH:mm');
+                    if (breakEnd.isBefore(breakStart)) breakEnd.add(1, 'day');
+                    const breakHours = breakEnd.diff(breakStart, 'minutes') / 60;
+                    hours -= breakHours;
+                }
+
+                return total + Math.max(0, hours);
+            }, 0);
+
+            const remainingMinHours = Math.max(0, staff.min_hours_per_month - currentOtherStoreHours);
+            const remainingMaxHours = Math.max(0, staff.max_hours_per_month - currentOtherStoreHours);
+
             return `
-    スタッフID: ${staff.id}
-    名前: ${staff.name}
-    役職: ${staff.position}
-    雇用形態: ${staff.employment_type}
-    月間勤務時間: 最小${staff.min_hours_per_month}時間～最大${staff.max_hours_per_month}時間
-    1日最大勤務時間: ${staff.max_hours_per_day}時間
-    最大連続勤務日数: ${staff.max_consecutive_days}日
-    曜日別希望: ${dayPrefs}
-    休み希望: ${dayOffs || 'なし'}
-    他店舗シフト: ${otherStoreShifts || 'なし'}`;
+        スタッフID: ${staff.id}
+        名前: ${staff.name}
+        役職: ${staff.position}
+        雇用形態: ${staff.employment_type}
+        【重要】月間勤務時間制約:
+          - 全店舗最小時間: ${staff.min_hours_per_month}時間
+          - 全店舗最大時間: ${staff.max_hours_per_month}時間
+          - 他店舗既存時間: ${currentOtherStoreHours.toFixed(1)}時間
+          - 当店舗で必要な最小時間: ${remainingMinHours.toFixed(1)}時間
+          - 当店舗で割り当て可能な最大時間: ${remainingMaxHours.toFixed(1)}時間
+        1日最大勤務時間: ${staff.max_hours_per_day}時間
+        最大連続勤務日数: ${staff.max_consecutive_days}日
+        曜日別希望: ${dayPrefs}
+        休み希望: ${dayOffs || 'なし'}
+        他店舗シフト: ${otherStoreShifts || 'なし'}`;
         }).join('\n');
 
         const requirementDetails = requirementsData.map(req => {
@@ -376,83 +668,78 @@ class ShiftGeneratorService {
             `期間: ${year}年${month}月`;
 
         return `
-# シフト生成リクエスト
-
-## 基本情報
-年月: ${year}年${monthNames[month - 1]}
-${periodInfo}
-店舗: ${storeData.name}
-営業時間: ${storeData.opening_time}～${storeData.closing_time}
-定休日: ${closedDaysInfo}
-1日最低勤務時間: ${minDailyHours}時間
-
-## スタッフ情報
-${staffDetails}
-
-## 日別要件（参考値）
-${requirementDetails}
-
-## 【重要】制約条件（必須遵守）
-1. **指定期間内でのシフト生成**
-   - 必ず${calendarData[0]?.date}から${calendarData[calendarData.length - 1]?.date}の期間内でシフトを生成してください
-   - この期間外の日付は含めないでください
-
-2. **スタッフの労働条件を絶対に守る**
-   - 最大連続勤務日数を超過してはならない
-   - 1日の最大勤務時間を超過してはならない
-   - 月間勤務時間の上限・下限を守る（特に下限を満たすよう積極的にシフトに入れる）
-   - 他店舗での勤務を含めて連続勤務日数を計算する
-
-3. **勤務時間の最適化**
-   - 各スタッフの月間最低勤務時間（min_hours_per_month）を必ず満たすようにシフトを組む
-   - スタッフが勤務可能な日には積極的にシフトに入れ、月間時間を確保する
-   - 1日の勤務時間は最低${minDailyHours}時間以上とする（シフトに入る場合）
-   - 短時間勤務よりも、ある程度まとまった時間での勤務を優先する
-
-4. **スタッフの希望・制約を優先**
-   - 休み希望は絶対に守る
-   - 他店舗でのシフトがある日は勤務不可
-   - 曜日別希望シフトを可能な限り尊重する
-   - 希望時間がある場合は、その時間帯での勤務を優先する
-
-5. **労働基準法遵守**
-   - 6時間超で45分、8時間超で60分の休憩を設定
-
-6. **人員要件について**
-   - 人員要件は参考値として扱う
-   - スタッフの労働条件と競合する場合は、スタッフの条件を優先
-   - 人員不足になっても構わないが、スタッフの最低時間確保を優先
-
-## 出力形式
-必ずJSON形式のみで回答してください。説明文は不要です。
-
-{
-  "shifts": [
+    # シフト生成リクエスト
+    
+    ## 基本情報
+    年月: ${year}年${monthNames[month - 1]}
+    ${periodInfo}
+    店舗: ${storeData.name}
+    営業時間: ${storeData.opening_time}～${storeData.closing_time}
+    定休日: ${closedDaysInfo}
+    1日最低勤務時間: ${minDailyHours}時間
+    
+    ## スタッフ情報
+    ${staffDetails}
+    
+    ## 日別要件（参考値）
+    ${requirementDetails}
+    
+    ## 【最重要】制約条件（絶対遵守）
+    
+    ### 1. 月間勤務時間の絶対遵守
+    - 各スタッフの「当店舗で必要な最小時間」を**必ず**満たすこと
+    - 各スタッフの「当店舗で割り当て可能な最大時間」を**絶対に**超えないこと
+    - 他店舗での勤務時間も含めて全店舗合計で月間制限を守ること
+    - 最小時間に達しない場合は、積極的にシフトを追加すること
+    
+    ### 2. シフト生成の優先順序
+    1. **第1優先**: 各スタッフの月間最小勤務時間の確保
+    2. **第2優先**: スタッフの希望・制約の尊重
+    3. **第3優先**: 人員要件の満足（人員不足は許容する）
+    
+    ### 3. 勤務時間の最適化
+    - 1日の勤務時間は最低${minDailyHours}時間以上とする
+    - 短時間勤務よりも、まとまった時間での勤務を優先
+    - 各スタッフが月間最小時間を確実に満たすよう工夫する
+    
+    ### 4. その他の制約
+    - 指定期間内（${calendarData[0]?.date}から${calendarData[calendarData.length - 1]?.date}）でのシフト生成
+    - 最大連続勤務日数を超過してはならない
+    - 1日の最大勤務時間を超過してはならない
+    - 休み希望は絶対に守る
+    - 他店舗でのシフトがある日は勤務不可
+    - 6時間超で45分、8時間超で60分の休憩を設定
+    
+    ## 出力形式
+    必ずJSON形式のみで回答してください。説明文は不要です。
+    
     {
-      "date": "YYYY-MM-DD",
-      "assignments": [
+      "shifts": [
         {
-          "staff_id": 1,
-          "staff_name": "田中 太郎",
-          "start_time": "09:00",
-          "end_time": "18:00",
-          "break_start_time": "12:00",
-          "break_end_time": "13:00"
+          "date": "YYYY-MM-DD",
+          "assignments": [
+            {
+              "staff_id": 1,
+              "staff_name": "田中 太郎",
+              "start_time": "09:00",
+              "end_time": "18:00",
+              "break_start_time": "12:00",
+              "break_end_time": "13:00"
+            }
+          ]
         }
-      ]
-    }
-  ],
-  "summary": {
-    "totalHoursByStaff": [
-      {
-        "staff_id": 1,
-        "staff_name": "田中 太郎",
-        "total_hours": 160,
-        "violations": []
+      ],
+      "summary": {
+        "totalHoursByStaff": [
+          {
+            "staff_id": 1,
+            "staff_name": "田中 太郎",
+            "total_hours": 160,
+            "violations": []
+          }
+        ]
       }
-    ]
-  }
-}`;
+    }`;
     }
 
     async _callClaudeAPI(prompt) {
@@ -460,8 +747,24 @@ ${requirementDetails}
             const requestData = {
                 model: this.claudeModel,
                 max_tokens: 8000,
-                temperature: 0.3,
-                system: "あなたはシフト最適化の専門家です。スタッフの労働条件を絶対に守り、特に月間最低勤務時間を満たすよう積極的にシフトを組んでください。必ずJSON形式のデータのみを返してください。説明文や追加のテキストは一切含めないでください。",
+                temperature: 0.1,
+                system: `あなたは労働基準法を熟知したシフト最適化の専門家です。
+    
+    【最重要ミッション】
+    各スタッフの月間最低勤務時間を**絶対に**満たすシフトを生成してください。
+    
+    【絶対遵守事項】
+    1. 各スタッフの「当店舗で必要な最小時間」を必ず確保する
+    2. 他店舗勤務時間を含めて全店舗合計で月間制限を守る
+    3. 最小時間に満たない場合は、勤務可能日に積極的にシフトを割り当てる
+    4. 短時間勤務よりも、まとまった時間（4時間以上）での勤務を優先する
+    
+    【優先順序】
+    1. 月間最低勤務時間の確保（最優先）
+    2. スタッフの希望・制約の尊重
+    3. 人員要件の満足（最低優先、不足は許容）
+    
+    必ずJSON形式のデータのみを返してください。説明文や追加のテキストは一切含めないでください。`,
                 messages: [
                     {
                         role: "user",
@@ -568,7 +871,6 @@ ${requirementDetails}
             }))
         };
     }
-
     _formatStaffData(staff, dayOffRequests, existingShifts) {
         const staffData = staff.map(s => {
             const daysOff = dayOffRequests
@@ -592,6 +894,34 @@ ${requirementDetails}
                 break_end_time: pref.break_end_time
             }));
 
+            const otherStoreHours = otherStoreShifts.reduce((total, shift) => {
+                const startTime = moment(shift.start_time, 'HH:mm');
+                const endTime = moment(shift.end_time, 'HH:mm');
+
+                if (endTime.isBefore(startTime)) {
+                    endTime.add(1, 'day');
+                }
+
+                let hours = endTime.diff(startTime, 'minutes') / 60;
+
+                if (shift.break_start_time && shift.break_end_time) {
+                    const breakStart = moment(shift.break_start_time, 'HH:mm');
+                    const breakEnd = moment(shift.break_end_time, 'HH:mm');
+
+                    if (breakEnd.isBefore(breakStart)) {
+                        breakEnd.add(1, 'day');
+                    }
+
+                    const breakHours = breakEnd.diff(breakStart, 'minutes') / 60;
+                    hours -= breakHours;
+                }
+
+                return total + Math.max(0, hours);
+            }, 0);
+
+            const minHoursForThisStore = Math.max(0, (s.min_hours_per_month || 0) - otherStoreHours);
+            const maxHoursForThisStore = Math.max(0, (s.max_hours_per_month || 160) - otherStoreHours);
+
             return {
                 id: s.id,
                 name: `${s.last_name} ${s.first_name}`,
@@ -599,6 +929,9 @@ ${requirementDetails}
                 employment_type: s.employment_type || 'パート',
                 max_hours_per_month: s.max_hours_per_month || 160,
                 min_hours_per_month: s.min_hours_per_month || 0,
+                other_store_hours: otherStoreHours,
+                min_hours_for_this_store: minHoursForThisStore,
+                max_hours_for_this_store: maxHoursForThisStore,
                 max_hours_per_day: s.max_hours_per_day || 8,
                 max_consecutive_days: s.max_consecutive_days || 5,
                 day_preferences: formattedPreferences,

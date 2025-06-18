@@ -1068,68 +1068,87 @@ export default {
 
     // 修正されたfetchAllStoreShifts関数
     const fetchAllStoreShifts = async () => {
-      if (
-        !staffList.value ||
-        staffList.value.length === 0 ||
-        !selectedStore.value
-      ) {
-        return;
+  if (
+    !staffList.value ||
+    staffList.value.length === 0 ||
+    !selectedStore.value
+  ) {
+    return;
+  }
+
+  try {
+    console.log('=== 他店舗シフト取得開始 ===');
+    console.log('対象期間:', currentYear.value, '年', currentMonth.value, '月');
+    console.log('除外店舗ID:', selectedStore.value.id);
+
+    const uniqueStoreIds = new Set();
+
+    staffList.value.forEach((staff) => {
+      let storeIds = [];
+      if (staff.store_ids && Array.isArray(staff.store_ids)) {
+        storeIds = staff.store_ids;
+      } else if (staff.stores && Array.isArray(staff.stores)) {
+        storeIds = staff.stores.map((s) => s.id);
       }
 
-      try {
-        // スタッフが所属する他の店舗のIDを収集
-        const uniqueStoreIds = new Set();
+      storeIds.forEach((id) => {
+        if (id !== selectedStore.value.id) {
+          uniqueStoreIds.add(id);
+        }
+      });
+    });
 
-        staffList.value.forEach((staff) => {
-          let storeIds = [];
-          if (staff.store_ids && Array.isArray(staff.store_ids)) {
-            storeIds = staff.store_ids;
-          } else if (staff.stores && Array.isArray(staff.stores)) {
-            storeIds = staff.stores.map((s) => s.id);
-          }
+    console.log('他店舗ID一覧:', Array.from(uniqueStoreIds));
 
-          // 現在の店舗以外の店舗IDを追加
-          storeIds.forEach((id) => {
-            if (id !== selectedStore.value.id) {
-              uniqueStoreIds.add(id);
+    const storeShiftsPromises = Array.from(uniqueStoreIds).map(
+      async (storeId) => {
+        try {
+          console.log(`店舗ID ${storeId} のシフト取得中...`);
+          const response = await store.dispatch(
+            "shift/fetchShiftByYearMonth",
+            {
+              year: currentYear.value,
+              month: currentMonth.value,
+              storeId: storeId,
             }
-          });
-        });
-
-        // 各店舗のシフトデータを並行取得
-        const storeShiftsPromises = Array.from(uniqueStoreIds).map(
-          async (storeId) => {
-            try {
-              const response = await store.dispatch(
-                "shift/fetchShiftByYearMonth",
-                {
-                  year: currentYear.value,
-                  month: currentMonth.value,
-                  storeId: storeId,
-                }
-              );
-              return { storeId, shifts: response?.shifts || [] };
-            } catch (error) {
-              console.log(`店舗ID ${storeId} のシフトデータ取得エラー:`, error);
-              return { storeId, shifts: [] };
-            }
-          }
-        );
-
-        const results = await Promise.all(storeShiftsPromises);
-
-        // 結果をallStoreShiftsに格納
-        allStoreShifts.value = {};
-        results.forEach(({ storeId, shifts }) => {
-          allStoreShifts.value[storeId] = shifts;
-        });
-
-        console.log("全店舗シフトデータ取得完了:", allStoreShifts.value);
-      } catch (error) {
-        console.error("全店舗シフトデータ取得エラー:", error);
-        allStoreShifts.value = {};
+          );
+          console.log(`店舗ID ${storeId} のシフト取得完了:`, response?.shifts?.length || 0, 'シフト');
+          return { storeId, shifts: response?.shifts || [] };
+        } catch (error) {
+          console.log(`店舗ID ${storeId} のシフトデータ取得エラー:`, error.message);
+          return { storeId, shifts: [] };
+        }
       }
+    );
+
+    const results = await Promise.all(storeShiftsPromises);
+
+    allStoreShifts.value = {};
+    let totalOtherStoreShifts = 0;
+    
+    results.forEach(({ storeId, shifts }) => {
+      allStoreShifts.value[storeId] = shifts;
+      totalOtherStoreShifts += shifts.length;
+    });
+
+    console.log('=== 他店舗シフト取得完了 ===');
+    console.log('取得店舗数:', results.length);
+    console.log('総シフト数:', totalOtherStoreShifts);
+    console.log('詳細データ:', allStoreShifts.value);
+
+    staffList.value.forEach(staff => {
+      const otherStoreHours = calculateTotalHoursAllStores(staff.id) - calculateTotalHours(staff.id);
+      if (otherStoreHours > 0) {
+        console.log(`${staff.last_name} ${staff.first_name}: 他店舗 ${otherStoreHours.toFixed(1)}時間`);
+      }
+    });
+
+  } catch (error) {
+    console.error("全店舗シフトデータ取得エラー:", error);
+    allStoreShifts.value = {};
+  }
     };
+
 
     // calculateTotalHours 関数も修正（精度向上）
     const calculateTotalHours = (staffId) => {
