@@ -16,11 +16,9 @@ const UserChangeLog = require('./UserChangeLog')(sequelize, DataTypes);
 const BusinessHours = require('./BusinessHours')(sequelize, DataTypes);
 const SystemSetting = require('./SystemSetting')(sequelize, DataTypes);
 
-// User associations
 User.hasMany(Session, { foreignKey: 'user_id', as: 'sessions' });
 Session.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
-// Store associations
 Store.hasMany(StoreClosedDay, { foreignKey: 'store_id', as: 'closedDays' });
 StoreClosedDay.belongsTo(Store, { foreignKey: 'store_id' });
 
@@ -30,7 +28,6 @@ StoreStaffRequirement.belongsTo(Store, { foreignKey: 'store_id' });
 Store.hasMany(Staff, { foreignKey: 'store_id', as: 'staff' });
 Staff.belongsTo(Store, { foreignKey: 'store_id' });
 
-// Staff multiple store associations
 Staff.belongsToMany(Store, {
     through: 'staff_stores',
     as: 'stores',
@@ -45,14 +42,12 @@ Store.belongsToMany(Staff, {
     otherKey: 'staff_id'
 });
 
-// Staff preferences and requests
 Staff.hasMany(StaffDayPreference, { foreignKey: 'staff_id', as: 'dayPreferences' });
 StaffDayPreference.belongsTo(Staff, { foreignKey: 'staff_id' });
 
 Staff.hasMany(StaffDayOffRequest, { foreignKey: 'staff_id', as: 'dayOffRequests' });
 StaffDayOffRequest.belongsTo(Staff, { foreignKey: 'staff_id', as: 'staff' });
 
-// Shift associations
 Store.hasMany(Shift, { foreignKey: 'store_id', as: 'shifts' });
 Shift.belongsTo(Store, { foreignKey: 'store_id' });
 
@@ -62,7 +57,6 @@ ShiftAssignment.belongsTo(Shift, { foreignKey: 'shift_id' });
 Staff.hasMany(ShiftAssignment, { foreignKey: 'staff_id', as: 'assignments' });
 ShiftAssignment.belongsTo(Staff, { foreignKey: 'staff_id' });
 
-// Change log associations
 ShiftAssignment.hasMany(ShiftChangeLog, { foreignKey: 'shift_assignment_id', as: 'changeLogs' });
 ShiftChangeLog.belongsTo(ShiftAssignment, { foreignKey: 'shift_assignment_id' });
 
@@ -75,7 +69,6 @@ UserChangeLog.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(UserChangeLog, { foreignKey: 'admin_id', as: 'changesMade' });
 UserChangeLog.belongsTo(User, { foreignKey: 'admin_id', as: 'admin' });
 
-// Business hours and settings
 Store.hasMany(BusinessHours, { foreignKey: 'store_id', as: 'businessHours' });
 BusinessHours.belongsTo(Store, { foreignKey: 'store_id' });
 

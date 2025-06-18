@@ -3,7 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { Store, Staff, StaffDayPreference, StaffDayOffRequest,
-    StoreClosedDay, StoreStaffRequirement, Shift, ShiftAssignment, sequelize } = require('../models');
+    StoreClosedDay, StoreStaffRequirement, Shift, ShiftAssignment, sequelize, SystemSetting } = require('../models');
 const { Op } = require('sequelize');
 const moment = require('moment-timezone');
 
@@ -57,7 +57,6 @@ class ShiftGeneratorService {
                 throw new Error('店舗が見つかりません');
             }
 
-            // **修正: システム設定から締め日を取得**
             let systemSettings;
             try {
                 systemSettings = await SystemSetting.findOne({
@@ -69,9 +68,10 @@ class ShiftGeneratorService {
             }
 
             const closingDay = systemSettings?.closing_day || 25;
+            const minDailyHours = systemSettings?.min_daily_hours || 4.0;
             console.log(`使用する締め日: ${closingDay}日`);
+            console.log(`最低勤務時間: ${minDailyHours}時間/日`);
 
-            // **修正: 締め日を考慮した期間計算**
             const { startDate, endDate } = this.getShiftPeriodByClosingDay(year, month, closingDay);
             console.log(`シフト期間: ${startDate.format('YYYY-MM-DD')} から ${endDate.format('YYYY-MM-DD')}`);
 
@@ -101,11 +101,10 @@ class ShiftGeneratorService {
             const storeData = this._formatStoreData(store);
             const staffData = this._formatStaffData(staff, dayOffRequests, existingShifts);
 
-            // **修正: 締め日考慮のカレンダーデータ生成**
             const calendarData = this._generateCalendarDataWithClosingDay(startDate, endDate);
             const requirementsData = this._formatRequirementsDataWithPeriod(store, startDate, endDate);
 
-            const prompt = this._generatePrompt(storeData, staffData, calendarData, requirementsData, year, month);
+            const prompt = this._generatePrompt(storeData, staffData, calendarData, requirementsData, year, month, minDailyHours);
 
             console.log('Claude APIにリクエスト送信中...');
 
@@ -135,11 +134,9 @@ class ShiftGeneratorService {
         let startDate, endDate;
 
         if (closingDay >= 1 && closingDay <= 31) {
-            // 前月の締め日の翌日から当月の締め日まで
             startDate = moment(`${year}-${month}-${closingDay}`, 'YYYY-MM-DD').subtract(1, 'month').add(1, 'day');
             endDate = moment(`${year}-${month}-${closingDay}`, 'YYYY-MM-DD');
 
-            // 月末日を超える締め日の調整
             const startMonthDays = moment(startDate).subtract(1, 'day').daysInMonth();
             if (closingDay > startMonthDays) {
                 startDate = moment(`${year}-${month}`, 'YYYY-MM').subtract(1, 'month').endOf('month').add(1, 'day');
@@ -150,7 +147,6 @@ class ShiftGeneratorService {
                 endDate = moment(`${year}-${month}`, 'YYYY-MM').endOf('month');
             }
         } else {
-            // 締め日が無効な場合は月初月末
             startDate = moment(`${year}-${month}-01`, 'YYYY-MM-DD');
             endDate = moment(`${year}-${month}`, 'YYYY-MM').endOf('month');
         }
@@ -158,7 +154,6 @@ class ShiftGeneratorService {
         return { startDate, endDate };
     }
 
-    // **新規追加: 締め日考慮のカレンダーデータ生成**
     _generateCalendarDataWithClosingDay(startDate, endDate) {
         const calendarData = [];
         const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
@@ -180,7 +175,6 @@ class ShiftGeneratorService {
         return calendarData;
     }
 
-    // **修正: 期間指定の要件データ生成**
     _formatRequirementsDataWithPeriod(store, startDate, endDate) {
         const requirementsData = [];
 
@@ -189,11 +183,9 @@ class ShiftGeneratorService {
             const dayOfWeek = current.day();
             const dateStr = current.format('YYYY-MM-DD');
 
-            // 特定日の要件を優先
             const specialRequirements = store.staffRequirements
                 .filter(req => req.specific_date && moment(req.specific_date).format('YYYY-MM-DD') === dateStr);
 
-            // 特定日の要件がない場合は曜日要件を使用
             const regularRequirements = store.staffRequirements
                 .filter(req => req.day_of_week === dayOfWeek && !req.specific_date);
 
@@ -216,7 +208,6 @@ class ShiftGeneratorService {
 
         return requirementsData;
     }
-
 
     async _getExistingShiftsForAllStores(staff, year, month, excludeStoreId) {
         const startDate = moment(`${year}-${month.toString().padStart(2, '0')}-01`);
@@ -266,7 +257,6 @@ class ShiftGeneratorService {
         return staffShifts;
     }
 
-    // 全店舗のシフト時間を取得する新しいメソッド
     async getStaffTotalHoursAllStores(staffIds, year, month) {
         const startDate = moment(`${year}-${month.toString().padStart(2, '0')}-01`);
         const endDate = moment(startDate).endOf('month');
@@ -309,12 +299,10 @@ class ShiftGeneratorService {
             const storeId = assignment.Shift.store_id;
             const storeName = assignment.Shift.Store.name;
 
-            // 勤務時間を計算
             const startTime = moment(assignment.start_time, 'HH:mm:ss');
             const endTime = moment(assignment.end_time, 'HH:mm:ss');
             let hours = endTime.diff(startTime, 'minutes') / 60;
 
-            // 休憩時間を引く
             if (assignment.break_start_time && assignment.break_end_time) {
                 const breakStart = moment(assignment.break_start_time, 'HH:mm:ss');
                 const breakEnd = moment(assignment.break_end_time, 'HH:mm:ss');
@@ -322,7 +310,6 @@ class ShiftGeneratorService {
                 hours -= breakHours;
             }
 
-            // 店舗別の時間を記録
             if (!staffTotalHours[staffId].storeBreakdown[storeId]) {
                 staffTotalHours[staffId].storeBreakdown[storeId] = {
                     hours: 0,
@@ -336,7 +323,7 @@ class ShiftGeneratorService {
         return staffTotalHours;
     }
 
-    _generatePrompt(storeData, staffData, calendarData, requirementsData, year, month) {
+    _generatePrompt(storeData, staffData, calendarData, requirementsData, year, month, minDailyHours) {
         const monthNames = [
             '1月', '2月', '3月', '4月', '5月', '6月',
             '7月', '8月', '9月', '10月', '11月', '12月'
@@ -384,14 +371,20 @@ class ShiftGeneratorService {
             return `${req.date}: ${reqs}`;
         }).filter(Boolean).join('\n');
 
+        const periodInfo = calendarData.length > 0 ?
+            `期間: ${calendarData[0].date} から ${calendarData[calendarData.length - 1].date}` :
+            `期間: ${year}年${month}月`;
+
         return `
 # シフト生成リクエスト
 
 ## 基本情報
 年月: ${year}年${monthNames[month - 1]}
+${periodInfo}
 店舗: ${storeData.name}
 営業時間: ${storeData.opening_time}～${storeData.closing_time}
 定休日: ${closedDaysInfo}
+1日最低勤務時間: ${minDailyHours}時間
 
 ## スタッフ情報
 ${staffDetails}
@@ -400,24 +393,35 @@ ${staffDetails}
 ${requirementDetails}
 
 ## 【重要】制約条件（必須遵守）
-1. **スタッフの労働条件を絶対に守る**
+1. **指定期間内でのシフト生成**
+   - 必ず${calendarData[0]?.date}から${calendarData[calendarData.length - 1]?.date}の期間内でシフトを生成してください
+   - この期間外の日付は含めないでください
+
+2. **スタッフの労働条件を絶対に守る**
    - 最大連続勤務日数を超過してはならない
    - 1日の最大勤務時間を超過してはならない
-   - 月間勤務時間の上限・下限を守る
+   - 月間勤務時間の上限・下限を守る（特に下限を満たすよう積極的にシフトに入れる）
    - 他店舗での勤務を含めて連続勤務日数を計算する
 
-2. **スタッフの希望・制約を優先**
+3. **勤務時間の最適化**
+   - 各スタッフの月間最低勤務時間（min_hours_per_month）を必ず満たすようにシフトを組む
+   - スタッフが勤務可能な日には積極的にシフトに入れ、月間時間を確保する
+   - 1日の勤務時間は最低${minDailyHours}時間以上とする（シフトに入る場合）
+   - 短時間勤務よりも、ある程度まとまった時間での勤務を優先する
+
+4. **スタッフの希望・制約を優先**
    - 休み希望は絶対に守る
    - 他店舗でのシフトがある日は勤務不可
    - 曜日別希望シフトを可能な限り尊重する
+   - 希望時間がある場合は、その時間帯での勤務を優先する
 
-3. **労働基準法遵守**
+5. **労働基準法遵守**
    - 6時間超で45分、8時間超で60分の休憩を設定
 
-4. **人員要件について**
+6. **人員要件について**
    - 人員要件は参考値として扱う
    - スタッフの労働条件と競合する場合は、スタッフの条件を優先
-   - 人員不足になっても構わない
+   - 人員不足になっても構わないが、スタッフの最低時間確保を優先
 
 ## 出力形式
 必ずJSON形式のみで回答してください。説明文は不要です。
@@ -457,7 +461,7 @@ ${requirementDetails}
                 model: this.claudeModel,
                 max_tokens: 8000,
                 temperature: 0.3,
-                system: "あなたはシフト最適化の専門家です。スタッフの労働条件を絶対に守り、必ずJSON形式のデータのみを返してください。説明文や追加のテキストは一切含めないでください。",
+                system: "あなたはシフト最適化の専門家です。スタッフの労働条件を絶対に守り、特に月間最低勤務時間を満たすよう積極的にシフトを組んでください。必ずJSON形式のデータのみを返してください。説明文や追加のテキストは一切含めないでください。",
                 messages: [
                     {
                         role: "user",
@@ -961,7 +965,6 @@ ${requirementDetails}
                 } else {
                     console.log('既存シフトを更新します');
 
-                    // **修正: 既存の割り当てを完全に削除**
                     const deletedCount = await ShiftAssignment.destroy({
                         where: { shift_id: shift.id },
                         transaction: t

@@ -39,6 +39,30 @@
                 締め日は必須です
               </small>
             </div>
+
+            <div class="field">
+              <label for="min_daily_hours">1日最低勤務時間 <span class="required-mark">*</span></label>
+              <div class="min-hours-container">
+                <InputNumber
+                  id="min_daily_hours"
+                  v-model="settings.min_daily_hours"
+                  :min="1.0"
+                  :max="12.0"
+                  :minFractionDigits="1"
+                  :maxFractionDigits="1"
+                  :step="0.5"
+                  showButtons
+                  :class="{ 'p-invalid': submitted && !settings.min_daily_hours }"
+                />
+                <span class="min-hours-suffix">時間</span>
+              </div>
+              <small class="form-help">
+                スタッフがシフトに入る場合の1日あたりの最低勤務時間を設定します。AI生成時にこの時間以上の勤務となるようシフトが組まれます。
+              </small>
+              <small v-if="submitted && !settings.min_daily_hours" class="p-error">
+                最低勤務時間は必須です
+              </small>
+            </div>
           </div>
         </template>
       </Card>
@@ -88,6 +112,7 @@ export default {
     
     const settings = reactive({
       closing_day: 25,
+      min_daily_hours: 4.0,
       additional_settings: {}
     });
 
@@ -99,6 +124,7 @@ export default {
         const data = response.data;
         
         settings.closing_day = data.closing_day;
+        settings.min_daily_hours = data.min_daily_hours || 4.0;
         settings.additional_settings = data.additional_settings || {};
         
         originalSettings.value = { ...settings };
@@ -127,12 +153,23 @@ export default {
         });
         return;
       }
+
+      if (!settings.min_daily_hours || settings.min_daily_hours < 1.0 || settings.min_daily_hours > 12.0) {
+        toast.add({
+          severity: 'error',
+          summary: 'バリデーションエラー',
+          detail: '最低勤務時間は1.0-12.0時間の範囲で入力してください',
+          life: 3000
+        });
+        return;
+      }
       
       saving.value = true;
       
       try {
         await api.put('/system-settings', {
           closing_day: settings.closing_day,
+          min_daily_hours: settings.min_daily_hours,
           timezone: 'Asia/Tokyo',
           additional_settings: settings.additional_settings
         });
@@ -161,6 +198,7 @@ export default {
 
     const resetSettings = () => {
       settings.closing_day = originalSettings.value.closing_day;
+      settings.min_daily_hours = originalSettings.value.min_daily_hours;
       settings.additional_settings = originalSettings.value.additional_settings;
       submitted.value = false;
       
@@ -189,6 +227,7 @@ export default {
 </script>
 
 <style scoped>
+
 .system-settings {
   padding: 1rem;
   max-width: 800px;
@@ -256,31 +295,109 @@ export default {
   color: var(--red-500);
 }
 
-.closing-day-container {
+.closing-day-container,
+.min-hours-container {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.closing-day-suffix {
+.closing-day-suffix,
+.min-hours-suffix {
   font-size: 0.95rem;
   color: var(--text-color-secondary);
 }
 
 .form-help {
-  font-size: 0.85rem;
   color: var(--text-color-secondary);
+  font-size: 0.875rem;
   line-height: 1.4;
+  margin-top: 0.25rem;
 }
 
 .action-buttons {
   display: flex;
+  gap: 1rem;
   justify-content: flex-end;
-  gap: 0.5rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--surface-border);
 }
 
+/* InputNumber のスタイル調整 */
+.closing-day-container .p-inputnumber,
+.min-hours-container .p-inputnumber {
+  width: 120px;
+}
+
+.closing-day-container .p-inputnumber input,
+.min-hours-container .p-inputnumber input {
+  text-align: center;
+  font-weight: 600;
+}
+
+/* エラー状態のスタイル */
+.p-invalid {
+  border-color: var(--red-500) !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
+}
+
+.p-error {
+  color: var(--red-500);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+/* ボタンのスタイル調整 */
+.action-buttons .p-button {
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.action-buttons .p-button-primary {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.action-buttons .p-button-primary:hover:not(:disabled) {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.3);
+}
+
+.action-buttons .p-button-secondary {
+  background: var(--surface-0);
+  border-color: var(--surface-300);
+  color: var(--text-color);
+}
+
+.action-buttons .p-button-secondary:hover:not(:disabled) {
+  background: var(--surface-100);
+  border-color: var(--surface-400);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* カードのスタイル調整 */
+.settings-container .p-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--surface-200);
+}
+
+.settings-container .p-card .p-card-title {
+  padding: 1.5rem 1.5rem 0;
+  border-bottom: 1px solid var(--surface-200);
+  margin-bottom: 0;
+  padding-bottom: 1rem;
+}
+
+.settings-container .p-card .p-card-content {
+  padding: 1.5rem;
+}
+
+/* レスポンシブ対応 */
 @media (max-width: 768px) {
   .system-settings {
     padding: 0.5rem;
@@ -296,7 +413,34 @@ export default {
   
   .action-buttons .p-button {
     width: 100%;
-    margin-left: 0 !important;
+    justify-content: center;
+  }
+  
+  .closing-day-container,
+  .min-hours-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .closing-day-container .p-inputnumber,
+  .min-hours-container .p-inputnumber {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .settings-container .p-card .p-card-title,
+  .settings-container .p-card .p-card-content {
+    padding: 1rem;
+  }
+  
+  .settings-form {
+    gap: 1.25rem;
+  }
+  
+  .card-title {
+    font-size: 1.125rem;
   }
 }
 </style>

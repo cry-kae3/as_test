@@ -16,6 +16,7 @@ const getSystemSettings = async (req, res) => {
             settings = await SystemSetting.create({
                 user_id: userId,
                 closing_day: 25,
+                min_daily_hours: 4.0,
                 timezone: 'Asia/Tokyo',
                 additional_settings: {}
             });
@@ -36,10 +37,14 @@ const updateSystemSettings = async (req, res) => {
             userId = req.user.parent_user_id;
         }
 
-        const { closing_day, additional_settings } = req.body;
+        const { closing_day, min_daily_hours, additional_settings } = req.body;
 
         if (closing_day && (closing_day < 1 || closing_day > 31)) {
             return res.status(400).json({ message: '締め日は1-31の範囲で指定してください' });
+        }
+
+        if (min_daily_hours && (min_daily_hours < 1.0 || min_daily_hours > 12.0)) {
+            return res.status(400).json({ message: '最低勤務時間は1.0-12.0時間の範囲で指定してください' });
         }
 
         let settings = await SystemSetting.findOne({
@@ -48,6 +53,7 @@ const updateSystemSettings = async (req, res) => {
 
         const updateData = {};
         if (closing_day !== undefined) updateData.closing_day = closing_day;
+        if (min_daily_hours !== undefined) updateData.min_daily_hours = min_daily_hours;
         updateData.timezone = 'Asia/Tokyo';
         if (additional_settings !== undefined) updateData.additional_settings = additional_settings;
 
@@ -57,6 +63,7 @@ const updateSystemSettings = async (req, res) => {
             settings = await SystemSetting.create({
                 user_id: userId,
                 closing_day: closing_day || 25,
+                min_daily_hours: min_daily_hours || 4.0,
                 timezone: 'Asia/Tokyo',
                 additional_settings: additional_settings || {}
             });

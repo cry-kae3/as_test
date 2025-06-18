@@ -22,6 +22,15 @@ module.exports = (sequelize, DataTypes) => {
                 max: 31
             }
         },
+        min_daily_hours: {
+            type: DataTypes.DECIMAL(3, 1),
+            allowNull: true,
+            defaultValue: 4.0,
+            validate: {
+                min: 1.0,
+                max: 12.0
+            }
+        },
         timezone: {
             type: DataTypes.STRING(50),
             allowNull: true,
