@@ -421,6 +421,9 @@ const generateShift = async (req, res) => {
     try {
         const { store_id, year, month } = req.body;
 
+        console.log('=== シフト生成リクエスト受信 ===');
+        console.log('パラメータ:', { store_id, year, month });
+
         if (!store_id || !year || !month) {
             return res.status(400).json({ message: '店舗ID、年、月は必須です' });
         }
@@ -444,7 +447,11 @@ const generateShift = async (req, res) => {
             }
         }
 
+        console.log('権限チェック完了、シフト生成開始');
+
         const shiftData = await shiftGeneratorService.generateShift(store_id, year, month);
+
+        console.log('シフト生成完了、保存開始');
 
         const savedShift = await shiftGeneratorService.saveShift(shiftData, store_id, year, month);
 
@@ -478,9 +485,16 @@ const generateShift = async (req, res) => {
             allStoreHours: allStoreHours
         };
 
+        console.log('=== シフト生成完了 ===');
+        console.log('生成されたシフト数:', response.shifts.length);
+
         res.status(201).json(response);
     } catch (error) {
-        console.error('シフト生成エラー:', error);
+        console.error('=== シフト生成失敗 ===');
+        console.error('エラー詳細:', {
+            message: error.message,
+            stack: error.stack
+        });
         res.status(500).json({
             message: 'シフト生成中にエラーが発生しました',
             error: error.message
@@ -616,10 +630,236 @@ const confirmShift = async (req, res) => {
     }
 };
 
+// スタッフの勤務条件チェック関数
+const validateStaffWorkingConditions = async (staffId, date, startTime, endTime, breakStartTime, breakEndTime, excludeAssignmentId = null) => {
+    const warnings = [];
+    const errors = [];
+
+    // スタッフ情報と設定を取得
+    const staff = await Staff.findByPk(staffId, {
+        include: [
+            {
+                model: require('../models').StaffDayPreference,
+                as: 'dayPreferences'
+            },
+            {
+                model: require('../models').StaffDayOffRequest,
+                as: 'dayOffRequests',
+                where: {
+                    date: date,
+                    status: ['approved', 'pending']
+                },
+                required: false
+            }
+        ]
+    });
+
+    if (!staff) {
+        errors.push('スタッフが見つかりません');
+        return { errors, warnings };
+    }
+
+    // 1. 休み希望チェック
+    if (staff.dayOffRequests && staff.dayOffRequests.length > 0) {
+        const dayOffRequest = staff.dayOffRequests[0];
+        if (dayOffRequest.status === 'approved') {
+            errors.push(`${date}は承認済みの休み希望があります（${dayOffRequest.reason || 'お休み'}）`);
+        } else {
+            warnings.push(`${date}は休み希望があります（${dayOffRequest.reason || 'お休み'}）`);
+        }
+    }
+
+    // 2. 曜日別希望シフトチェック
+    const dayOfWeek = new Date(date).getDay();
+    const dayPreference = staff.dayPreferences?.find(pref => pref.day_of_week === dayOfWeek);
+
+    if (dayPreference && !dayPreference.available) {
+        errors.push(`${['日', '月', '火', '水', '木', '金', '土'][dayOfWeek]}曜日は勤務不可の設定です`);
+    }
+
+    if (dayPreference && dayPreference.preferred_start_time && dayPreference.preferred_end_time) {
+        const prefStart = dayPreference.preferred_start_time.substring(0, 5);
+        const prefEnd = dayPreference.preferred_end_time.substring(0, 5);
+        if (startTime < prefStart || endTime > prefEnd) {
+            warnings.push(`希望時間（${prefStart}-${prefEnd}）から外れています`);
+        }
+    }
+
+    // 3. 1日の勤務時間チェック
+    const workMinutes = calculateWorkMinutes(startTime, endTime, breakStartTime, breakEndTime);
+    const workHours = workMinutes / 60;
+
+    if (staff.max_hours_per_day && workHours > staff.max_hours_per_day) {
+        errors.push(`1日の最大勤務時間（${staff.max_hours_per_day}時間）を超過しています（${workHours.toFixed(1)}時間）`);
+    }
+
+    // 4. 月間勤務時間チェック
+    const monthlyHours = await calculateMonthlyHours(staffId, date, workMinutes, excludeAssignmentId);
+
+    if (staff.max_hours_per_month && monthlyHours > staff.max_hours_per_month) {
+        errors.push(`月間最大勤務時間（${staff.max_hours_per_month}時間）を超過します（${monthlyHours.toFixed(1)}時間）`);
+    }
+
+    if (staff.min_hours_per_month && monthlyHours < staff.min_hours_per_month) {
+        warnings.push(`月間最小勤務時間（${staff.min_hours_per_month}時間）を下回ります（${monthlyHours.toFixed(1)}時間）`);
+    }
+
+    // 5. 連続勤務日数チェック
+    const consecutiveDays = await calculateConsecutiveWorkDays(staffId, date, excludeAssignmentId);
+
+    if (staff.max_consecutive_days && consecutiveDays > staff.max_consecutive_days) {
+        errors.push(`最大連続勤務日数（${staff.max_consecutive_days}日）を超過します（${consecutiveDays}日）`);
+    }
+
+    // 6. 労働基準法チェック（休憩時間）
+    if (workHours > 8 && (!breakStartTime || !breakEndTime)) {
+        errors.push('8時間超の勤務には最低60分の休憩が必要です');
+    } else if (workHours > 6 && (!breakStartTime || !breakEndTime)) {
+        errors.push('6時間超の勤務には最低45分の休憩が必要です');
+    } else if (breakStartTime && breakEndTime) {
+        const breakMinutes = calculateBreakMinutes(breakStartTime, breakEndTime);
+        if (workHours > 8 && breakMinutes < 60) {
+            errors.push('8時間超の勤務には最低60分の休憩が必要です');
+        } else if (workHours > 6 && breakMinutes < 45) {
+            errors.push('6時間超の勤務には最低45分の休憩が必要です');
+        }
+    }
+
+    return { errors, warnings };
+};
+
+// 勤務時間計算（分単位）
+const calculateWorkMinutes = (startTime, endTime, breakStartTime, breakEndTime) => {
+    const start = new Date(`2000-01-01T${startTime}`);
+    const end = new Date(`2000-01-01T${endTime}`);
+    let minutes = (end - start) / (1000 * 60);
+
+    if (breakStartTime && breakEndTime) {
+        const breakStart = new Date(`2000-01-01T${breakStartTime}`);
+        const breakEnd = new Date(`2000-01-01T${breakEndTime}`);
+        const breakMinutes = (breakEnd - breakStart) / (1000 * 60);
+        minutes -= breakMinutes;
+    }
+
+    return Math.max(0, minutes);
+};
+
+// 休憩時間計算（分単位）
+const calculateBreakMinutes = (breakStartTime, breakEndTime) => {
+    const breakStart = new Date(`2000-01-01T${breakStartTime}`);
+    const breakEnd = new Date(`2000-01-01T${breakEndTime}`);
+    return Math.max(0, (breakEnd - breakStart) / (1000 * 60));
+};
+
+// 月間勤務時間計算
+const calculateMonthlyHours = async (staffId, targetDate, additionalMinutes, excludeAssignmentId = null) => {
+    const date = new Date(targetDate);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+
+    // 該当月のシフト取得
+    const shifts = await Shift.findAll({
+        where: {
+            year: year,
+            month: month
+        },
+        include: [{
+            model: ShiftAssignment,
+            as: 'assignments',
+            where: {
+                staff_id: staffId,
+                ...(excludeAssignmentId && { id: { [Op.ne]: excludeAssignmentId } })
+            },
+            required: false
+        }]
+    });
+
+    let totalMinutes = additionalMinutes || 0;
+
+    shifts.forEach(shift => {
+        shift.assignments.forEach(assignment => {
+            totalMinutes += calculateWorkMinutes(
+                assignment.start_time,
+                assignment.end_time,
+                assignment.break_start_time,
+                assignment.break_end_time
+            );
+        });
+    });
+
+    return totalMinutes / 60;
+};
+
+// 連続勤務日数計算
+const calculateConsecutiveWorkDays = async (staffId, targetDate, excludeAssignmentId = null) => {
+    const targetDateObj = new Date(targetDate);
+    let consecutiveDays = 1; // 今回の勤務日を含む
+
+    // 過去方向にチェック
+    let checkDate = new Date(targetDateObj);
+    checkDate.setDate(checkDate.getDate() - 1);
+
+    while (true) {
+        const dateStr = checkDate.toISOString().split('T')[0];
+        const hasShift = await ShiftAssignment.findOne({
+            include: [{
+                model: Shift,
+                where: {
+                    year: checkDate.getFullYear(),
+                    month: checkDate.getMonth() + 1
+                }
+            }],
+            where: {
+                staff_id: staffId,
+                date: dateStr,
+                ...(excludeAssignmentId && { id: { [Op.ne]: excludeAssignmentId } })
+            }
+        });
+
+        if (hasShift) {
+            consecutiveDays++;
+            checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+            break;
+        }
+    }
+
+    // 未来方向にチェック
+    checkDate = new Date(targetDateObj);
+    checkDate.setDate(checkDate.getDate() + 1);
+
+    while (true) {
+        const dateStr = checkDate.toISOString().split('T')[0];
+        const hasShift = await ShiftAssignment.findOne({
+            include: [{
+                model: Shift,
+                where: {
+                    year: checkDate.getFullYear(),
+                    month: checkDate.getMonth() + 1
+                }
+            }],
+            where: {
+                staff_id: staffId,
+                date: dateStr,
+                ...(excludeAssignmentId && { id: { [Op.ne]: excludeAssignmentId } })
+            }
+        });
+
+        if (hasShift) {
+            consecutiveDays++;
+            checkDate.setDate(checkDate.getDate() + 1);
+        } else {
+            break;
+        }
+    }
+
+    return consecutiveDays;
+};
+
 const createShiftAssignment = async (req, res) => {
     try {
         const { year, month } = req.params;
-        const { store_id, staff_id, date, start_time, end_time, break_start_time, break_end_time, notes, change_reason } = req.body;
+        const { store_id, staff_id, date, start_time, end_time, break_start_time, break_end_time, notes, change_reason, force = false } = req.body;
 
         console.log('Received assignment data:', {
             year,
@@ -632,7 +872,8 @@ const createShiftAssignment = async (req, res) => {
             break_start_time,
             break_end_time,
             notes,
-            change_reason
+            change_reason,
+            force
         });
 
         if (!store_id || !staff_id || !date || !start_time || !end_time) {
@@ -695,6 +936,26 @@ const createShiftAssignment = async (req, res) => {
             });
         }
 
+        // スタッフの勤務条件チェック
+        const validation = await validateStaffWorkingConditions(
+            parseInt(staff_id),
+            date,
+            start_time,
+            end_time,
+            break_start_time,
+            break_end_time
+        );
+
+        // 強制作成でない場合、エラーがあれば拒否
+        if (!force && validation.errors.length > 0) {
+            return res.status(400).json({
+                message: '勤務条件に違反しています',
+                errors: validation.errors,
+                warnings: validation.warnings,
+                canForce: true
+            });
+        }
+
         const assignment = await ShiftAssignment.create({
             shift_id: shift.id,
             staff_id: parseInt(staff_id),
@@ -727,7 +988,17 @@ const createShiftAssignment = async (req, res) => {
 
         console.log('Assignment created successfully:', assignment.id);
 
-        res.status(201).json(assignment);
+        // レスポンスに警告も含める
+        const response = {
+            ...assignment.toJSON(),
+            validation: {
+                errors: validation.errors,
+                warnings: validation.warnings,
+                forced: force && validation.errors.length > 0
+            }
+        };
+
+        res.status(201).json(response);
     } catch (error) {
         console.error('シフト割り当て作成エラー:', error);
         res.status(500).json({
@@ -740,7 +1011,7 @@ const createShiftAssignment = async (req, res) => {
 const updateShiftAssignment = async (req, res) => {
     try {
         const { year, month, assignmentId } = req.params;
-        const { store_id, staff_id, date, start_time, end_time, break_start_time, break_end_time, notes, change_reason } = req.body;
+        const { store_id, staff_id, date, start_time, end_time, break_start_time, break_end_time, notes, change_reason, force = false } = req.body;
 
         const assignment = await ShiftAssignment.findByPk(assignmentId, {
             include: [
@@ -757,6 +1028,27 @@ const updateShiftAssignment = async (req, res) => {
 
         if (!assignment) {
             return res.status(404).json({ message: 'シフト割り当てが見つかりません' });
+        }
+
+        // スタッフの勤務条件チェック
+        const validation = await validateStaffWorkingConditions(
+            parseInt(staff_id),
+            date,
+            start_time,
+            end_time,
+            break_start_time,
+            break_end_time,
+            assignmentId // 更新対象は除外
+        );
+
+        // 強制更新でない場合、エラーがあれば拒否
+        if (!force && validation.errors.length > 0) {
+            return res.status(400).json({
+                message: '勤務条件に違反しています',
+                errors: validation.errors,
+                warnings: validation.warnings,
+                canForce: true
+            });
         }
 
         const previousData = {
@@ -799,7 +1091,17 @@ const updateShiftAssignment = async (req, res) => {
 
         await ShiftChangeLog.create(logData);
 
-        res.status(200).json(assignment);
+        // レスポンスに警告も含める
+        const response = {
+            ...assignment.toJSON(),
+            validation: {
+                errors: validation.errors,
+                warnings: validation.warnings,
+                forced: force && validation.errors.length > 0
+            }
+        };
+
+        res.status(200).json(response);
     } catch (error) {
         console.error('シフト割り当て更新エラー:', error);
         res.status(500).json({ message: 'シフト割り当ての更新中にエラーが発生しました' });

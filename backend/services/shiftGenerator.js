@@ -6,7 +6,6 @@ const { Store, Staff, StaffDayPreference, StaffDayOffRequest,
     StoreClosedDay, StoreStaffRequirement, Shift, ShiftAssignment, sequelize, SystemSetting } = require('../models');
 const { Op } = require('sequelize');
 const moment = require('moment-timezone');
-const shiftLogger = require('./shiftLogger');
 
 class ShiftGeneratorService {
     constructor() {
@@ -36,11 +35,8 @@ class ShiftGeneratorService {
 
     async generateShift(storeId, year, month) {
         try {
-            console.log('シフト生成を開始します');
-            await shiftLogger.logShiftGeneration(storeId, year, month, {
-                phase: 'START',
-                message: 'シフト生成開始'
-            });
+            console.log('=== シフト生成開始 ===');
+            console.log(`店舗ID: ${storeId}, 期間: ${year}年${month}月`);
 
             if (!this.claudeApiKey) {
                 throw new Error('Claude API キーが設定されていません');
@@ -70,11 +66,10 @@ class ShiftGeneratorService {
             const closingDay = systemSettings?.closing_day || 25;
             const minDailyHours = systemSettings?.min_daily_hours || 4.0;
 
-            await shiftLogger.logShiftGeneration(storeId, year, month, {
-                phase: 'SETTINGS',
+            console.log('システム設定:', {
                 closingDay,
                 minDailyHours,
-                systemSettings: systemSettings || {}
+                hasSystemSettings: !!systemSettings
             });
 
             const { startDate, endDate } = this.getShiftPeriodByClosingDay(year, month, closingDay);
@@ -96,6 +91,8 @@ class ShiftGeneratorService {
                 throw new Error('スタッフが登録されていません');
             }
 
+            console.log(`スタッフ数: ${staff.length}人`);
+
             const dayOffRequests = await StaffDayOffRequest.findAll({
                 where: {
                     staff_id: staff.map(s => s.id),
@@ -106,28 +103,16 @@ class ShiftGeneratorService {
                 }
             });
 
+            console.log(`休み希望数: ${dayOffRequests.length}件`);
+
             const existingShifts = await this._getExistingShiftsForPeriod(staff, startDate, endDate, storeId);
 
             const storeData = this._formatStoreData(store);
             const staffData = this._formatStaffDataWithValidation(staff, dayOffRequests, existingShifts, startDate, endDate);
 
-            await shiftLogger.logStaffData(storeId, year, month, staffData);
-
-            const staffHoursCalc = staffData.map(s => ({
-                staffId: s.id,
-                name: s.name,
-                minRequired: s.min_hours_for_this_store,
-                maxAllowed: s.max_hours_for_this_store,
-                otherStoreHours: s.other_store_hours,
-                totalMinHours: s.min_hours_per_month,
-                totalMaxHours: s.max_hours_per_month
-            }));
-
-            await shiftLogger.logTimeCalculation(storeId, year, month, {
-                staffHoursCalculation: staffHoursCalc,
-                totalStaff: staffData.length,
-                periodStart: startDate.format('YYYY-MM-DD'),
-                periodEnd: endDate.format('YYYY-MM-DD')
+            console.log('スタッフ時間制約:');
+            staffData.forEach(s => {
+                console.log(`  ${s.name}: 最小${s.min_hours_for_this_store}h, 最大${s.max_hours_for_this_store}h (他店舗: ${s.other_store_hours}h)`);
             });
 
             const calendarData = this._generateCalendarDataWithClosingDay(startDate, endDate);
@@ -135,40 +120,58 @@ class ShiftGeneratorService {
 
             const prompt = this._generateEnhancedPrompt(storeData, staffData, calendarData, requirementsData, year, month, minDailyHours);
 
-            await shiftLogger.logAIPrompt(storeId, year, month, prompt);
+            console.log('プロンプト長:', prompt.length, '文字');
 
             console.log('Claude APIにリクエスト送信中...');
             const response = await this._callClaudeAPI(prompt);
 
             console.log('Claude APIからレスポンスを受信しました');
+            console.log('レスポンス長:', response.length, '文字');
+
             const shiftData = this._parseAIResponse(response);
 
-            await shiftLogger.logAIResponse(storeId, year, month, response, shiftData);
+            console.log('パース結果:', {
+                generatedShifts: shiftData.shifts?.length || 0,
+                hasSummary: !!shiftData.summary
+            });
 
             const generatedHours = this._calculateGeneratedHours(shiftData, staffData);
-            await shiftLogger.logHoursValidation(storeId, year, month, generatedHours);
+            console.log('生成された時間集計:');
+            generatedHours.forEach(staff => {
+                const isUnderMin = staff.generatedHours < staff.minRequired;
+                const isOverMax = staff.generatedHours > staff.maxAllowed;
+                const status = isUnderMin ? '不足' : isOverMax ? '超過' : 'OK';
+                console.log(`  ${staff.name}: ${staff.generatedHours}h (${status})`);
+            });
 
             const validationResult = await this.validateShift(shiftData, storeId, year, month);
-            await shiftLogger.logValidation(storeId, year, month, validationResult);
+            console.log('検証結果:', {
+                isValid: validationResult.isValid,
+                warningsCount: validationResult.warnings?.length || 0
+            });
 
             if (validationResult.warnings.length > 0) {
+                console.log('警告一覧:');
+                validationResult.warnings.forEach((warning, index) => {
+                    console.log(`  ${index + 1}. ${warning.date} ${warning.time_range}: ${warning.message}`);
+                });
+
                 if (!shiftData.summary) {
                     shiftData.summary = {};
                 }
                 shiftData.summary.staffingWarnings = validationResult.warnings;
             }
 
-            await shiftLogger.logShiftGeneration(storeId, year, month, {
-                phase: 'COMPLETION',
-                message: 'シフト生成完了',
-                generatedShifts: shiftData.shifts?.length || 0,
-                warningsCount: validationResult.warnings?.length || 0
-            });
+            console.log('=== シフト生成完了 ===');
 
             return shiftData;
         } catch (error) {
-            console.error('シフト生成エラー:', error);
-            await shiftLogger.logError(storeId, year, month, error, 'GENERATION_ERROR');
+            console.error('=== シフト生成エラー ===');
+            console.error('エラー詳細:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+            });
             throw error;
         }
     }
@@ -246,6 +249,8 @@ class ShiftGeneratorService {
             ]
         });
 
+        console.log(`他店舗シフト数: ${existingShifts.length}件`);
+
         const staffShifts = {};
         staff.forEach(s => {
             staffShifts[s.id] = [];
@@ -293,6 +298,8 @@ class ShiftGeneratorService {
     }
 
     _formatStaffDataWithValidation(staff, dayOffRequests, existingShifts, startDate, endDate) {
+        console.log('スタッフデータフォーマット開始');
+
         const staffData = staff.map(s => {
             const daysOff = dayOffRequests
                 .filter(req => req.staff_id === s.id)
@@ -343,6 +350,7 @@ class ShiftGeneratorService {
             };
         });
 
+        console.log('スタッフデータフォーマット完了');
         return staffData;
     }
 
@@ -750,6 +758,11 @@ class ShiftGeneratorService {
                     throw new Error('シフトデータの形式が正しくありません: shifts配列が見つかりません');
                 }
 
+                console.log('JSONパース成功:', {
+                    shiftsCount: shiftData.shifts.length,
+                    hasSummary: !!shiftData.summary
+                });
+
                 if (!shiftData.summary) {
                     shiftData.summary = this._generateSummary(shiftData.shifts);
                 }
@@ -760,6 +773,7 @@ class ShiftGeneratorService {
 
                 const repairedJson = this._attemptJsonRepair(jsonString);
                 if (repairedJson) {
+                    console.log('JSON修復成功');
                     return JSON.parse(repairedJson);
                 }
 
