@@ -2922,6 +2922,7 @@ const deleteShift = async () => {
     });
 
     return {
+      deleteShift,  // この行を追加
       loading,
       saving,
       isEditMode,
