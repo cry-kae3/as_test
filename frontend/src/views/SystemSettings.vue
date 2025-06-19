@@ -111,8 +111,8 @@ export default {
     const originalSettings = ref({});
     
     const settings = reactive({
-      closing_day: 25,
-      min_daily_hours: 4.0,
+      closing_day: null,
+      min_daily_hours: null,
       additional_settings: {}
     });
 
@@ -124,7 +124,7 @@ export default {
         const data = response.data;
         
         settings.closing_day = data.closing_day;
-        settings.min_daily_hours = data.min_daily_hours || 4.0;
+        settings.min_daily_hours = data.min_daily_hours;
         settings.additional_settings = data.additional_settings || {};
         
         originalSettings.value = { ...settings };
@@ -322,7 +322,6 @@ export default {
   padding-top: 1rem;
 }
 
-/* InputNumber のスタイル調整 */
 .closing-day-container .p-inputnumber,
 .min-hours-container .p-inputnumber {
   width: 120px;
@@ -334,7 +333,6 @@ export default {
   font-weight: 600;
 }
 
-/* エラー状態のスタイル */
 .p-invalid {
   border-color: var(--red-500) !important;
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
@@ -346,7 +344,6 @@ export default {
   margin-top: 0.25rem;
 }
 
-/* ボタンのスタイル調整 */
 .action-buttons .p-button {
   padding: 0.75rem 1.5rem;
   font-weight: 500;
@@ -379,7 +376,6 @@ export default {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* カードのスタイル調整 */
 .settings-container .p-card {
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
@@ -397,7 +393,6 @@ export default {
   padding: 1.5rem;
 }
 
-/* レスポンシブ対応 */
 @media (max-width: 768px) {
   .system-settings {
     padding: 0.5rem;

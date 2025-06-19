@@ -617,7 +617,6 @@ export default {
     const effectiveUser = computed(() => store.getters['auth/effectiveUser']);
     const effectiveUserRole = computed(() => store.getters['auth/effectiveUserRole']);
     
-    // 店舗選択を表示するかどうか
     const shouldShowStoreSelection = computed(() => {
       return effectiveUserRole.value === 'admin' && storeOptions.value.length > 0;
     });
@@ -655,7 +654,6 @@ export default {
       { label: "その他", value: "other" },
     ];
 
-    // 初期化関数
     const initializeStaffDialog = () => {
       return {
         visible: false,
@@ -680,7 +678,6 @@ export default {
         const staffDetail = await store.dispatch("staff/fetchStaffById", staff.id);
         console.log("スタッフ詳細データ:", staffDetail);
 
-        // スタッフ基本情報をコピー
         staffDialog.staff = {
           id: staffDetail.id,
           store_id: staffDetail.store_id,
@@ -697,42 +694,25 @@ export default {
           max_consecutive_days: staffDetail.max_consecutive_days,
         };
 
-        // 希望シフトの設定
         if (staffDetail.dayPreferences && Array.isArray(staffDetail.dayPreferences)) {
           staffDialog.dayPreferences = daysOfWeek.map((day) => {
             const preference = staffDetail.dayPreferences.find(
               (p) => parseInt(p.day_of_week) === parseInt(day.value)
             );
-
-            if (preference) {
-              return {
-                id: preference.id,
+            
+            return preference || {
                 day_of_week: parseInt(day.value),
-                available: preference.available === true || preference.available === 'true',
-                preferred_start_time: preference.preferred_start_time ? 
-                  String(preference.preferred_start_time).substring(0, 5) : null,
-                preferred_end_time: preference.preferred_end_time ? 
-                  String(preference.preferred_end_time).substring(0, 5) : null,
-                break_start_time: preference.break_start_time ? 
-                  String(preference.break_start_time).substring(0, 5) : null,
-                break_end_time: preference.break_end_time ? 
-                  String(preference.break_end_time).substring(0, 5) : null,
-              };
-            } else {
-              return {
-                day_of_week: parseInt(day.value),
-                available: true,
+                available: false,
                 preferred_start_time: null,
                 preferred_end_time: null,
                 break_start_time: null,
                 break_end_time: null,
               };
-            }
           });
         } else {
           staffDialog.dayPreferences = daysOfWeek.map((day) => ({
             day_of_week: parseInt(day.value),
-            available: true,
+            available: false,
             preferred_start_time: null,
             preferred_end_time: null,
             break_start_time: null,
@@ -740,7 +720,6 @@ export default {
           }));
         }
 
-        // 休み希望の設定
         if (staffDetail.dayOffRequests && staffDetail.dayOffRequests.length > 0) {
           staffDialog.dayOffRequests = staffDetail.dayOffRequests.map((request) => ({
             id: request.id,
@@ -771,7 +750,6 @@ export default {
     const saveStaff = async () => {
       submitted.value = true;
 
-      // バリデーション
       if (!staffDialog.staff.last_name || !staffDialog.staff.first_name) {
         toast.add({
           severity: "error",
@@ -782,7 +760,6 @@ export default {
         return;
       }
 
-      // 管理者の場合は店舗IDが必須
       if (shouldShowStoreSelection.value && (!staffDialog.staff.store_ids || staffDialog.staff.store_ids.length === 0)) {
         toast.add({
           severity: "error",
@@ -796,7 +773,6 @@ export default {
       saving.value = true;
 
       try {
-        // 希望シフトデータの準備
         const dayPreferences = staffDialog.dayPreferences.map((day) => ({
           day_of_week: parseInt(day.day_of_week, 10),
           available: Boolean(day.available),
@@ -807,7 +783,6 @@ export default {
           ...(day.id && { id: day.id })
         }));
 
-        // 休み希望データの準備
         const dayOffRequests = staffDialog.dayOffRequests.map((req) => ({
           date: req.date,
           reason: req.reason || "requested",
@@ -815,12 +790,9 @@ export default {
           ...(req.id && { id: req.id })
         }));
 
-        // 保存データの準備
         const staffData = {
           ...staffDialog.staff,
-          // 複数店舗対応
           store_ids: staffDialog.staff.store_ids || [],
-          // 後方互換性のため、最初の店舗をstore_idとしても設定
           store_id: staffDialog.staff.store_ids && staffDialog.staff.store_ids.length > 0 
             ? staffDialog.staff.store_ids[0] 
             : staffDialog.staff.store_id,
@@ -875,7 +847,6 @@ export default {
           console.log('店舗一覧取得結果:', stores);
           storeOptions.value = stores || [];
           
-          // エリア一覧を生成
           generateAreaOptions(stores || []);
         } else {
           storeOptions.value = [];
@@ -889,7 +860,6 @@ export default {
     };
 
     const generateAreaOptions = (stores) => {
-      // 店舗のエリア情報からユニークなエリア一覧を生成
       const areas = new Set();
       stores.forEach(store => {
         if (store.area && store.area.trim()) {
@@ -906,7 +876,6 @@ export default {
     };
 
     const selectStoresByArea = (areaValue) => {
-      // 指定されたエリアの店舗を全て選択
       const areaStores = storeOptions.value
         .filter(store => store.area && store.area.trim() === areaValue)
         .map(store => store.id);
@@ -914,7 +883,6 @@ export default {
       console.log(`エリア ${areaValue} の店舗:`, areaStores);
       
       if (areaStores.length > 0) {
-        // 既存の選択と重複しないように追加
         const currentSelection = staffDialog.staff.store_ids || [];
         const newSelection = [...new Set([...currentSelection, ...areaStores])];
         staffDialog.staff.store_ids = newSelection;
@@ -982,11 +950,9 @@ export default {
       if (effectiveUserRole.value === 'owner' || effectiveUserRole.value === 'staff') {
         defaultStoreId = effectiveUser.value?.store_id || 1;
       } else if (effectiveUserRole.value === 'admin') {
-        // 管理者の場合は店舗選択必須のためnullにする
         defaultStoreId = null;
       }
 
-      // 新規スタッフのデフォルトデータ
       staffDialog.staff = {
         store_id: defaultStoreId,
         store_ids: defaultStoreId ? [defaultStoreId] : [],
@@ -1002,7 +968,6 @@ export default {
         max_consecutive_days: null,
       };
 
-      // 希望シフトのデフォルト設定
       staffDialog.dayPreferences = daysOfWeek.map((day) => ({
         day_of_week: day.value,
         available: true,
@@ -1100,7 +1065,6 @@ export default {
       staffDialog.dayOffRequests.splice(index, 1);
     };
 
-    // ユーティリティ関数
     const formatDate = (date) => {
       if (!date) return "";
       const d = date instanceof Date ? date : new Date(date);
@@ -1267,7 +1231,6 @@ export default {
   color: var(--red-500);
 }
 
-/* 店舗選択のスタイル */
 .store-selection-container {
   display: flex;
   flex-direction: column;
@@ -1430,7 +1393,6 @@ export default {
   color: var(--text-color-secondary);
 }
 
-/* テーブルのスタイル */
 .day-preferences-summary {
   display: flex;
   gap: 0.25rem;
@@ -1491,7 +1453,6 @@ export default {
   justify-content: center;
 }
 
-/* 休み希望のスタイル */
 .custom-date-picker {
   padding: 1rem;
   background-color: var(--surface-ground);
@@ -1556,7 +1517,6 @@ export default {
   gap: 0.5rem;
 }
 
-/* レスポンシブ対応 */
 @media (max-width: 1200px) {
   .staff-dialog {
     width: 95vw !important;
@@ -1641,7 +1601,6 @@ export default {
   }
 }
 
-/* プライムVueのカラムフィルター調整 */
 :deep(.p-column-filter) {
   width: 100%;
   min-width: 100px;
@@ -1665,7 +1624,6 @@ export default {
   white-space: nowrap;
 }
 
-/* タブビューの調整 */
 :deep(.p-tabview .p-tabview-panels) {
   padding: 0;
 }

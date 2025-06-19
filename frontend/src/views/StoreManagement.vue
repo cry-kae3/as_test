@@ -370,6 +370,12 @@
                 <h5 class="day-title">{{ day.label }}曜日</h5>
 
                 <div
+                  v-if="getRequirementsForDayNew(day.value).length === 0"
+                  class="text-center p-3 text-muted"
+                >
+                  この曜日の人員要件は設定されていません。
+                </div>
+                <div
                   v-for="(req, reqIndex) in getRequirementsForDayNew(day.value)"
                   :key="dayIndex + '-' + reqIndex"
                   class="requirement-item"
@@ -752,6 +758,12 @@
               >
                 <h5 class="day-title">{{ day.label }}曜日</h5>
 
+                <div
+                  v-if="getRequirementsForDayEdit(day.value).length === 0"
+                  class="text-center p-3 text-muted"
+                >
+                  この曜日の人員要件は設定されていません。
+                </div>
                 <div
                   v-for="(req, reqIndex) in getRequirementsForDayEdit(
                     day.value
@@ -1199,17 +1211,7 @@ export default {
 
       newStoreDialog.dayRequirements = {};
       daysOfWeek.forEach((day) => {
-        if (day.value !== 0) {
-          newStoreDialog.dayRequirements[day.value] = [
-            {
-              start_time: "09:00",
-              end_time: "18:00",
-              required_staff_count: 2,
-            },
-          ];
-        } else {
-          newStoreDialog.dayRequirements[day.value] = [];
-        }
+        newStoreDialog.dayRequirements[day.value] = [];
       });
 
       newStoreDialog.visible = true;
@@ -1529,16 +1531,6 @@ export default {
             }
           });
         }
-
-        daysOfWeek.forEach((day) => {
-          if (storeDialog.dayRequirements[day.value].length === 0) {
-            storeDialog.dayRequirements[day.value].push({
-              start_time: "09:00",
-              end_time: "18:00",
-              required_staff_count: 2,
-            });
-          }
-        });
 
         console.log("変換後の人員要件データ:", storeDialog.dayRequirements);
       } catch (error) {

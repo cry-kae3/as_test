@@ -18,11 +18,6 @@ const authenticateSession = async (req, res, next) => {
         const user = session.user;
         const impersonateUserId = req.headers['x-impersonate-user-id'];
 
-        console.log('認証ミドルウェア:', {
-            originalUserId: user.id,
-            originalUserRole: user.role,
-            impersonateUserId: impersonateUserId
-        });
 
         if (impersonateUserId && user.role === 'admin') {
             try {

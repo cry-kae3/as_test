@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -6,21 +7,7 @@ const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const { logUserChange } = require('./middleware/changeLogger');
 const sessionService = require('./services/sessionService');
-require('dotenv').config();
-
-const requiredEnvVars = [
-  'CLAUDE_API_KEY',
-  'API_PORT',
-  'INITIAL_ADMIN_USERNAME',
-  'INITIAL_ADMIN_PASSWORD',
-  'INITIAL_ADMIN_EMAIL'
-];
-
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
-if (missingEnvVars.length > 0) {
-  console.error('Missing required environment variables:', missingEnvVars);
-  process.exit(1);
-}
+const { seedStaffRequirements } = require('./services/seeder');
 
 const { sequelize, User } = require('./models');
 const routes = require('./routes');
@@ -115,13 +102,16 @@ async function startServer() {
       }
       await sequelize.sync(syncOptions);
       await createInitialUsers();
+      await seedStaffRequirements();
     } else {
       await createInitialUsers();
+      await seedStaffRequirements();
     }
 
     startSessionCleanup();
 
     app.listen(API_PORT, () => {
+      console.log(`サーバーがポート${API_PORT}で起動しました。`);
     });
   } catch (error) {
     console.error('Server startup error:', error);
