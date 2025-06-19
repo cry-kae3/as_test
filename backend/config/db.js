@@ -16,14 +16,6 @@ if (missingEnvVars.length > 0) {
     process.exit(1);
 }
 
-console.log('Connecting to database with settings:', {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    database: process.env.DB_NAME,
-    username: process.env.DB_USERNAME,
-    dialect: process.env.DB_DIALECT
-});
-
 const sequelize = new Sequelize(
     process.env.DB_NAME,
     process.env.DB_USERNAME,
@@ -32,7 +24,7 @@ const sequelize = new Sequelize(
         host: process.env.DB_HOST,
         port: parseInt(process.env.DB_PORT),
         dialect: process.env.DB_DIALECT,
-        logging: process.env.NODE_ENV === 'development' ? console.log : false,
+        logging: false,
         dialectOptions: {
             ssl: process.env.NODE_ENV === 'production' ? {
                 require: true,
@@ -45,7 +37,6 @@ const sequelize = new Sequelize(
 const testConnection = async () => {
     try {
         await sequelize.authenticate();
-        console.log('Database connection has been established successfully.');
         return true;
     } catch (error) {
         console.error('Unable to connect to the database:', error);

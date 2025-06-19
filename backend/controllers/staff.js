@@ -21,7 +21,6 @@ const getAllDayOffRequests = async (req, res) => {
             include[0].where = { store_id };
         }
 
-        let storeWhereClause = {};
         if (req.user.role === 'owner' || req.user.role === 'staff') {
             let ownerId = req.user.id;
 
@@ -61,11 +60,6 @@ const getAllDayOffRequests = async (req, res) => {
 const getAllStaff = async (req, res) => {
     try {
         const { store_id } = req.query;
-        console.log('getAllStaff called with:', {
-            store_id,
-            user: req.user,
-            userRole: req.user?.role
-        });
 
         const where = {};
         if (store_id) {
@@ -105,29 +99,12 @@ const getAllStaff = async (req, res) => {
             }
 
             include[0].where = { owner_id: ownerId };
-
-            console.log('Store where condition:', include[0].where);
         }
-
-        console.log('Executing query with where:', where);
-        console.log('Include configuration:', JSON.stringify(include, null, 2));
 
         const staff = await Staff.findAll({
             where,
             include,
             order: [['id', 'ASC']]
-        });
-
-        console.log(`Found ${staff.length} staff members`);
-
-        staff.forEach((s, index) => {
-            console.log(`Staff ${index + 1}:`, {
-                id: s.id,
-                name: `${s.last_name} ${s.first_name}`,
-                store_id: s.store_id,
-                dayPreferences: s.dayPreferences?.length || 0,
-                dayOffRequests: s.dayOffRequests?.length || 0
-            });
         });
 
         res.status(200).json(staff);
@@ -372,14 +349,6 @@ const updateStaff = async (req, res) => {
         } = req.body;
         const isImpersonating = req.query.impersonation === 'true';
 
-        console.log("受け取ったデータ:", {
-            id,
-            store_id,
-            store_ids,
-            day_preferences,
-            day_off_requests
-        });
-
         const include = [
             {
                 model: Store,
@@ -455,8 +424,6 @@ const updateStaff = async (req, res) => {
                 });
 
                 if (day_preferences && Array.isArray(day_preferences) && day_preferences.length > 0) {
-                    console.log("希望シフトデータ:", day_preferences);
-
                     await StaffDayPreference.bulkCreate(
                         day_preferences.map(pref => ({
                             staff_id: id,
@@ -589,11 +556,6 @@ const updateStaff = async (req, res) => {
                     attributes: ['id', 'name', 'area']
                 }
             ]
-        });
-
-        console.log("更新後のスタッフデータ:", {
-            dayPreferences: updatedStaff.dayPreferences,
-            dayOffRequests: updatedStaff.dayOffRequests
         });
 
         res.status(200).json(updatedStaff);

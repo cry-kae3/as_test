@@ -20,1042 +20,431 @@ class ShiftGeneratorService {
             const certPath = process.env.NODE_EXTRA_CA_CERTS || '/usr/local/share/ca-certificates/Fortinet_CA_SSL.crt';
             if (fs.existsSync(certPath)) {
                 this.caCert = fs.readFileSync(certPath);
-                console.log('企業CA証明書を読み込みました:', certPath);
             } else {
                 const localCertPath = path.join(__dirname, '../../Fortinet_CA_SSL.cer');
                 if (fs.existsSync(localCertPath)) {
                     this.caCert = fs.readFileSync(localCertPath);
-                    console.log('ローカルCA証明書を読み込みました:', localCertPath);
                 }
             }
         } catch (error) {
-            console.warn('CA証明書の読み込みに失敗しました:', error.message);
+            // CA証明書の読み込みに失敗しても処理は続行
         }
     }
 
     async generateShift(storeId, year, month) {
+        console.log(`[ShiftGeneratorService] シフト生成開始: 店舗ID ${storeId}, ${year}年${month}月`);
         try {
-            console.log('=== シフト生成開始 ===');
-            console.log(`店舗ID: ${storeId}, 期間: ${year}年${month}月`);
-
-            if (!this.claudeApiKey) {
-                throw new Error('Claude API キーが設定されていません');
-            }
-
-            const store = await Store.findByPk(storeId, {
-                include: [
-                    { model: StoreClosedDay, as: 'closedDays' },
-                    { model: StoreStaffRequirement, as: 'staffRequirements' }
-                ]
-            });
-
+            const store = await Store.findByPk(storeId);
             if (!store) {
-                throw new Error('店舗が見つかりません');
+                throw new Error('指定された店舗が見つかりません。');
             }
 
-            let systemSettings;
-            try {
-                systemSettings = await SystemSetting.findOne({
-                    where: { user_id: store.owner_id }
-                });
-            } catch (error) {
-                console.warn('システム設定取得エラー:', error);
-                systemSettings = null;
+            const staffs = await Staff.findAll({ where: { store_id: storeId, is_active: true } });
+            if (staffs.length === 0) {
+                throw new Error('この店舗にアクティブなスタッフがいません。');
             }
+            console.log(`[ShiftGeneratorService] 取得したスタッフ数: ${staffs.length}`);
 
-            const closingDay = systemSettings?.closing_day || 25;
-            const minDailyHours = systemSettings?.min_daily_hours || 4.0;
-
-            console.log('システム設定:', {
-                closingDay,
-                minDailyHours,
-                hasSystemSettings: !!systemSettings
-            });
-
-            const { startDate, endDate } = this.getShiftPeriodByClosingDay(year, month, closingDay);
-
-            const staff = await Staff.findAll({
-                where: { store_id: storeId },
-                include: [
-                    { model: StaffDayPreference, as: 'dayPreferences' },
-                    {
-                        model: Store,
-                        as: 'stores',
-                        through: { attributes: [] },
-                        attributes: ['id', 'name']
-                    }
-                ]
-            });
-
-            if (staff.length === 0) {
-                throw new Error('スタッフが登録されていません');
-            }
-
-            console.log(`スタッフ数: ${staff.length}人`);
-
-            const dayOffRequests = await StaffDayOffRequest.findAll({
+            const staffPreferences = await StaffDayPreference.findAll({
                 where: {
-                    staff_id: staff.map(s => s.id),
+                    staff_id: { [Op.in]: staffs.map(s => s.id) },
+                    year: year,
+                    month: month
+                }
+            });
+            console.log(`[ShiftGeneratorService] 取得したスタッフ希望シフト数: ${staffPreferences.length}`);
+
+            const staffDayOffRequests = await StaffDayOffRequest.findAll({
+                where: {
+                    staff_id: { [Op.in]: staffs.map(s => s.id) },
                     date: {
-                        [Op.between]: [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')]
-                    },
-                    status: ['pending', 'approved']
+                        [Op.between]: [
+                            moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Tokyo').startOf('month').toDate(),
+                            moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Tokyo').endOf('month').toDate()
+                        ]
+                    }
                 }
             });
+            console.log(`[ShiftGeneratorService] 取得したスタッフ休み希望数: ${staffDayOffRequests.length}`);
 
-            console.log(`休み希望数: ${dayOffRequests.length}件`);
 
-            const existingShifts = await this._getExistingShiftsForPeriod(staff, startDate, endDate, storeId);
-
-            const storeData = this._formatStoreData(store);
-            const staffData = this._formatStaffDataWithValidation(staff, dayOffRequests, existingShifts, startDate, endDate);
-
-            console.log('スタッフ時間制約:');
-            staffData.forEach(s => {
-                console.log(`  ${s.name}: 最小${s.min_hours_for_this_store}h, 最大${s.max_hours_for_this_store}h (他店舗: ${s.other_store_hours}h)`);
-            });
-
-            const calendarData = this._generateCalendarDataWithClosingDay(startDate, endDate);
-            const requirementsData = this._formatRequirementsDataWithPeriod(store, startDate, endDate);
-
-            const prompt = this._generateEnhancedPrompt(storeData, staffData, calendarData, requirementsData, year, month, minDailyHours);
-
-            console.log('プロンプト長:', prompt.length, '文字');
-
-            console.log('Claude APIにリクエスト送信中...');
-            const response = await this._callClaudeAPI(prompt);
-
-            console.log('Claude APIからレスポンスを受信しました');
-            console.log('レスポンス長:', response.length, '文字');
-
-            const shiftData = this._parseAIResponse(response);
-
-            console.log('パース結果:', {
-                generatedShifts: shiftData.shifts?.length || 0,
-                hasSummary: !!shiftData.summary
-            });
-
-            const generatedHours = this._calculateGeneratedHours(shiftData, staffData);
-            console.log('生成された時間集計:');
-            generatedHours.forEach(staff => {
-                const isUnderMin = staff.generatedHours < staff.minRequired;
-                const isOverMax = staff.generatedHours > staff.maxAllowed;
-                const status = isUnderMin ? '不足' : isOverMax ? '超過' : 'OK';
-                console.log(`  ${staff.name}: ${staff.generatedHours}h (${status})`);
-            });
-
-            const validationResult = await this.validateShift(shiftData, storeId, year, month);
-            console.log('検証結果:', {
-                isValid: validationResult.isValid,
-                warningsCount: validationResult.warnings?.length || 0
-            });
-
-            if (validationResult.warnings.length > 0) {
-                console.log('警告一覧:');
-                validationResult.warnings.forEach((warning, index) => {
-                    console.log(`  ${index + 1}. ${warning.date} ${warning.time_range}: ${warning.message}`);
-                });
-
-                if (!shiftData.summary) {
-                    shiftData.summary = {};
+            const storeClosedDays = await StoreClosedDay.findAll({
+                where: {
+                    store_id: storeId,
+                    date: {
+                        [Op.between]: [
+                            moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Tokyo').startOf('month').toDate(),
+                            moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Tokyo').endOf('month').toDate()
+                        ]
+                    }
                 }
-                shiftData.summary.staffingWarnings = validationResult.warnings;
-            }
+            });
+            console.log(`[ShiftGeneratorService] 取得した店舗定休日数: ${storeClosedDays.length}`);
 
-            console.log('=== シフト生成完了 ===');
+            const storeRequirements = await StoreStaffRequirement.findAll({
+                where: { store_id: storeId }
+            });
+            console.log(`[ShiftGeneratorService] 取得した店舗要員要件数: ${storeRequirements.length}`);
 
-            return shiftData;
+            const systemSettings = await SystemSetting.findOne();
+            console.log(`[ShiftGeneratorService] 取得したシステム設定: ${systemSettings ? 'あり' : 'なし'}`);
+
+            const prompt = this.buildPrompt(
+                store, staffs, staffPreferences, staffDayOffRequests,
+                storeClosedDays, storeRequirements, systemSettings, year, month
+            );
+            console.log(`[ShiftGeneratorService] Claude APIプロンプト作成完了。プロンプトサイズ: ${prompt.length} 文字`);
+            // console.log("プロンプト内容:\n", prompt); // デバッグ用：プロンプト全体を確認したい場合にコメントを外す
+
+            const response = await this.callClaudeApi(prompt);
+            console.log(`[ShiftGeneratorService] Claude APIレスポンス受信完了。`);
+            // console.log("Claude APIレスポンス:\n", JSON.stringify(response, null, 2)); // デバッグ用：レスポンス全体を確認したい場合にコメントを外す
+
+            const shiftData = this.parseClaudeResponse(response);
+            console.log(`[ShiftGeneratorService] Claudeレスポンス解析完了。生成されたシフト日数: ${shiftData.shifts.length}`);
+            console.log(`[ShiftGeneratorService] 生成されたシフトデータ概要:`, JSON.stringify(shiftData, null, 2)); // 生成されたシフトデータの詳細を確認
+
+            // 勤務条件の検証ログを追加
+            this.validateGeneratedShift(shiftData, staffs, systemSettings);
+
+            const savedShift = await this.saveShift(storeId, year, month, shiftData);
+            console.log(`[ShiftGeneratorService] シフト保存完了: シフトID ${savedShift.id}`);
+            return savedShift;
+
         } catch (error) {
-            console.error('=== シフト生成エラー ===');
-            console.error('エラー詳細:', {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
-            });
+            console.error('[ShiftGeneratorService] シフト生成処理中にエラーが発生しました:', error.message, error.stack);
             throw error;
         }
     }
 
-    _calculateGeneratedHours(shiftData, staffData) {
-        const staffHours = {};
+    buildPrompt(store, staffs, staffPreferences, staffDayOffRequests, storeClosedDays, storeRequirements, systemSettings, year, month) {
+        const startDate = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, 'Asia/Tokyo');
+        const endDate = startDate.clone().endOf('month');
+        const totalDays = endDate.date();
 
-        if (shiftData.shifts) {
-            shiftData.shifts.forEach(dayShift => {
-                if (dayShift.assignments) {
-                    dayShift.assignments.forEach(assignment => {
-                        const staffId = assignment.staff_id;
-                        if (!staffHours[staffId]) {
-                            staffHours[staffId] = 0;
-                        }
+        let prompt = `あなたは店舗のシフトを最適に生成するAIアシスタントです。以下の情報に基づき、${year}年${month}月のシフトをJSON形式で生成してください。\n\n`;
 
-                        const startTime = moment(assignment.start_time, 'HH:mm');
-                        const endTime = moment(assignment.end_time, 'HH:mm');
-                        let hours = endTime.diff(startTime, 'minutes') / 60;
+        prompt += `### 店舗情報\n`;
+        prompt += `- 店舗名: ${store.name}\n`;
+        prompt += `- 営業時間: ${store.opening_time} - ${store.closing_time}\n`;
+        prompt += `- 最低必要人数: ${store.min_staff_for_open}人\n`;
+        prompt += `- シフト最小時間（分）: ${systemSettings?.min_shift_minutes || 240}\n`;
+        prompt += `- 休憩自動挿入の閾値（時間）: ${systemSettings?.break_threshold_hours || 6}\n`;
+        prompt += `- 休憩時間（分）: ${systemSettings?.break_minutes || 60}\n`;
+        prompt += `- 最大勤務時間（日）（時間）: ${systemSettings?.max_daily_work_hours || 8}\n`;
+        prompt += `- 最大勤務時間（週）（時間）: ${systemSettings?.max_weekly_work_hours || 40}\n`;
+        prompt += `- 最大勤務日数（週）: ${systemSettings?.max_weekly_work_days || 5}\n`;
+        prompt += `- 最小勤務間隔（時間）: ${systemSettings?.min_rest_hours || 11}\n`; // 追加
+        prompt += `- 月の最大勤務時間（時間）: ${systemSettings?.max_monthly_work_hours || 160}\n\n`;
 
-                        if (assignment.break_start_time && assignment.break_end_time) {
-                            const breakStart = moment(assignment.break_start_time, 'HH:mm');
-                            const breakEnd = moment(assignment.break_end_time, 'HH:mm');
-                            const breakHours = breakEnd.diff(breakStart, 'minutes') / 60;
-                            hours -= breakHours;
-                        }
 
-                        staffHours[staffId] += hours;
-                    });
-                }
+        prompt += `### スタッフ情報\n`;
+        staffs.forEach(staff => {
+            const preferences = staffPreferences.filter(p => p.staff_id === staff.id);
+            const offRequests = staffDayOffRequests.filter(r => r.staff_id === staff.id);
+            prompt += `- ID: ${staff.id}, 名前: ${staff.name}, 役職: ${staff.position}, 雇用形態: ${staff.employment_type}\n`;
+            prompt += `  - 契約勤務時間（週）（時間）: ${staff.contracted_weekly_hours}\n`;
+            prompt += `  - 週あたりの最大勤務日数: ${staff.max_days_per_week || '設定なし'}\n`;
+            prompt += `  - 希望勤務時間帯: ${preferences.map(p => `${p.day_of_week} ${p.start_time}-${p.end_time}`).join(', ') || 'なし'}\n`;
+            prompt += `  - 休み希望: ${offRequests.map(r => moment(r.date).format('YYYY-MM-DD')).join(', ') || 'なし'}\n`;
+            prompt += `  - 各スタッフは1日1シフトのみ割り当て可能。\n`;
+            prompt += `  - 各スタッフは最低勤務間隔（${systemSettings?.min_rest_hours || 11}時間）を守ること。\n`;
+            prompt += `  - 各スタッフは1日の最大勤務時間（${systemSettings?.max_daily_work_hours || 8}時間）を超過しないこと。\n`;
+            prompt += `  - 各スタッフは1週間の最大勤務時間（${systemSettings?.max_weekly_work_hours || 40}時間）を超過しないこと。\n`;
+            prompt += `  - 各スタッフは1週間の最大勤務日数（${systemSettings?.max_weekly_work_days || 5}日）を超過しないこと。\n`;
+            prompt += `  - 各スタッフは月の最大勤務時間（${systemSettings?.max_monthly_work_hours || 160}時間）を超過しないこと。\n`;
+            prompt += `  - 休憩自動挿入の閾値（${systemSettings?.break_threshold_hours || 6}時間）を超える勤務には${systemSettings?.break_minutes || 60}分の休憩を必ず挿入すること。\n`;
+
+        });
+        prompt += `\n`;
+
+        prompt += `### 店舗定休日\n`;
+        if (storeClosedDays.length > 0) {
+            storeClosedDays.forEach(day => {
+                prompt += `- ${moment(day.date).format('YYYY-MM-DD')}\n`;
             });
-        }
-
-        return staffData.map(staff => {
-            const generatedHours = staffHours[staff.id] || 0;
-            const totalHours = generatedHours + staff.other_store_hours;
-
-            return {
-                staffId: staff.id,
-                name: staff.name,
-                generatedHours,
-                minRequired: staff.min_hours_for_this_store,
-                maxAllowed: staff.max_hours_for_this_store,
-                otherStoreHours: staff.other_store_hours,
-                totalHours,
-                totalMinHours: staff.min_hours_per_month,
-                totalMaxHours: staff.max_hours_per_month
-            };
-        });
-    }
-
-    async _getExistingShiftsForPeriod(staff, startDate, endDate, excludeStoreId) {
-        console.log(`他店舗シフト取得: ${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}`);
-
-        const existingShifts = await ShiftAssignment.findAll({
-            where: {
-                staff_id: staff.map(s => s.id),
-                date: {
-                    [Op.between]: [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')]
-                }
-            },
-            include: [
-                {
-                    model: Shift,
-                    where: {
-                        store_id: { [Op.ne]: excludeStoreId }
-                    },
-                    include: [
-                        {
-                            model: Store,
-                            attributes: ['id', 'name']
-                        }
-                    ]
-                }
-            ]
-        });
-
-        console.log(`他店舗シフト数: ${existingShifts.length}件`);
-
-        const staffShifts = {};
-        staff.forEach(s => {
-            staffShifts[s.id] = [];
-        });
-
-        existingShifts.forEach(assignment => {
-            if (staffShifts[assignment.staff_id]) {
-                staffShifts[assignment.staff_id].push({
-                    date: moment(assignment.date).format('YYYY-MM-DD'),
-                    start_time: assignment.start_time,
-                    end_time: assignment.end_time,
-                    store_name: assignment.Shift.Store.name,
-                    break_start_time: assignment.break_start_time,
-                    break_end_time: assignment.break_end_time
-                });
-            }
-        });
-
-        return staffShifts;
-    }
-
-    _calculateShiftHours(shift) {
-        const startTime = moment(shift.start_time, 'HH:mm:ss');
-        const endTime = moment(shift.end_time, 'HH:mm:ss');
-
-        if (endTime.isBefore(startTime)) {
-            endTime.add(1, 'day');
-        }
-
-        let hours = endTime.diff(startTime, 'minutes') / 60;
-
-        if (shift.break_start_time && shift.break_end_time) {
-            const breakStart = moment(shift.break_start_time, 'HH:mm:ss');
-            const breakEnd = moment(shift.break_end_time, 'HH:mm:ss');
-
-            if (breakEnd.isBefore(breakStart)) {
-                breakEnd.add(1, 'day');
-            }
-
-            const breakHours = breakEnd.diff(breakStart, 'minutes') / 60;
-            hours -= breakHours;
-        }
-
-        return Math.max(0, hours);
-    }
-
-    _formatStaffDataWithValidation(staff, dayOffRequests, existingShifts, startDate, endDate) {
-        console.log('スタッフデータフォーマット開始');
-
-        const staffData = staff.map(s => {
-            const daysOff = dayOffRequests
-                .filter(req => req.staff_id === s.id)
-                .map(req => ({
-                    date: moment(req.date).format('YYYY-MM-DD'),
-                    reason: req.reason,
-                    status: req.status
-                }));
-
-            const otherStoreShifts = existingShifts[s.id] || [];
-
-            const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-            const formattedPreferences = s.dayPreferences.map(pref => ({
-                day_of_week: pref.day_of_week,
-                day_name: dayNames[pref.day_of_week],
-                available: pref.available,
-                preferred_start_time: pref.preferred_start_time,
-                preferred_end_time: pref.preferred_end_time,
-                break_start_time: pref.break_start_time,
-                break_end_time: pref.break_end_time
-            }));
-
-            const otherStoreHours = otherStoreShifts.reduce((total, shift) => {
-                return total + this._calculateShiftHours(shift);
-            }, 0);
-
-            const minHours = s.min_hours_per_month || 0;
-            const maxHours = s.max_hours_per_month || 160;
-
-            const minHoursForThisStore = Math.max(0, minHours - otherStoreHours);
-            const maxHoursForThisStore = Math.max(0, maxHours - otherStoreHours);
-
-            return {
-                id: s.id,
-                name: `${s.last_name} ${s.first_name}`,
-                position: s.position || '一般スタッフ',
-                employment_type: s.employment_type || 'パート',
-                max_hours_per_month: maxHours,
-                min_hours_per_month: minHours,
-                other_store_hours: otherStoreHours,
-                min_hours_for_this_store: minHoursForThisStore,
-                max_hours_for_this_store: maxHoursForThisStore,
-                max_hours_per_day: s.max_hours_per_day || 8,
-                max_consecutive_days: s.max_consecutive_days || 5,
-                day_preferences: formattedPreferences,
-                days_off: daysOff,
-                other_store_shifts: otherStoreShifts
-            };
-        });
-
-        console.log('スタッフデータフォーマット完了');
-        return staffData;
-    }
-
-    _generateEnhancedPrompt(storeData, staffData, calendarData, requirementsData, year, month, minDailyHours) {
-        const monthNames = [
-            '1月', '2月', '3月', '4月', '5月', '6月',
-            '7月', '8月', '9月', '10月', '11月', '12月'
-        ];
-
-        const staffDetails = staffData.map(staff => {
-            const dayPrefs = staff.day_preferences.map(pref =>
-                `${pref.day_name}:${pref.available ? `${pref.preferred_start_time || '未設定'}-${pref.preferred_end_time || '未設定'}` : '休み'}`
-            ).join(', ');
-
-            const dayOffs = staff.days_off.map(off => `${off.date}(${off.reason || ''})`).join(', ');
-
-            const otherStoreShifts = staff.other_store_shifts.map(shift =>
-                `${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`
-            ).join(', ');
-
-            return `
-    【スタッフ: ${staff.name}】
-    ID: ${staff.id}
-    役職: ${staff.position}
-    雇用形態: ${staff.employment_type}
-    
-    🚨【最重要】勤務時間制約🚨
-    - 月間全体最小時間: ${staff.min_hours_per_month}時間
-    - 月間全体最大時間: ${staff.max_hours_per_month}時間
-    - 他店舗での確定時間: ${staff.other_store_hours.toFixed(1)}時間
-    - 【絶対達成】当店舗で必要な最小時間: ${staff.min_hours_for_this_store.toFixed(1)}時間
-    - 【絶対厳守】当店舗での最大可能時間: ${staff.max_hours_for_this_store.toFixed(1)}時間
-    
-    その他制約:
-    - 1日最大勤務: ${staff.max_hours_per_day}時間
-    - 最大連続勤務: ${staff.max_consecutive_days}日
-    - 曜日別希望: ${dayPrefs}
-    - 休み希望: ${dayOffs || 'なし'}
-    - 他店舗シフト: ${otherStoreShifts || 'なし'}`;
-        }).join('\n');
-
-        const periodInfo = calendarData.length > 0 ?
-            `期間: ${calendarData[0].date} から ${calendarData[calendarData.length - 1].date}` :
-            `期間: ${year}年${month}月`;
-
-        return `
-    # シフト生成リクエスト
-    
-    ## 基本情報
-    年月: ${year}年${monthNames[month - 1]}
-    ${periodInfo}
-    店舗: ${storeData.name}
-    営業時間: ${storeData.opening_time}～${storeData.closing_time}
-    
-    ## スタッフ詳細情報
-    ${staffDetails}
-    
-    ## 🚨【最重要命令】🚨
-    
-    ### 絶対遵守事項
-    1. **各スタッフの「当店舗で必要な最小時間」を100%達成**
-    2. **各スタッフの「当店舗での最大可能時間」を絶対に超過しない**
-    3. **人員要件は参考程度に留め、スタッフの時間制約を最優先**
-    
-    ### シフト生成戦略
-    - 各スタッフが最小時間に満たない場合は、勤務可能日に追加でシフトを組む
-    - 1回の勤務は最低${minDailyHours}時間以上とする
-    - 短時間の細切れシフトではなく、まとまった時間で割り当てる
-    - 人員不足になっても構わないので、スタッフの時間制約を守る
-    
-    ## 出力形式
-    JSONのみで回答。説明不要。
-    
-    {
-      "shifts": [
-        {
-          "date": "YYYY-MM-DD",
-          "assignments": [
-            {
-              "staff_id": 1,
-              "staff_name": "田中 太郎",
-              "start_time": "09:00",
-              "end_time": "18:00",
-              "break_start_time": "12:00",
-              "break_end_time": "13:00"
-            }
-          ]
-        }
-      ]
-    }`;
-    }
-
-    getShiftPeriodByClosingDay(year, month, closingDay) {
-        let startDate, endDate;
-
-        if (closingDay >= 1 && closingDay <= 31) {
-            startDate = moment(`${year}-${month}-${closingDay}`, 'YYYY-MM-DD').subtract(1, 'month').add(1, 'day');
-            endDate = moment(`${year}-${month}-${closingDay}`, 'YYYY-MM-DD');
-
-            const startMonthDays = moment(startDate).subtract(1, 'day').daysInMonth();
-            if (closingDay > startMonthDays) {
-                startDate = moment(`${year}-${month}`, 'YYYY-MM').subtract(1, 'month').endOf('month').add(1, 'day');
-            }
-
-            const endMonthDays = moment(endDate).daysInMonth();
-            if (closingDay > endMonthDays) {
-                endDate = moment(`${year}-${month}`, 'YYYY-MM').endOf('month');
-            }
         } else {
-            startDate = moment(`${year}-${month}-01`, 'YYYY-MM-DD');
-            endDate = moment(`${year}-${month}`, 'YYYY-MM').endOf('month');
+            prompt += `- なし\n`;
         }
+        prompt += `\n`;
 
-        return { startDate, endDate };
-    }
-
-    _generateCalendarDataWithClosingDay(startDate, endDate) {
-        const calendarData = [];
-        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-
-        const current = moment(startDate);
-        while (current.isSameOrBefore(endDate)) {
-            const dayOfWeek = current.day();
-
-            calendarData.push({
-                date: current.format('YYYY-MM-DD'),
-                day_of_week: dayOfWeek,
-                day_name: dayNames[dayOfWeek],
-                is_weekend: [0, 6].includes(dayOfWeek)
-            });
-
-            current.add(1, 'day');
-        }
-
-        return calendarData;
-    }
-
-    _formatRequirementsDataWithPeriod(store, startDate, endDate) {
-        const requirementsData = [];
-
-        const current = moment(startDate);
-        while (current.isSameOrBefore(endDate)) {
-            const dayOfWeek = current.day();
-            const dateStr = current.format('YYYY-MM-DD');
-
-            const specialRequirements = store.staffRequirements
-                .filter(req => req.specific_date && moment(req.specific_date).format('YYYY-MM-DD') === dateStr);
-
-            const regularRequirements = store.staffRequirements
-                .filter(req => req.day_of_week === dayOfWeek && !req.specific_date);
-
-            const dayRequirements = specialRequirements.length > 0 ? specialRequirements : regularRequirements;
-
-            const formattedRequirements = dayRequirements.map(req => ({
-                start_time: moment(req.start_time, 'HH:mm:ss').format('HH:mm'),
-                end_time: moment(req.end_time, 'HH:mm:ss').format('HH:mm'),
-                required_staff_count: req.required_staff_count
-            }));
-
-            requirementsData.push({
-                date: dateStr,
-                day_of_week: dayOfWeek,
-                requirements: formattedRequirements
-            });
-
-            current.add(1, 'day');
-        }
-
-        return requirementsData;
-    }
-
-    async getStaffTotalHoursAllStores(staffIds, year, month) {
-        const startDate = moment(`${year}-${month.toString().padStart(2, '0')}-01`);
-        const endDate = moment(startDate).endOf('month');
-
-        console.log(`全店舗シフト時間取得: ${year}年${month}月, スタッフ数: ${staffIds.length}`);
-
-        const allShifts = await ShiftAssignment.findAll({
-            where: {
-                staff_id: { [Op.in]: staffIds },
-                date: {
-                    [Op.between]: [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')]
-                }
-            },
-            include: [
-                {
-                    model: Shift,
-                    include: [
-                        {
-                            model: Store,
-                            attributes: ['id', 'name']
-                        }
-                    ]
-                }
-            ]
+        prompt += `### 店舗の最低要員要件（時間帯別）\n`;
+        storeRequirements.forEach(req => {
+            prompt += `- ${req.day_of_week} ${req.start_time}-${req.end_time}: ${req.required_staff_count}人\n`;
         });
+        prompt += `\n`;
 
-        const staffTotalHours = {};
+        prompt += `### シフト生成の考慮事項\n`;
+        prompt += `- 各日の店舗の営業時間を考慮すること。\n`;
+        prompt += `- 各時間帯で最低要員要件を満たすこと。\n`;
+        prompt += `- スタッフの休み希望日はシフトに含めないこと。\n`;
+        prompt += `- スタッフの契約勤務時間や希望を最大限尊重すること。\n`;
+        prompt += `- 店舗定休日はシフトを組まないこと。\n`;
+        prompt += `- 各スタッフの週および月の最大勤務時間・日数を遵守すること。\n`;
+        prompt += `- 各スタッフの最小勤務間隔を遵守すること。\n`;
+        prompt += `- 各スタッフの1日の最大勤務時間を遵守すること。\n`;
+        prompt += `- 6時間以上の勤務には必ず60分の休憩を挿入すること。休憩時間は勤務時間に含まれない。\n`;
+        prompt += `- シフトは最低4時間からとする。ただし、スタッフの希望を優先し、調整が必要な場合は柔軟に対応する。\n`;
+        prompt += `- 日付は 'YYYY-MM-DD' 形式、時刻は 'HH:MM' 形式で記述すること。\n\n`;
 
-        staffIds.forEach(staffId => {
-            staffTotalHours[staffId] = {
-                currentStore: 0,
-                otherStores: 0,
-                total: 0,
-                storeBreakdown: {}
-            };
-        });
+        prompt += `### 出力形式 (JSON)\n`;
+        prompt += `{\n`;
+        prompt += `  "year": ${year},\n`;
+        prompt += `  "month": ${month},\n`;
+        prompt += `  "shifts": [\n`;
+        prompt += `    {\n`;
+        prompt += `      "date": "YYYY-MM-DD",\n`;
+        prompt += `      "assignments": [\n`;
+        prompt += `        {\n`;
+        prompt += `          "staff_id": "スタッフID",\n`;
+        prompt += `          "start_time": "HH:MM",\n`;
+        prompt += `          "end_time": "HH:MM",\n`;
+        prompt += `          "break_start_time": "HH:MM",\n`;
+        prompt += `          "break_end_time": "HH:MM",\n`;
+        prompt += `          "notes": "任意メモ"\n`;
+        prompt += `        }\n`;
+        prompt += `      ]\n`;
+        prompt += `    }\n`;
+        prompt += `  ]\n`;
+        prompt += `}\n\n`;
 
-        allShifts.forEach(assignment => {
-            const staffId = assignment.staff_id;
-            const storeId = assignment.Shift.store_id;
-            const storeName = assignment.Shift.Store.name;
-
-            const startTime = moment(assignment.start_time, 'HH:mm:ss');
-            const endTime = moment(assignment.end_time, 'HH:mm:ss');
-
-            if (endTime.isBefore(startTime)) {
-                endTime.add(1, 'day');
-            }
-
-            let hours = endTime.diff(startTime, 'minutes') / 60;
-
-            if (assignment.break_start_time && assignment.break_end_time) {
-                const breakStart = moment(assignment.break_start_time, 'HH:mm:ss');
-                const breakEnd = moment(assignment.break_end_time, 'HH:mm:ss');
-
-                if (breakEnd.isBefore(breakStart)) {
-                    breakEnd.add(1, 'day');
-                }
-
-                const breakHours = breakEnd.diff(breakStart, 'minutes') / 60;
-                hours -= breakHours;
-            }
-
-            hours = Math.max(0, hours);
-
-            if (!staffTotalHours[staffId].storeBreakdown[storeId]) {
-                staffTotalHours[staffId].storeBreakdown[storeId] = {
-                    hours: 0,
-                    storeName: storeName
-                };
-            }
-            staffTotalHours[staffId].storeBreakdown[storeId].hours += hours;
-            staffTotalHours[staffId].total += hours;
-        });
-
-        return staffTotalHours;
+        prompt += `上記の条件と形式に従って、${year}年${month}月のシフトJSONを生成してください。`;
+        return prompt;
     }
 
-    async _callClaudeAPI(prompt) {
+    async callClaudeApi(prompt) {
+        const httpsAgent = this.caCert ? new https.Agent({ ca: this.caCert }) : null;
+
         try {
-            const requestData = {
+            const headers = {
+                'x-api-key': this.claudeApiKey,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json'
+            };
+
+            const data = {
                 model: this.claudeModel,
-                max_tokens: 8000,
-                temperature: 0.1,
-                system: `あなたは労働基準法を熟知したシフト最適化の専門家です。
-    
-    【最重要ミッション】
-    各スタッフの月間最低勤務時間を**絶対に**満たすシフトを生成してください。
-    
-    【絶対遵守事項】
-    1. 各スタッフの「当店舗で必要な最小時間」を必ず確保する
-    2. 他店舗勤務時間を含めて全店舗合計で月間制限を守る
-    3. 最小時間に満たない場合は、勤務可能日に積極的にシフトを割り当てる
-    4. 短時間勤務よりも、まとまった時間（4時間以上）での勤務を優先する
-    
-    【優先順序】
-    1. 月間最低勤務時間の確保（最優先）
-    2. スタッフの希望・制約の尊重
-    3. 人員要件の満足（最低優先、不足は許容）
-    
-    必ずJSON形式のデータのみを返してください。説明文や追加のテキストは一切含めないでください。`,
-                messages: [
-                    {
-                        role: "user",
-                        content: prompt
-                    }
-                ]
+                max_tokens: 4000,
+                messages: [{ role: 'user', content: prompt }]
             };
 
-            console.log('Claude API リクエスト送信中...');
-
-            const httpsAgentOptions = {};
-
-            if (process.env.NODE_ENV === 'development') {
-                httpsAgentOptions.rejectUnauthorized = false;
-                console.log('開発環境: SSL証明書検証を無効化');
-            } else {
-                httpsAgentOptions.rejectUnauthorized = true;
-                if (this.caCert) {
-                    httpsAgentOptions.ca = this.caCert;
-                    console.log('本番環境: カスタムCA証明書を使用');
-                }
+            const config = { headers: headers };
+            if (httpsAgent) {
+                config.httpsAgent = httpsAgent;
             }
 
-            const httpsAgent = new https.Agent(httpsAgentOptions);
-
-            const axiosConfig = {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': this.claudeApiKey,
-                    'anthropic-version': '2023-06-01'
-                },
-                timeout: 180000,
-                httpsAgent: httpsAgent
-            };
-
-            const response = await axios.post(this.claudeApiUrl, requestData, axiosConfig);
-
-            if (response.data && response.data.content && Array.isArray(response.data.content)) {
-                const responseText = response.data.content[0]?.text;
-                return responseText;
-            } else {
-                console.error('Unexpected response format:', response.data);
-                throw new Error('Unexpected response format from Claude API');
-            }
+            const response = await axios.post(this.claudeApiUrl, data, config);
+            return response.data;
         } catch (error) {
             if (error.response) {
-                console.error('Claude API エラーレスポンス:', {
-                    status: error.response.status,
-                    statusText: error.response.statusText,
-                    data: error.response.data
-                });
-
-                if (error.response.status === 401) {
-                    throw new Error('Claude API認証エラー: APIキーを確認してください');
-                } else if (error.response.status === 429) {
-                    throw new Error('Claude APIレート制限エラー: しばらく待ってからお試しください');
-                } else if (error.response.status === 500) {
-                    throw new Error('Claude APIサーバーエラー: しばらく待ってからお試しください');
-                } else {
-                    throw new Error(`Claude APIエラー: ${error.response.data?.error?.message || error.response.statusText}`);
-                }
+                console.error('[Claude APIエラー] レスポンスデータ:', error.response.data);
+                console.error('[Claude APIエラー] ステータス:', error.response.status);
+                console.error('[Claude APIエラー] ヘッダー:', error.response.headers);
+                throw new Error(`Claude APIエラー: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
             } else if (error.request) {
-                console.error('Claude API リクエストエラー:', error.message);
-
-                if (error.code === 'ECONNABORTED') {
-                    throw new Error('Claude API接続タイムアウト: リクエストが時間内に完了しませんでした');
-                } else if (error.code === 'ENOTFOUND') {
-                    throw new Error('Claude API DNS解決エラー: インターネット接続を確認してください');
-                } else if (error.code === 'ECONNREFUSED') {
-                    throw new Error('Claude API接続拒否: ネットワーク設定を確認してください');
-                }
-
-                throw new Error('Claude APIへの接続に失敗しました');
+                console.error('[Claude APIエラー] リクエスト:', error.request);
+                throw new Error('Claude APIエラー: レスポンスがありませんでした。');
             } else {
-                console.error('予期しないエラー:', error);
-                throw error;
+                console.error('[Claude APIエラー] その他のエラー:', error.message);
+                throw new Error(`Claude APIエラー: ${error.message}`);
             }
         }
     }
 
-    _formatStoreData(store) {
-        return {
-            id: store.id,
-            name: store.name,
-            opening_time: store.opening_time,
-            closing_time: store.closing_time,
-            closed_days: store.closedDays.map(day => ({
-                day_of_week: day.day_of_week,
-                specific_date: day.specific_date ? moment(day.specific_date).format('YYYY-MM-DD') : null
-            }))
-        };
-    }
+    parseClaudeResponse(response) {
+        if (!response || !response.content || response.content.length === 0) {
+            throw new Error('Claude APIからのレスポンス内容が空です。');
+        }
 
-    _parseAIResponse(response) {
+        const jsonString = response.content[0].text;
         try {
-            console.log('AIレスポンスの解析を開始します');
-
-            if (!response) {
-                throw new Error('レスポンスが空です');
-            }
-
-            let jsonString = null;
-
-            const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-            if (jsonBlockMatch && jsonBlockMatch[1]) {
-                jsonString = jsonBlockMatch[1].trim();
-            }
-
-            if (!jsonString) {
-                const jsonBlockMatchUpper = response.match(/```JSON\s*([\s\S]*?)\s*```/);
-                if (jsonBlockMatchUpper && jsonBlockMatchUpper[1]) {
-                    jsonString = jsonBlockMatchUpper[1].trim();
-                }
-            }
-
-            if (!jsonString) {
-                const jsonObjectMatch = response.match(/(\{[\s\S]*\})/);
-                if (jsonObjectMatch && jsonObjectMatch[1]) {
-                    jsonString = jsonObjectMatch[1].trim();
-                }
-            }
-
-            if (!jsonString) {
-                throw new Error('AIレスポンスからJSONデータを抽出できませんでした');
-            }
-
-            jsonString = this._repairJsonString(jsonString);
-
-            try {
-                const shiftData = JSON.parse(jsonString);
-
-                if (!shiftData.shifts || !Array.isArray(shiftData.shifts)) {
-                    throw new Error('シフトデータの形式が正しくありません: shifts配列が見つかりません');
-                }
-
-                console.log('JSONパース成功:', {
-                    shiftsCount: shiftData.shifts.length,
-                    hasSummary: !!shiftData.summary
-                });
-
-                if (!shiftData.summary) {
-                    shiftData.summary = this._generateSummary(shiftData.shifts);
-                }
-
-                return shiftData;
-            } catch (parseError) {
-                console.error('JSONパースエラー:', parseError.message);
-
-                const repairedJson = this._attemptJsonRepair(jsonString);
-                if (repairedJson) {
-                    console.log('JSON修復成功');
-                    return JSON.parse(repairedJson);
-                }
-
-                throw new Error('JSONのパースに失敗しました: ' + parseError.message);
-            }
-        } catch (error) {
-            console.error('AIレスポンス解析エラー:', error);
-            throw new Error('AIレスポンスの解析に失敗しました: ' + error.message);
+            return JSON.parse(jsonString);
+        } catch (e) {
+            console.error('[ShiftGeneratorService] ClaudeレスポンスのJSONパースエラー:', e);
+            console.error('[ShiftGeneratorService] パース失敗したJSON文字列:', jsonString);
+            throw new Error('Claude APIからのレスポンスをJSONとして解析できませんでした。');
         }
     }
 
-    _repairJsonString(jsonString) {
-        jsonString = jsonString
-            .replace(/,\s*}/g, '}')
-            .replace(/,\s*]/g, ']')
-            .replace(/^\s*,/gm, '')
-            .trim();
+    validateGeneratedShift(shiftData, staffs, systemSettings) {
+        const staffMap = new Map(staffs.map(s => [s.id, s]));
+        const minShiftMinutes = systemSettings?.min_shift_minutes || 240; // 4時間
+        const breakThresholdHours = systemSettings?.break_threshold_hours || 6;
+        const breakMinutes = systemSettings?.break_minutes || 60;
+        const maxDailyWorkHours = systemSettings?.max_daily_work_hours || 8;
+        const maxWeeklyWorkHours = systemSettings?.max_weekly_work_hours || 40;
+        const maxWeeklyWorkDays = systemSettings?.max_weekly_work_days || 5;
+        const minRestHours = systemSettings?.min_rest_hours || 11;
+        const maxMonthlyWorkHours = systemSettings?.max_monthly_work_hours || 160;
 
-        return jsonString;
-    }
+        const staffMonthlyWorkHours = new Map();
+        const staffWeeklyWorkHours = new Map();
+        const staffWeeklyWorkDays = new Map();
+        const staffLastShiftEnd = new Map();
 
-    _attemptJsonRepair(jsonString) {
-        try {
-            let repaired = jsonString;
+        for (let i = 0; i < shiftData.shifts.length; i++) {
+            const dayShift = shiftData.shifts[i];
+            const currentDate = moment(dayShift.date);
+            const dayOfWeek = currentDate.day(); // Sunday = 0, Monday = 1, etc.
+            const isNewWeek = dayOfWeek === 1; // 月曜日を週の始まりとする
 
-            const openBraces = (repaired.match(/\{/g) || []).length;
-            const closeBraces = (repaired.match(/\}/g) || []).length;
-            const openBrackets = (repaired.match(/\[/g) || []).length;
-            const closeBrackets = (repaired.match(/\]/g) || []).length;
-
-            for (let i = 0; i < openBrackets - closeBrackets; i++) {
-                repaired += ']';
-            }
-            for (let i = 0; i < openBraces - closeBraces; i++) {
-                repaired += '}';
-            }
-
-            repaired = repaired.replace(/,\s*([}\]])/, '$1');
-
-            JSON.parse(repaired);
-            return repaired;
-        } catch (error) {
-            return null;
-        }
-    }
-
-    _generateSummary(shifts) {
-        const staffHours = {};
-
-        shifts.forEach(dayShift => {
-            if (dayShift.assignments) {
-                dayShift.assignments.forEach(assignment => {
-                    const staffId = assignment.staff_id;
-                    const startTime = moment(assignment.start_time, 'HH:mm');
-                    const endTime = moment(assignment.end_time, 'HH:mm');
-
-                    let hours = endTime.diff(startTime, 'minutes') / 60;
-
-                    if (assignment.break_start_time && assignment.break_end_time) {
-                        const breakStart = moment(assignment.break_start_time, 'HH:mm');
-                        const breakEnd = moment(assignment.break_end_time, 'HH:mm');
-                        const breakHours = breakEnd.diff(breakStart, 'minutes') / 60;
-                        hours -= breakHours;
-                    }
-
-                    if (!staffHours[staffId]) {
-                        staffHours[staffId] = {
-                            staff_id: staffId,
-                            staff_name: assignment.staff_name || `スタッフ${staffId}`,
-                            total_hours: 0
-                        };
-                    }
-                    staffHours[staffId].total_hours += hours;
-                });
-            }
-        });
-
-        return {
-            totalHoursByStaff: Object.values(staffHours).map(staff => ({
-                ...staff,
-                total_hours: Math.round(staff.total_hours * 10) / 10
-            }))
-        };
-    }
-
-    async validateShift(shiftData, storeId, year, month) {
-        try {
-            console.log('シフトの検証を開始します');
-
-            const store = await Store.findByPk(storeId, {
-                include: [
-                    { model: StoreStaffRequirement, as: 'staffRequirements' }
-                ]
-            });
-
-            if (!store) {
-                throw new Error('店舗が見つかりません');
+            if (isNewWeek && i !== 0) {
+                console.log(`--- 新しい週の開始: ${currentDate.format('YYYY-MM-DD')} ---`);
+                staffWeeklyWorkHours.clear();
+                staffWeeklyWorkDays.clear();
             }
 
-            const warnings = [];
+            if (!dayShift.assignments) {
+                console.log(`[Validation] ${dayShift.date}: 割り当てがありません。スキップします。`);
+                continue;
+            }
 
-            for (const dayShift of shiftData.shifts) {
-                const date = moment(dayShift.date);
-                const dayOfWeek = date.day();
+            const assignedStaffToday = new Set();
 
-                const specialRequirements = store.staffRequirements
-                    .filter(req => req.specific_date && moment(req.specific_date).format('YYYY-MM-DD') === dayShift.date);
+            for (const assignment of dayShift.assignments) {
+                const staffId = assignment.staff_id;
+                const staff = staffMap.get(staffId);
 
-                const regularRequirements = store.staffRequirements
-                    .filter(req => req.day_of_week === dayOfWeek && !req.specific_date);
-
-                const requirements = specialRequirements.length > 0 ? specialRequirements : regularRequirements;
-
-                if (requirements.length === 0) {
+                if (!staff) {
+                    console.warn(`[Validation Warning] ${dayShift.date} - スタッフID ${staffId} が見つかりません。`);
                     continue;
                 }
 
-                for (const requirement of requirements) {
-                    const startTime = moment(requirement.start_time, 'HH:mm:ss');
-                    const endTime = moment(requirement.end_time, 'HH:mm:ss');
+                if (assignedStaffToday.has(staffId)) {
+                    console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 1日に複数のシフトが割り当てられています。`);
+                }
+                assignedStaffToday.add(staffId);
 
-                    const timeSlots = this._generateTimeSlots(startTime, endTime, 15);
+                const start = moment(`${dayShift.date} ${assignment.start_time}`);
+                const end = moment(`${dayShift.date} ${assignment.end_time}`);
 
-                    const staffCounts = {};
-                    timeSlots.forEach(slot => {
-                        staffCounts[slot] = 0;
-                    });
+                if (!start.isValid() || !end.isValid() || end.isBefore(start)) {
+                    console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 不正なシフト時間 (${assignment.start_time}-${assignment.end_time})`);
+                    continue;
+                }
 
-                    const assignments = dayShift.assignments || [];
+                let workDurationMinutes = end.diff(start, 'minutes');
+                let breakDurationMinutes = 0;
 
-                    for (const assignment of assignments) {
-                        const assignmentStart = moment(assignment.start_time, 'HH:mm');
-                        const assignmentEnd = moment(assignment.end_time, 'HH:mm');
-
-                        const breakStart = assignment.break_start_time ? moment(assignment.break_start_time, 'HH:mm') : null;
-                        const breakEnd = assignment.break_end_time ? moment(assignment.break_end_time, 'HH:mm') : null;
-
-                        timeSlots.forEach(slot => {
-                            const slotTime = moment(slot, 'HH:mm');
-                            const isInBreak = breakStart && breakEnd &&
-                                slotTime.isSameOrAfter(breakStart) &&
-                                slotTime.isBefore(breakEnd);
-
-                            const isWorking = slotTime.isSameOrAfter(assignmentStart) &&
-                                slotTime.isBefore(assignmentEnd) &&
-                                !isInBreak;
-
-                            if (isWorking) {
-                                staffCounts[slot]++;
-                            }
-                        });
-                    }
-
-                    let currentWarningStart = null;
-                    let currentShortage = 0;
-
-                    for (let i = 0; i < timeSlots.length; i++) {
-                        const slot = timeSlots[i];
-                        const staffCount = staffCounts[slot];
-                        const shortage = requirement.required_staff_count - staffCount;
-
-                        if (shortage > 0 && currentWarningStart === null) {
-                            currentWarningStart = slot;
-                            currentShortage = shortage;
-                        }
-                        else if (currentWarningStart !== null &&
-                            (shortage !== currentShortage || shortage <= 0 || i === timeSlots.length - 1)) {
-
-                            if (currentShortage > 0) {
-                                warnings.push({
-                                    date: dayShift.date,
-                                    time_range: `${currentWarningStart}-${slot}`,
-                                    required: requirement.required_staff_count,
-                                    assigned: requirement.required_staff_count - currentShortage,
-                                    message: `人員が不足しています（必要: ${requirement.required_staff_count}名, 割当: ${requirement.required_staff_count - currentShortage}名）`
-                                });
-                            }
-
-                            if (shortage > 0) {
-                                currentWarningStart = slot;
-                                currentShortage = shortage;
-                            } else {
-                                currentWarningStart = null;
-                            }
-                        }
+                if (assignment.break_start_time && assignment.break_end_time) {
+                    const breakStart = moment(`${dayShift.date} ${assignment.break_start_time}`);
+                    const breakEnd = moment(`${dayShift.date} ${assignment.break_end_time}`);
+                    if (breakStart.isValid() && breakEnd.isValid() && breakEnd.isAfter(breakStart)) {
+                        breakDurationMinutes = breakEnd.diff(breakStart, 'minutes');
+                        workDurationMinutes -= breakDurationMinutes;
+                    } else {
+                        console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 不正な休憩時間 (${assignment.break_start_time}-${assignment.break_end_time})`);
                     }
                 }
+
+                const workDurationHours = workDurationMinutes / 60;
+
+                // 最小シフト時間
+                if (workDurationMinutes < minShiftMinutes) {
+                    console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 最小シフト時間 ${minShiftMinutes}分 (${minShiftMinutes / 60}時間) を下回っています。割り当て時間: ${workDurationMinutes}分`);
+                }
+
+                // 1日の最大勤務時間
+                if (workDurationHours > maxDailyWorkHours) {
+                    console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 1日の最大勤務時間 ${maxDailyWorkHours}時間 を超過しています。割り当て時間: ${workDurationHours.toFixed(2)}時間`);
+                }
+
+                // 休憩自動挿入の閾値
+                if (workDurationHours * 60 >= breakThresholdHours * 60 && breakDurationMinutes < breakMinutes) {
+                    console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 勤務時間が${breakThresholdHours}時間を超えているのに、${breakMinutes}分の休憩が不足しています。実休憩: ${breakDurationMinutes}分`);
+                }
+
+                // 週の勤務時間
+                staffWeeklyWorkHours.set(staffId, (staffWeeklyWorkHours.get(staffId) || 0) + workDurationHours);
+                if (staffWeeklyWorkHours.get(staffId) > maxWeeklyWorkHours) {
+                    console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 週の最大勤務時間 ${maxWeeklyWorkHours}時間 を超過しています。現在の週合計: ${staffWeeklyWorkHours.get(staffId).toFixed(2)}時間`);
+                }
+
+                // 週の勤務日数
+                staffWeeklyWorkDays.set(staffId, (staffWeeklyWorkDays.get(staffId) || 0) + 1);
+                if (staffWeeklyWorkDays.get(staffId) > maxWeeklyWorkDays) {
+                    console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 週の最大勤務日数 ${maxWeeklyWorkDays}日 を超過しています。現在の週合計: ${staffWeeklyWorkDays.get(staffId)}日`);
+                }
+
+                // 月の勤務時間
+                staffMonthlyWorkHours.set(staffId, (staffMonthlyWorkHours.get(staffId) || 0) + workDurationHours);
+                if (staffMonthlyWorkHours.get(staffId) > maxMonthlyWorkHours) {
+                    console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 月の最大勤務時間 ${maxMonthlyWorkHours}時間 を超過しています。現在の月合計: ${staffMonthlyWorkHours.get(staffId).toFixed(2)}時間`);
+                }
+
+                // 最小勤務間隔 (前回のシフト終了時刻からの計算)
+                if (staffLastShiftEnd.has(staffId)) {
+                    const lastShiftEnd = staffLastShiftEnd.get(staffId);
+                    const restDurationHours = start.diff(lastShiftEnd, 'hours');
+                    if (restDurationHours < minRestHours) {
+                        console.error(`[Validation Error] ${dayShift.date} - スタッフID ${staffId}: 最小勤務間隔 ${minRestHours}時間 を下回っています。前シフト終了時刻 ${lastShiftEnd.format('HH:MM')}、今回シフト開始時刻 ${assignment.start_time}。間隔: ${restDurationHours}時間`);
+                    }
+                }
+                staffLastShiftEnd.set(staffId, end); // 現在のシフト終了時刻を保存
             }
-
-            console.log(`検証完了: ${warnings.length}件の警告があります`);
-
-            return {
-                isValid: warnings.length === 0,
-                warnings
-            };
-        } catch (error) {
-            console.error('シフト検証エラー:', error);
-            throw error;
         }
+        console.log('[Validation] シフト検証完了。上記にエラーがなければ、主要な勤務条件は満たされています。');
     }
 
-    _generateTimeSlots(startTime, endTime, intervalMinutes) {
-        const slots = [];
-        const current = moment(startTime);
 
-        while (current.isBefore(endTime)) {
-            slots.push(current.format('HH:mm'));
-            current.add(intervalMinutes, 'minutes');
-        }
-
-        return slots;
-    }
-
-    async saveShift(shiftData, storeId, year, month) {
-        try {
-            console.log('シフトの保存を開始します');
-
+    async saveShift(storeId, year, month, shiftData) {
+        console.log(`[ShiftGeneratorService] シフト保存処理開始: 店舗ID ${storeId}, ${year}年${month}月`);
+        const result = await sequelize.transaction(async (t) => {
             let shift = await Shift.findOne({
                 where: {
                     store_id: storeId,
-                    year,
-                    month
-                }
+                    year: year,
+                    month: month
+                },
+                transaction: t
             });
 
-            const result = await sequelize.transaction(async (t) => {
-                if (!shift) {
-                    console.log('新規シフトを作成します');
-                    shift = await Shift.create({
-                        store_id: storeId,
-                        year,
-                        month,
-                        status: 'draft'
+            if (shift) {
+                console.log(`[ShiftGeneratorService] 既存シフトID ${shift.id} を更新します。`);
+                await ShiftAssignment.destroy({
+                    where: { shift_id: shift.id },
+                    transaction: t
+                });
+                if (shift.status === 'confirmed') {
+                    await shift.update({ status: 'draft' }, { transaction: t });
+                }
+            } else {
+                console.log(`[ShiftGeneratorService] 新しいシフトを作成します。`);
+                shift = await Shift.create({
+                    store_id: storeId,
+                    year: year,
+                    month: month,
+                    status: 'draft'
+                }, { transaction: t });
+            }
+
+            let savedAssignments = 0;
+
+            for (const dayShift of shiftData.shifts) {
+                if (!dayShift.assignments || !Array.isArray(dayShift.assignments)) {
+                    continue;
+                }
+
+                for (const assignment of dayShift.assignments) {
+                    await ShiftAssignment.create({
+                        shift_id: shift.id,
+                        staff_id: assignment.staff_id,
+                        date: dayShift.date,
+                        start_time: assignment.start_time,
+                        end_time: assignment.end_time,
+                        break_start_time: assignment.break_start_time || null,
+                        break_end_time: assignment.break_end_time || null,
+                        notes: assignment.notes || null
                     }, { transaction: t });
-                } else {
-                    console.log('既存シフトを更新します');
-
-                    const deletedCount = await ShiftAssignment.destroy({
-                        where: { shift_id: shift.id },
-                        transaction: t
-                    });
-                    console.log(`削除されたシフト割り当て数: ${deletedCount}`);
-
-                    if (shift.status === 'confirmed') {
-                        await shift.update({ status: 'draft' }, { transaction: t });
-                        console.log('確定済みシフトをドラフト状態に変更しました');
-                    }
+                    savedAssignments++;
                 }
+            }
 
-                console.log('新しいシフト割り当てを保存します');
-                let savedAssignments = 0;
+            console.log(`[ShiftGeneratorService] シフト保存完了: ${savedAssignments}件の割り当てを保存`);
+            return shift;
+        });
 
-                for (const dayShift of shiftData.shifts) {
-                    if (!dayShift.assignments || !Array.isArray(dayShift.assignments)) {
-                        console.warn(`${dayShift.date}のassignmentsがありません`);
-                        continue;
-                    }
-
-                    for (const assignment of dayShift.assignments) {
-                        await ShiftAssignment.create({
-                            shift_id: shift.id,
-                            staff_id: assignment.staff_id,
-                            date: dayShift.date,
-                            start_time: assignment.start_time,
-                            end_time: assignment.end_time,
-                            break_start_time: assignment.break_start_time || null,
-                            break_end_time: assignment.break_end_time || null,
-                            notes: assignment.notes || null
-                        }, { transaction: t });
-                        savedAssignments++;
-                    }
-                }
-
-                console.log(`シフトの保存が完了しました。保存された割り当て数: ${savedAssignments}`);
-                return shift;
-            });
-
-            return result;
-        } catch (error) {
-            console.error('シフト保存エラー:', error);
-            throw error;
-        }
+        return result;
     }
 }
 

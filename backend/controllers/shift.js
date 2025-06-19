@@ -423,6 +423,11 @@ const generateShift = async (req, res) => {
 
         console.log('=== シフト生成リクエスト受信 ===');
         console.log('パラメータ:', { store_id, year, month });
+        console.log('リクエストユーザー:', {
+            id: req.user.id,
+            role: req.user.role,
+            isImpersonating: req.isImpersonating
+        });
 
         if (!store_id || !year || !month) {
             return res.status(400).json({ message: '店舗ID、年、月は必須です' });
@@ -447,17 +452,18 @@ const generateShift = async (req, res) => {
             }
         }
 
-        console.log('権限チェック完了、シフト生成開始');
+        console.log('権限チェック完了、AI シフト生成開始');
 
         const shiftData = await shiftGeneratorService.generateShift(store_id, year, month);
 
-        console.log('シフト生成完了、保存開始');
+        console.log('AI シフト生成完了、データベース保存開始');
 
         const savedShift = await shiftGeneratorService.saveShift(shiftData, store_id, year, month);
 
+        console.log('=== 生成後の最終検証 ===');
         const staff = await Staff.findAll({
             where: { store_id: store_id },
-            attributes: ['id']
+            attributes: ['id', 'first_name', 'last_name', 'min_hours_per_month', 'max_hours_per_month']
         });
         const staffIds = staff.map(s => s.id);
 
@@ -469,6 +475,29 @@ const generateShift = async (req, res) => {
                     year,
                     month
                 );
+
+                console.log('最終的な全店舗時間集計:');
+                staff.forEach(s => {
+                    const hours = allStoreHours[s.id];
+                    if (hours) {
+                        const isOverMax = hours.total > (s.max_hours_per_month || 0);
+                        const isUnderMin = hours.total < (s.min_hours_per_month || 0);
+
+                        console.log(`【${s.last_name} ${s.first_name}】最終結果:`);
+                        console.log(`  全店舗合計: ${hours.total.toFixed(1)}時間`);
+                        console.log(`  制約範囲: ${s.min_hours_per_month || 0} - ${s.max_hours_per_month || 0}時間`);
+
+                        if (isOverMax) {
+                            console.error(`  ❌ 月間最大時間超過: ${hours.total} > ${s.max_hours_per_month}`);
+                        }
+                        if (isUnderMin) {
+                            console.warn(`  ⚠️ 月間最小時間不足: ${hours.total} < ${s.min_hours_per_month}`);
+                        }
+                        if (!isOverMax && !isUnderMin) {
+                            console.log(`  ✅ 制約範囲内`);
+                        }
+                    }
+                });
             } catch (error) {
                 console.error('全店舗時間集計エラー:', error);
             }
@@ -485,15 +514,17 @@ const generateShift = async (req, res) => {
             allStoreHours: allStoreHours
         };
 
-        console.log('=== シフト生成完了 ===');
+        console.log('=== シフト生成API完了 ===');
         console.log('生成されたシフト数:', response.shifts.length);
+        console.log('生成されたアサインメント総数:', response.shifts.reduce((sum, s) => sum + (s.assignments?.length || 0), 0));
 
         res.status(201).json(response);
     } catch (error) {
-        console.error('=== シフト生成失敗 ===');
+        console.error('=== シフト生成API失敗 ===');
         console.error('エラー詳細:', {
             message: error.message,
-            stack: error.stack
+            stack: error.stack,
+            name: error.name
         });
         res.status(500).json({
             message: 'シフト生成中にエラーが発生しました',

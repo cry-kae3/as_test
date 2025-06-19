@@ -61,7 +61,6 @@ async function createInitialUsers() {
     const userCount = await User.count();
     if (userCount !== 0) return;
 
-    console.log('Creating initial admin user...');
     const hashedPassword = await bcrypt.hash(process.env.INITIAL_ADMIN_PASSWORD, 10);
     await User.create({
       username: process.env.INITIAL_ADMIN_USERNAME,
@@ -70,10 +69,8 @@ async function createInitialUsers() {
       role: process.env.INITIAL_ADMIN_ROLE,
       is_active: true
     });
-    console.log('Initial admin user created');
 
     if (process.env.CREATE_NORMAL_USER === 'true') {
-      console.log('Creating initial owner user...');
       const ownerHashedPassword = await bcrypt.hash(process.env.INITIAL_USER_PASSWORD, 10);
       await User.create({
         username: process.env.INITIAL_USER_USERNAME,
@@ -83,7 +80,6 @@ async function createInitialUsers() {
         role: process.env.INITIAL_USER_ROLE,
         is_active: true
       });
-      console.log('Initial owner user created');
     }
 
   } catch (error) {
@@ -108,12 +104,9 @@ async function startSessionCleanup() {
 
 async function startServer() {
   try {
-    console.log('Testing database connection...');
     await sequelize.authenticate();
-    console.log('Database connection successful');
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('Syncing database...');
       const syncOptions = {};
       if (process.env.RESET_DB === 'true') {
         syncOptions.force = true;
@@ -121,7 +114,6 @@ async function startServer() {
         syncOptions.alter = true;
       }
       await sequelize.sync(syncOptions);
-      console.log('Database sync complete');
       await createInitialUsers();
     } else {
       await createInitialUsers();
@@ -130,7 +122,6 @@ async function startServer() {
     startSessionCleanup();
 
     app.listen(API_PORT, () => {
-      console.log(`Server is running on port ${API_PORT}`);
     });
   } catch (error) {
     console.error('Server startup error:', error);
