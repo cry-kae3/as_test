@@ -82,55 +82,140 @@ class ShiftGeneratorService {
         }
     }
 
-    buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period) {
-        let prompt = `あなたは、スタッフの労働条件を最優先する、非常に有能なシフト管理AIです。以下のルール階層を厳密に守り、${period.startDate.format('YYYY年M月D日')}から${period.endDate.format('YYYY年M月D日')}までのシフトをJSON形式で一度に生成してください。\n\n`;
-        prompt += `### ルール階層（上にあるほど優先度が高い）\n`;
-        prompt += `1. **レベル1：絶対遵守ルール（最優先）**\n`;
-        prompt += `   - スタッフ個人の「休み希望日」と「勤務不可曜日」には、絶対にシフトを割り当てないでください。\n`;
-        prompt += `   - スタッフ個人の「1日の最大勤務時間」「月間勤務時間制約」の制約を必ず守ってください。\n\n`;
-        prompt += `2. **レベル2：努力目標**\n`;
-        prompt += `   - レベル1のルールを守った上で、スタッフの「希望時間」内にシフトを割り当てるように最大限努力してください。\n\n`;
-        prompt += `3. **レベル3：任意目標（優先度：低）**\n`;
-        prompt += `   - 上記の全ルールを守った上で、もし余裕があれば、店舗の「最低要員要件」を満たしてください。この目標は、スタッフのルールを破ってまで達成する必要は全くありません。\n\n`;
-        prompt += `--- 以下、シフト生成に必要なデータです ---\n\n`;
-        prompt += `### 店舗・期間情報\n`;
-        prompt += `- 店舗名: ${store.name}\n`;
-        prompt += `- 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}\n`;
-        prompt += `- 営業時間: ${store.opening_time} - ${store.closing_time}\n\n`;
-        prompt += `### スタッフ情報と制約条件\n`;
-        staffs.forEach(staff => {
-            prompt += `- ID: ${staff.id}, 名前: ${staff.first_name} ${staff.last_name}\n`;
-            prompt += `  - 月間勤務時間制約: ${staff.min_hours_per_month || 0}時間 ～ ${staff.max_hours_per_month || 999}時間\n`;
-            prompt += `  - 1日の最大勤務時間: ${staff.max_hours_per_day || '未設定'}時間\n`;
-            const dayOffs = staff.dayOffRequests.map(r => r.date).join(', ');
-            prompt += `  - 休み希望日: ${dayOffs || 'なし'}\n`;
-            const dayPrefs = staff.dayPreferences.map(p => {
-                const day = ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week];
-                if (!p.available) return `${day}(不可)`;
-                const time = (p.preferred_start_time && p.preferred_end_time) ? ` (${p.preferred_start_time.slice(0, 5)}-${p.preferred_end_time.slice(0, 5)})` : '';
-                return day + time;
-            }).join(', ');
-            prompt += `  - 勤務可能曜日と希望時間: ${dayPrefs || '特になし'}\n\n`;
-        });
-        prompt += `### 店舗定休日\n`;
-        if (storeClosedDays.length > 0) {
-            prompt += storeClosedDays.map(day => `- ${day.specific_date || '毎週' + ['日', '月', '火', '水', '木', '金', '土'][day.day_of_week] + '曜日'}`).join('\n') + '\n\n';
-        } else {
-            prompt += `- なし\n\n`;
+    validateStaffConstraints(staff, date, startTime, endTime) {
+        const errors = [];
+        const warnings = [];
+
+        const dayOfWeek = new Date(date).getDay();
+        const dayPreference = staff.dayPreferences?.find(pref => pref.day_of_week === dayOfWeek);
+
+        if (dayPreference && !dayPreference.available) {
+            errors.push(`${['日', '月', '火', '水', '木', '金', '土'][dayOfWeek]}曜日は勤務不可設定です`);
         }
-        prompt += `### 店舗の最低要員要件（時間帯別）\n`;
+
+        const dayOffRequest = staff.dayOffRequests?.find(req =>
+            req.date === date && (req.status === 'approved' || req.status === 'pending')
+        );
+        if (dayOffRequest) {
+            if (dayOffRequest.status === 'approved') {
+                errors.push(`${date}は承認済みの休み希望があります`);
+            } else {
+                errors.push(`${date}は休み希望があります`);
+            }
+        }
+
+        const workMinutes = this.calculateWorkMinutes(startTime, endTime);
+        const workHours = workMinutes / 60;
+
+        if (staff.max_hours_per_day && workHours > staff.max_hours_per_day) {
+            errors.push(`1日の最大勤務時間（${staff.max_hours_per_day}時間）を超過します（${workHours.toFixed(1)}時間）`);
+        }
+
+        if (workHours > 8) {
+            warnings.push('8時間超の勤務には休憩時間が必要です');
+        } else if (workHours > 6) {
+            warnings.push('6時間超の勤務には休憩時間が必要です');
+        }
+
+        return { errors, warnings };
+    }
+
+    buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period) {
+        let prompt = `あなたは、労働基準法と個人の制約を厳格に遵守するシフト管理AIです。以下のルールは絶対に破ってはいけません。
+
+### 🚨 絶対遵守ルール（違反は一切許可されません）
+1. **スタッフの「勤務不可曜日」には絶対にシフトを割り当てない**
+2. **スタッフの「休み希望日」には絶対にシフトを割り当てない**
+3. **スタッフの「1日最大勤務時間」を絶対に超過しない**
+4. **スタッフの「月間最大勤務時間」を絶対に超過しない**
+5. **スタッフの「最大連続勤務日数」を絶対に超過しない**
+
+### 📋 生成対象期間
+- 期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
+- 店舗: ${store.name}
+- 営業時間: ${store.opening_time} - ${store.closing_time}
+
+### 👥 スタッフ制約条件（絶対遵守）
+`;
+
+        staffs.forEach(staff => {
+            prompt += `
+**${staff.first_name} ${staff.last_name} (ID: ${staff.id})**
+- 月間勤務時間制限: 最低${staff.min_hours_per_month || 0}時間 ～ 最大${staff.max_hours_per_month || 999}時間（絶対遵守）
+- 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間（絶対遵守）
+- 最大連続勤務日数: ${staff.max_consecutive_days || 5}日（絶対遵守）`;
+
+            const dayOffs = staff.dayOffRequests?.map(r => r.date).join(', ') || 'なし';
+            prompt += `
+- 休み希望日: ${dayOffs}（絶対に割り当て禁止）`;
+
+            const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
+                ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
+            ).join(', ') || 'なし';
+            prompt += `
+- 勤務不可曜日: ${unavailableDays}（絶対に割り当て禁止）`;
+
+            const availableDays = staff.dayPreferences?.filter(p => p.available).map(p => {
+                const day = ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week];
+                const time = (p.preferred_start_time && p.preferred_end_time) ?
+                    ` (希望時間: ${p.preferred_start_time.slice(0, 5)}-${p.preferred_end_time.slice(0, 5)})` : '';
+                return day + time;
+            }).join(', ') || '制限なし';
+            prompt += `
+- 勤務可能曜日: ${availableDays}
+`;
+        });
+
+        prompt += `
+### 🏪 店舗定休日
+`;
+        if (storeClosedDays.length > 0) {
+            storeClosedDays.forEach(day => {
+                prompt += `- ${day.specific_date || '毎週' + ['日', '月', '火', '水', '木', '金', '土'][day.day_of_week] + '曜日'}\n`;
+            });
+        } else {
+            prompt += `- なし\n`;
+        }
+
+        prompt += `
+### 👥 店舗の人員要件（参考・努力目標）
+`;
         if (storeRequirements.length > 0) {
             storeRequirements.forEach(req => {
                 const day = req.specific_date ? req.specific_date : `毎週${['日', '月', '火', '水', '木', '金', '土'][req.day_of_week]}曜日`;
-                prompt += `- ${day} ${req.start_time.slice(0, 5)}-${req.end_time.slice(0, 5)}: ${req.required_staff_count}人\n`;
+                prompt += `- ${day} ${req.start_time.slice(0, 5)}-${req.end_time.slice(0, 5)}: ${req.required_staff_count}人（可能な範囲で）\n`;
             });
         } else {
-            prompt += `- 全時間帯で1人以上\n`;
+            prompt += `- 全時間帯で1人以上（可能な範囲で）\n`;
         }
-        prompt += `\n`;
-        prompt += `### 出力形式 (JSON) - 必ずこの形式で、絶対にコメントや追加の説明を含めずに出力してください\n`;
-        prompt += `\`\`\`json\n{\n  "shifts": [\n    {\n      "date": "YYYY-MM-DD",\n      "assignments": [\n        {\n          "staff_id": スタッフID,\n          "start_time": "HH:MM",\n          "end_time": "HH:MM"\n        }\n      ]\n    }\n  ]\n}\n\`\`\`\n\n`;
-        prompt += `上記のルールとデータに基づき、シフトのJSONを生成してください。`;
+
+        prompt += `
+### ⚠️ 重要な注意事項
+- 上記のスタッフ制約は絶対に守ってください
+- 人員要件は努力目標です。スタッフ制約を破ってまで満たす必要はありません
+- 勤務不可曜日や休み希望日への割り当ては絶対に行わないでください
+- 各スタッフの最大勤務時間を絶対に超過しないでください
+
+### 📄 出力形式（この形式以外は受け付けません）
+\`\`\`json
+{
+  "shifts": [
+    {
+      "date": "YYYY-MM-DD",
+      "assignments": [
+        {
+          "staff_id": スタッフID,
+          "start_time": "HH:MM",
+          "end_time": "HH:MM"
+        }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+制約を守りつつ、可能な限り良いシフトを生成してください。`;
+
         return prompt;
     }
 
@@ -161,22 +246,143 @@ class ShiftGeneratorService {
         const storeClosedDays = await StoreClosedDay.findAll({ where: { store_id: storeId } });
         const storeRequirements = await StoreStaffRequirement.findAll({ where: { store_id: storeId } });
 
-        const prompt = this.buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
+        const prompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
 
         console.log("=========================================");
-        console.log("========= Generated Gemini Prompt =========");
+        console.log("========= Enhanced Strict Prompt =========");
         console.log(prompt);
         console.log("=========================================");
 
-        const response = await this.callGeminiApi(prompt);
+        let attempts = 0;
+        const maxAttempts = 3;
+        let lastError = null;
 
-        console.log("--- Raw Gemini Response ---");
-        console.log(JSON.stringify(response, null, 2));
-        console.log("--------------------------");
+        while (attempts < maxAttempts) {
+            attempts++;
+            console.log(`AI生成試行 ${attempts}/${maxAttempts}`);
 
-        const generatedShiftData = this.parseGeminiResponse(response);
+            try {
+                const response = await this.callGeminiApi(prompt);
+                const generatedShiftData = this.parseGeminiResponse(response);
 
-        return this.saveShift(generatedShiftData, storeId, year, month);
+                const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, period);
+
+                if (validationResult.isValid) {
+                    console.log('✅ 生成されたシフトは全ての制約を満たしています');
+                    return this.saveShift(generatedShiftData, storeId, year, month);
+                } else {
+                    console.log('❌ 生成されたシフトに制約違反があります:', validationResult.violations);
+                    lastError = new Error(`制約違反: ${validationResult.violations.join(', ')}`);
+
+                    if (attempts < maxAttempts) {
+                        console.log('再生成を試行します...');
+                        continue;
+                    }
+                }
+            } catch (error) {
+                console.error(`試行 ${attempts} でエラー:`, error.message);
+                lastError = error;
+
+                if (attempts < maxAttempts) {
+                    console.log('再生成を試行します...');
+                    continue;
+                }
+            }
+        }
+
+        throw lastError || new Error('最大試行回数に達しました。制約を満たすシフトを生成できませんでした。');
+    }
+
+    async validateGeneratedShift(shiftData, staffs, period) {
+        const violations = [];
+        const staffWorkHours = {};
+        const staffWorkDays = {};
+
+        if (!shiftData || !shiftData.shifts) {
+            return { isValid: false, violations: ['シフトデータが不正です'] };
+        }
+
+        for (const dayShift of shiftData.shifts) {
+            const date = dayShift.date;
+            const dayOfWeek = new Date(date).getDay();
+
+            if (!dayShift.assignments) continue;
+
+            for (const assignment of dayShift.assignments) {
+                const staffId = assignment.staff_id;
+                const staff = staffs.find(s => s.id === staffId);
+
+                if (!staff) {
+                    violations.push(`存在しないスタッフID: ${staffId}`);
+                    continue;
+                }
+
+                const validation = this.validateStaffConstraints(staff, date, assignment.start_time, assignment.end_time);
+                if (validation.errors.length > 0) {
+                    violations.push(`${staff.first_name} ${staff.last_name} (${date}): ${validation.errors.join(', ')}`);
+                }
+
+                if (!staffWorkHours[staffId]) {
+                    staffWorkHours[staffId] = 0;
+                    staffWorkDays[staffId] = [];
+                }
+
+                const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
+                staffWorkHours[staffId] += workMinutes;
+                staffWorkDays[staffId].push(date);
+            }
+        }
+
+        for (const staff of staffs) {
+            const staffId = staff.id;
+            const totalHours = (staffWorkHours[staffId] || 0) / 60;
+
+            if (staff.min_hours_per_month && totalHours < staff.min_hours_per_month) {
+                violations.push(`${staff.first_name} ${staff.last_name}: 月間最小勤務時間不足 (${totalHours.toFixed(1)}h < ${staff.min_hours_per_month}h)`);
+            }
+
+            if (staff.max_hours_per_month && totalHours > staff.max_hours_per_month) {
+                violations.push(`${staff.first_name} ${staff.last_name}: 月間最大勤務時間超過 (${totalHours.toFixed(1)}h > ${staff.max_hours_per_month}h)`);
+            }
+
+            const workDays = staffWorkDays[staffId] || [];
+            if (workDays.length > 0) {
+                const consecutiveDays = this.calculateMaxConsecutiveDays(workDays);
+                const maxConsecutive = staff.max_consecutive_days || 5;
+
+                if (consecutiveDays > maxConsecutive) {
+                    violations.push(`${staff.first_name} ${staff.last_name}: 最大連続勤務日数超過 (${consecutiveDays}日 > ${maxConsecutive}日)`);
+                }
+            }
+        }
+
+        return {
+            isValid: violations.length === 0,
+            violations
+        };
+    }
+
+    calculateMaxConsecutiveDays(workDays) {
+        if (workDays.length === 0) return 0;
+
+        const sortedDays = workDays.sort();
+        let maxConsecutive = 1;
+        let currentConsecutive = 1;
+
+        for (let i = 1; i < sortedDays.length; i++) {
+            const prevDate = new Date(sortedDays[i - 1]);
+            const currentDate = new Date(sortedDays[i]);
+            const diffDays = (currentDate - prevDate) / (1000 * 60 * 60 * 24);
+
+            if (diffDays === 1) {
+                currentConsecutive++;
+                maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+            } else {
+                currentConsecutive = 1;
+            }
+        }
+
+        return maxConsecutive;
     }
 
     async callGeminiApi(prompt) {

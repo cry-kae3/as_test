@@ -617,7 +617,7 @@ const validateStaffWorkingConditions = async (staffId, date, startTime, endTime,
         if (dayOffRequest.status === 'approved') {
             errors.push(`${date}は承認済みの休み希望があります（${dayOffRequest.reason || 'お休み'}）`);
         } else {
-            warnings.push(`${date}は休み希望があります（${dayOffRequest.reason || 'お休み'}）`);
+            errors.push(`${date}は休み希望があります（${dayOffRequest.reason || 'お休み'}）`);
         }
     }
 
@@ -660,13 +660,13 @@ const validateStaffWorkingConditions = async (staffId, date, startTime, endTime,
     if (workHours > 8 && (!breakStartTime || !breakEndTime)) {
         errors.push('8時間超の勤務には最低60分の休憩が必要です');
     } else if (workHours > 6 && (!breakStartTime || !breakEndTime)) {
-        errors.push('6時間超の勤務には最低45分の休憩が必要です');
+        warnings.push('6時間超の勤務には最低45分の休憩が必要です');
     } else if (breakStartTime && breakEndTime) {
         const breakMinutes = calculateBreakMinutes(breakStartTime, breakEndTime);
         if (workHours > 8 && breakMinutes < 60) {
             errors.push('8時間超の勤務には最低60分の休憩が必要です');
         } else if (workHours > 6 && breakMinutes < 45) {
-            errors.push('6時間超の勤務には最低45分の休憩が必要です');
+            warnings.push('6時間超の勤務には最低45分の休憩が必要です');
         }
     }
 

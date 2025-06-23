@@ -89,12 +89,12 @@
           />
 
           <Button
-              label="シフト削除"
-              icon="pi pi-trash"
-              class="action-button delete-button"
-              @click="deleteShift"
-              :disabled="loading"
-            />
+            label="シフト削除"
+            icon="pi pi-trash"
+            class="action-button delete-button"
+            @click="deleteShift"
+            :disabled="loading"
+          />
 
           <Button
             label="印刷"
@@ -1074,9 +1074,15 @@ export default {
       }
 
       try {
-        console.log('=== 他店舗シフト取得開始 ===');
-        console.log('対象期間:', currentYear.value, '年', currentMonth.value, '月');
-        console.log('除外店舗ID:', selectedStore.value.id);
+        console.log("=== 他店舗シフト取得開始 ===");
+        console.log(
+          "対象期間:",
+          currentYear.value,
+          "年",
+          currentMonth.value,
+          "月"
+        );
+        console.log("除外店舗ID:", selectedStore.value.id);
 
         const uniqueStoreIds = new Set();
 
@@ -1095,7 +1101,7 @@ export default {
           });
         });
 
-        console.log('他店舗ID一覧:', Array.from(uniqueStoreIds));
+        console.log("他店舗ID一覧:", Array.from(uniqueStoreIds));
 
         const storeShiftsPromises = Array.from(uniqueStoreIds).map(
           async (storeId) => {
@@ -1109,10 +1115,17 @@ export default {
                   storeId: storeId,
                 }
               );
-              console.log(`店舗ID ${storeId} のシフト取得完了:`, response?.shifts?.length || 0, 'シフト');
+              console.log(
+                `店舗ID ${storeId} のシフト取得完了:`,
+                response?.shifts?.length || 0,
+                "シフト"
+              );
               return { storeId, shifts: response?.shifts || [] };
             } catch (error) {
-              console.log(`店舗ID ${storeId} のシフトデータ取得エラー:`, error.message);
+              console.log(
+                `店舗ID ${storeId} のシフトデータ取得エラー:`,
+                error.message
+              );
               return { storeId, shifts: [] };
             }
           }
@@ -1122,30 +1135,34 @@ export default {
 
         allStoreShifts.value = {};
         let totalOtherStoreShifts = 0;
-        
+
         results.forEach(({ storeId, shifts }) => {
           allStoreShifts.value[storeId] = shifts;
           totalOtherStoreShifts += shifts.length;
         });
 
-        console.log('=== 他店舗シフト取得完了 ===');
-        console.log('取得店舗数:', results.length);
-        console.log('総シフト数:', totalOtherStoreShifts);
-        console.log('詳細データ:', allStoreShifts.value);
+        console.log("=== 他店舗シフト取得完了 ===");
+        console.log("取得店舗数:", results.length);
+        console.log("総シフト数:", totalOtherStoreShifts);
+        console.log("詳細データ:", allStoreShifts.value);
 
-        staffList.value.forEach(staff => {
-          const otherStoreHours = calculateTotalHoursAllStores(staff.id) - calculateTotalHours(staff.id);
+        staffList.value.forEach((staff) => {
+          const otherStoreHours =
+            calculateTotalHoursAllStores(staff.id) -
+            calculateTotalHours(staff.id);
           if (otherStoreHours > 0) {
-            console.log(`${staff.last_name} ${staff.first_name}: 他店舗 ${otherStoreHours.toFixed(1)}時間`);
+            console.log(
+              `${staff.last_name} ${
+                staff.first_name
+              }: 他店舗 ${otherStoreHours.toFixed(1)}時間`
+            );
           }
         });
-
       } catch (error) {
         console.error("全店舗シフトデータ取得エラー:", error);
         allStoreShifts.value = {};
       }
     };
-
 
     const calculateTotalHours = (staffId) => {
       let totalMinutes = 0;
@@ -1300,17 +1317,6 @@ export default {
       return totalHours > maxMonthHours || totalHours < minMonthHours;
     };
 
-    const hasStaffWarningsAllStores = (staffId) => {
-      const staff = staffList.value.find((s) => s.id === staffId);
-      if (!staff) return false;
-
-      const totalHours = calculateTotalHoursAllStores(staffId);
-      const maxMonthHours = staff.max_hours_per_month || 0;
-      const minMonthHours = staff.min_hours_per_month || 0;
-
-      return totalHours > maxMonthHours || totalHours < minMonthHours;
-    };
-
     const getStaffWarnings = (staffId) => {
       const warnings = [];
       const staff = staffList.value.find((s) => s.id === staffId);
@@ -1335,38 +1341,6 @@ export default {
           type: "under_hours",
           icon: "pi pi-exclamation-triangle",
           message: `月間勤務時間が下限を下回り (${formatHours(
-            totalHours
-          )} < ${formatHours(minMonthHours)})`,
-        });
-      }
-
-      return warnings;
-    };
-
-    const getStaffWarningsAllStores = (staffId) => {
-      const warnings = [];
-      const staff = staffList.value.find((s) => s.id === staffId);
-      if (!staff) return warnings;
-
-      const totalHours = calculateTotalHoursAllStores(staffId);
-      const maxMonthHours = staff.max_hours_per_month || 0;
-      const minMonthHours = staff.min_hours_per_month || 0;
-
-      if (totalHours > maxMonthHours) {
-        warnings.push({
-          type: "over_hours",
-          icon: "pi pi-exclamation-triangle",
-          message: `月間勤務時間が上限を超過 (全店舗合計: ${formatHours(
-            totalHours
-          )} > ${formatHours(maxMonthHours)})`,
-        });
-      }
-
-      if (totalHours < minMonthHours) {
-        warnings.push({
-          type: "under_hours",
-          icon: "pi pi-exclamation-triangle",
-          message: `月間勤務時間が下限を下回り (全店舗合計: ${formatHours(
             totalHours
           )} < ${formatHours(minMonthHours)})`,
         });
@@ -1758,6 +1732,193 @@ export default {
       }).length;
     };
 
+    const hasStaffWarningsAllStores = (staffId) => {
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return false;
+
+      const totalHours = calculateTotalHoursAllStores(staffId);
+      const maxMonthHours = staff.max_hours_per_month || 0;
+      const minMonthHours = staff.min_hours_per_month || 0;
+      const maxDayHours = staff.max_hours_per_day || 8;
+
+      let hasViolation = false;
+
+      if (
+        maxMonthHours > 0 &&
+        (totalHours > maxMonthHours || totalHours < minMonthHours)
+      ) {
+        hasViolation = true;
+      }
+
+      shifts.value.forEach((dayShift) => {
+        const assignment = dayShift.assignments.find(
+          (a) => a.staff_id === staffId
+        );
+        if (assignment) {
+          const dayHours = calculateDayHours(assignment);
+          if (dayHours > maxDayHours) {
+            hasViolation = true;
+          }
+
+          const dayOfWeek = new Date(dayShift.date).getDay();
+          const dayPreference = staff.dayPreferences?.find(
+            (pref) => pref.day_of_week === dayOfWeek
+          );
+          if (dayPreference && !dayPreference.available) {
+            hasViolation = true;
+          }
+
+          const dayOffRequest = staff.dayOffRequests?.find(
+            (req) =>
+              req.date === dayShift.date &&
+              (req.status === "approved" || req.status === "pending")
+          );
+          if (dayOffRequest) {
+            hasViolation = true;
+          }
+        }
+      });
+
+      return hasViolation;
+    };
+
+    const getStaffWarningsAllStores = (staffId) => {
+      const warnings = [];
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return warnings;
+
+      const totalHours = calculateTotalHoursAllStores(staffId);
+      const maxMonthHours = staff.max_hours_per_month || 0;
+      const minMonthHours = staff.min_hours_per_month || 0;
+      const maxDayHours = staff.max_hours_per_day || 8;
+
+      if (maxMonthHours > 0 && totalHours > maxMonthHours) {
+        warnings.push({
+          type: "over_hours",
+          icon: "pi pi-exclamation-triangle",
+          message: `月間勤務時間が上限を超過 (全店舗合計: ${formatHours(
+            totalHours
+          )} > ${formatHours(maxMonthHours)})`,
+          severity: "error",
+        });
+      }
+
+      if (minMonthHours > 0 && totalHours < minMonthHours) {
+        warnings.push({
+          type: "under_hours",
+          icon: "pi pi-exclamation-triangle",
+          message: `月間勤務時間が下限を下回り (全店舗合計: ${formatHours(
+            totalHours
+          )} < ${formatHours(minMonthHours)})`,
+          severity: "warn",
+        });
+      }
+
+      const violationDays = [];
+      shifts.value.forEach((dayShift) => {
+        const assignment = dayShift.assignments.find(
+          (a) => a.staff_id === staffId
+        );
+        if (assignment) {
+          const dayHours = calculateDayHours(assignment);
+          if (dayHours > maxDayHours) {
+            violationDays.push({
+              date: dayShift.date,
+              type: "day_hours_exceeded",
+              message: `${dayShift.date}: 1日勤務時間超過 (${formatHours(
+                dayHours
+              )} > ${formatHours(maxDayHours)})`,
+            });
+          }
+
+          const dayOfWeek = new Date(dayShift.date).getDay();
+          const dayPreference = staff.dayPreferences?.find(
+            (pref) => pref.day_of_week === dayOfWeek
+          );
+          if (dayPreference && !dayPreference.available) {
+            violationDays.push({
+              date: dayShift.date,
+              type: "unavailable_day",
+              message: `${dayShift.date}: 勤務不可曜日に割り当て (${
+                ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek]
+              }曜日)`,
+            });
+          }
+
+          const dayOffRequest = staff.dayOffRequests?.find(
+            (req) =>
+              req.date === dayShift.date &&
+              (req.status === "approved" || req.status === "pending")
+          );
+          if (dayOffRequest) {
+            violationDays.push({
+              date: dayShift.date,
+              type: "day_off_violation",
+              message: `${dayShift.date}: 休み希望日に割り当て (${
+                dayOffRequest.reason || "お休み"
+              })`,
+            });
+          }
+        }
+      });
+
+      if (violationDays.length > 0) {
+        warnings.push({
+          type: "schedule_violations",
+          icon: "pi pi-ban",
+          message: `スケジュール違反 ${violationDays.length}件`,
+          severity: "error",
+          details: violationDays,
+        });
+      }
+
+      const workDays = shifts.value
+        .filter((dayShift) =>
+          dayShift.assignments.some((a) => a.staff_id === staffId)
+        )
+        .map((dayShift) => dayShift.date)
+        .sort();
+
+      if (workDays.length > 0) {
+        const maxConsecutive = calculateMaxConsecutiveDays(workDays);
+        const allowedConsecutive = staff.max_consecutive_days || 5;
+
+        if (maxConsecutive > allowedConsecutive) {
+          warnings.push({
+            type: "consecutive_days",
+            icon: "pi pi-clock",
+            message: `最大連続勤務日数超過 (${maxConsecutive}日 > ${allowedConsecutive}日)`,
+            severity: "error",
+          });
+        }
+      }
+
+      return warnings;
+    };
+
+    const calculateMaxConsecutiveDays = (workDays) => {
+      if (workDays.length === 0) return 0;
+
+      const sortedDays = workDays.sort();
+      let maxConsecutive = 1;
+      let currentConsecutive = 1;
+
+      for (let i = 1; i < sortedDays.length; i++) {
+        const prevDate = new Date(sortedDays[i - 1]);
+        const currentDate = new Date(sortedDays[i]);
+        const diffDays = (currentDate - prevDate) / (1000 * 60 * 60 * 24);
+
+        if (diffDays === 1) {
+          currentConsecutive++;
+          maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+        } else {
+          currentConsecutive = 1;
+        }
+      }
+
+      return maxConsecutive;
+    };
+
     const hasShiftViolation = (date, staffId) => {
       const shift = getShiftForStaff(date, staffId);
       if (!shift) return false;
@@ -1767,10 +1928,44 @@ export default {
 
       const dayHours = calculateDayHours(shift);
       const maxDayHours = staff.max_hours_per_day || 8;
-      const consecutiveDays = getConsecutiveWorkDays(staffId, date);
-      const maxConsecutiveDays = staff.max_consecutive_days || 5;
 
-      return dayHours > maxDayHours || consecutiveDays > maxConsecutiveDays;
+      if (dayHours > maxDayHours) {
+        return true;
+      }
+
+      const dayOfWeek = new Date(date).getDay();
+      const dayPreference = staff.dayPreferences?.find(
+        (pref) => pref.day_of_week === dayOfWeek
+      );
+      if (dayPreference && !dayPreference.available) {
+        return true;
+      }
+
+      const dayOffRequest = staff.dayOffRequests?.find(
+        (req) =>
+          req.date === date &&
+          (req.status === "approved" || req.status === "pending")
+      );
+      if (dayOffRequest) {
+        return true;
+      }
+
+      const workDays = shifts.value
+        .filter((dayShift) =>
+          dayShift.assignments.some((a) => a.staff_id === staffId)
+        )
+        .map((dayShift) => dayShift.date);
+
+      if (workDays.includes(date)) {
+        const consecutiveDays = getConsecutiveWorkDaysForDate(staffId, date);
+        const maxConsecutiveDays = staff.max_consecutive_days || 5;
+
+        if (consecutiveDays > maxConsecutiveDays) {
+          return true;
+        }
+      }
+
+      return false;
     };
 
     const getShiftViolations = (date, staffId) => {
@@ -1783,26 +1978,100 @@ export default {
 
       const dayHours = calculateDayHours(shift);
       const maxDayHours = staff.max_hours_per_day || 8;
-      const consecutiveDays = getConsecutiveWorkDays(staffId, date);
-      const maxConsecutiveDays = staff.max_consecutive_days || 5;
 
       if (dayHours > maxDayHours) {
         violations.push({
           type: "day_hours",
-          icon: "pi pi-exclamation-triangle",
-          message: `1日の勤務時間が上限を超過 (${dayHours}h > ${maxDayHours}h)`,
+          icon: "pi pi-clock",
+          message: `1日の勤務時間が上限を超過 (${formatHours(
+            dayHours
+          )} > ${formatHours(maxDayHours)})`,
+          severity: "error",
         });
       }
+
+      const dayOfWeek = new Date(date).getDay();
+      const dayPreference = staff.dayPreferences?.find(
+        (pref) => pref.day_of_week === dayOfWeek
+      );
+      if (dayPreference && !dayPreference.available) {
+        violations.push({
+          type: "unavailable_day",
+          icon: "pi pi-ban",
+          message: `${
+            ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek]
+          }曜日は勤務不可設定です`,
+          severity: "error",
+        });
+      }
+
+      const dayOffRequest = staff.dayOffRequests?.find(
+        (req) =>
+          req.date === date &&
+          (req.status === "approved" || req.status === "pending")
+      );
+      if (dayOffRequest) {
+        violations.push({
+          type: "day_off_violation",
+          icon: "pi pi-ban",
+          message: `休み希望日です (${dayOffRequest.reason || "お休み"})`,
+          severity: "error",
+        });
+      }
+
+      const consecutiveDays = getConsecutiveWorkDaysForDate(staffId, date);
+      const maxConsecutiveDays = staff.max_consecutive_days || 5;
 
       if (consecutiveDays > maxConsecutiveDays) {
         violations.push({
           type: "consecutive_days",
-          icon: "pi pi-exclamation-triangle",
+          icon: "pi pi-calendar",
           message: `連続勤務日数が上限を超過 (${consecutiveDays}日 > ${maxConsecutiveDays}日)`,
+          severity: "error",
         });
       }
 
       return violations;
+    };
+
+    const getConsecutiveWorkDaysForDate = (staffId, targetDate) => {
+      const workDays = shifts.value
+        .filter((dayShift) =>
+          dayShift.assignments.some((a) => a.staff_id === staffId)
+        )
+        .map((dayShift) => dayShift.date)
+        .sort();
+
+      if (!workDays.includes(targetDate)) return 0;
+
+      let consecutiveDays = 1;
+      const targetIndex = workDays.indexOf(targetDate);
+
+      for (let i = targetIndex - 1; i >= 0; i--) {
+        const prevDate = new Date(workDays[i]);
+        const checkDate = new Date(workDays[i + 1]);
+        const diffDays = (checkDate - prevDate) / (1000 * 60 * 60 * 24);
+
+        if (diffDays === 1) {
+          consecutiveDays++;
+        } else {
+          break;
+        }
+      }
+
+      for (let i = targetIndex + 1; i < workDays.length; i++) {
+        const currentDate = new Date(workDays[i]);
+        const prevDate = new Date(workDays[i - 1]);
+        const diffDays = (currentDate - prevDate) / (1000 * 60 * 60 * 24);
+
+        if (diffDays === 1) {
+          consecutiveDays++;
+        } else {
+          break;
+        }
+      }
+
+      return consecutiveDays;
     };
 
     const hasDateWarnings = (date) => {
@@ -2139,27 +2408,27 @@ export default {
     };
 
     const isStoreClosed = (date) => {
-        if (!currentStore.value || !currentStore.value.operating_hours) {
-            return false;
-        }
-
-        const dayOfWeek = new Date(date).getDay();
-        
-        const operatingHours = currentStore.value.operating_hours.find(
-            (hours) => hours.day_of_week === dayOfWeek
-        );
-
-        if (operatingHours && operatingHours.is_closed) {
-            return true;
-        }
-        
-        if (currentStore.value.special_holidays) {
-            if (currentStore.value.special_holidays.includes(date)) {
-                return true;
-            }
-        }
-
+      if (!currentStore.value || !currentStore.value.operating_hours) {
         return false;
+      }
+
+      const dayOfWeek = new Date(date).getDay();
+
+      const operatingHours = currentStore.value.operating_hours.find(
+        (hours) => hours.day_of_week === dayOfWeek
+      );
+
+      if (operatingHours && operatingHours.is_closed) {
+        return true;
+      }
+
+      if (currentStore.value.special_holidays) {
+        if (currentStore.value.special_holidays.includes(date)) {
+          return true;
+        }
+      }
+
+      return false;
     };
 
     const generateDaysInMonth = () => {
@@ -2214,7 +2483,7 @@ export default {
       daysInMonth.value = days;
       console.log(`生成された日数: ${days.length}日`);
     };
-    
+
     const previousMonth = async () => {
       if (currentMonth.value === 1) {
         currentYear.value--;
@@ -2250,10 +2519,220 @@ export default {
       await loadShiftData();
     };
 
-    const createShift = async () => {
+    const generateAutomaticShift = async () => {
+      try {
+        loading.value = true;
+
+        toast.add({
+          severity: "info",
+          summary: "シフト生成開始",
+          detail: "AIによるシフト生成を開始しています...",
+          life: 5000,
+        });
+
+        const params = {
+          storeId: selectedStore.value.id,
+          year: currentYear.value,
+          month: currentMonth.value,
+        };
+
+        console.log("=== AIシフト生成開始 ===");
+        console.log("パラメータ:", params);
+        console.log("スタッフ数:", staffList.value.length);
+        console.log("期間:", `${currentYear.value}年${currentMonth.value}月`);
+
+        const result = await store.dispatch("shift/generateShift", params);
+
+        console.log("=== AIシフト生成完了 ===");
+        console.log("生成されたシフト数:", result?.shifts?.length || 0);
+
+        await loadShiftData();
+
+        const staffViolations = [];
+        const dateViolations = [];
+
+        staffList.value.forEach((staff) => {
+          if (hasStaffWarningsAllStores(staff.id)) {
+            const warnings = getStaffWarningsAllStores(staff.id);
+            staffViolations.push(
+              `${staff.last_name} ${staff.first_name}: ${warnings
+                .map((w) => w.message)
+                .join(", ")}`
+            );
+          }
+        });
+
+        daysInMonth.value.forEach((day) => {
+          if (hasDateWarnings(day.date)) {
+            const warnings = getDateWarnings(day.date);
+            dateViolations.push(
+              `${day.date}: ${warnings.map((w) => w.message).join(", ")}`
+            );
+          }
+        });
+
+        if (staffViolations.length > 0 || dateViolations.length > 0) {
+          let warningMessage =
+            "シフト生成は完了しましたが、以下の注意点があります：\n\n";
+
+          if (staffViolations.length > 0) {
+            warningMessage +=
+              "【スタッフ関連】\n" + staffViolations.slice(0, 3).join("\n");
+            if (staffViolations.length > 3) {
+              warningMessage += `\n...他${staffViolations.length - 3}件`;
+            }
+            warningMessage += "\n\n";
+          }
+
+          if (dateViolations.length > 0) {
+            warningMessage +=
+              "【日付関連】\n" + dateViolations.slice(0, 3).join("\n");
+            if (dateViolations.length > 3) {
+              warningMessage += `\n...他${dateViolations.length - 3}件`;
+            }
+          }
+
+          toast.add({
+            severity: "warn",
+            summary: "シフト生成完了（要確認）",
+            detail: warningMessage,
+            life: 10000,
+          });
+
+          console.log("⚠️ 生成されたシフトに警告があります");
+          console.log("スタッフ警告:", staffViolations);
+          console.log("日付警告:", dateViolations);
+        } else {
+          toast.add({
+            severity: "success",
+            summary: "シフト生成完了",
+            detail: "制約を守ったシフトが正常に生成されました",
+            life: 5000,
+          });
+
+          console.log("✅ 制約を守ったシフトが生成されました");
+        }
+
+        const totalStaffHours = staffList.value.reduce((sum, staff) => {
+          return sum + calculateTotalHours(staff.id);
+        }, 0);
+
+        console.log("=== 生成結果サマリー ===");
+        console.log("総勤務時間:", totalStaffHours.toFixed(1), "時間");
+        console.log(
+          "平均勤務時間:",
+          (totalStaffHours / staffList.value.length).toFixed(1),
+          "時間/人"
+        );
+        console.log(
+          "制約違反数:",
+          staffViolations.length + dateViolations.length
+        );
+      } catch (error) {
+        console.error("=== AIシフト生成失敗 ===");
+        console.error("エラー詳細:", error);
+
+        let errorMessage = "AIシフト生成に失敗しました";
+
+        if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.message) {
+          if (error.message.includes("制約違反")) {
+            errorMessage =
+              "スタッフの勤務条件を満たすシフトを生成できませんでした。勤務条件の見直しをご検討ください。";
+          } else if (error.message.includes("最大試行回数")) {
+            errorMessage =
+              "制約条件が厳しすぎるため、シフトを生成できませんでした。条件を緩和するか、手動でシフトを作成してください。";
+          } else {
+            errorMessage = error.message;
+          }
+        }
+
+        toast.add({
+          severity: "error",
+          summary: "生成エラー",
+          detail: errorMessage,
+          life: 8000,
+        });
+
+        confirm.require({
+          message:
+            "AIシフト生成に失敗しました。空のシフトを作成して手動で編集しますか？",
+          header: "代替手段の提案",
+          icon: "pi pi-question-circle",
+          acceptLabel: "空シフト作成",
+          rejectLabel: "キャンセル",
+          accept: () => {
+            createEmptyShift();
+          },
+        });
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    const regenerateShift = async () => {
       confirm.require({
-        message: "シフトの作成方法を選択してください",
-        header: "シフト作成",
+        message: `現在のシフトを削除してAIで再生成しますか？
+
+⚠️ 注意：
+- 現在のシフトは完全に削除されます
+- スタッフの勤務条件に違反しないシフトが生成されます
+- 条件が厳しい場合、生成に失敗する可能性があります`,
+        header: "シフト再生成の確認",
+        icon: "pi pi-exclamation-triangle",
+        acceptClass: "p-button-warning",
+        acceptLabel: "再生成実行",
+        rejectLabel: "キャンセル",
+        accept: async () => {
+          await generateAutomaticShift();
+        },
+      });
+    };
+
+    const createShift = async () => {
+      const hasStaffData = staffList.value && staffList.value.length > 0;
+
+      if (!hasStaffData) {
+        toast.add({
+          severity: "warn",
+          summary: "注意",
+          detail:
+            "スタッフが登録されていません。先にスタッフを登録してください。",
+          life: 5000,
+        });
+        return;
+      }
+
+      const hasValidStaff = staffList.value.some((staff) => {
+        const hasValidDayPreferences =
+          staff.dayPreferences &&
+          staff.dayPreferences.some((pref) => pref.available);
+        return hasValidDayPreferences;
+      });
+
+      if (!hasValidStaff) {
+        toast.add({
+          severity: "warn",
+          summary: "注意",
+          detail:
+            "勤務可能なスタッフがいません。スタッフの勤務設定を確認してください。",
+          life: 5000,
+        });
+      }
+
+      confirm.require({
+        message: `シフトの作成方法を選択してください
+
+【AI自動生成】
+✅ スタッフの勤務条件を自動で守ります
+✅ 効率的なシフトが生成されます
+⚠️ 条件が厳しい場合は生成に失敗する場合があります
+
+【手動作成】  
+✅ 自由にシフトを組むことができます
+⚠️ 勤務条件の確認は手動で行う必要があります`,
+        header: "シフト作成方法の選択",
         acceptLabel: "AI自動生成",
         rejectLabel: "手動作成",
         acceptClass: "p-button-primary",
@@ -2298,50 +2777,6 @@ export default {
       } finally {
         loading.value = false;
       }
-    };
-
-    const generateAutomaticShift = async () => {
-      try {
-        loading.value = true;
-
-        const params = {
-          storeId: selectedStore.value.id,
-          year: currentYear.value,
-          month: currentMonth.value,
-        };
-
-        await store.dispatch("shift/generateShift", params);
-        await loadShiftData();
-
-        toast.add({
-          severity: "success",
-          summary: "生成完了",
-          detail: "AIによるシフト生成が完了しました",
-          life: 3000,
-        });
-      } catch (error) {
-        console.error("自動シフト生成エラー:", error);
-        toast.add({
-          severity: "error",
-          summary: "エラー",
-          detail: "自動シフト生成に失敗しました",
-          life: 3000,
-        });
-      } finally {
-        loading.value = false;
-      }
-    };
-
-    const regenerateShift = async () => {
-      confirm.require({
-        message: "現在のシフトを削除してAIで再生成しますか？",
-        header: "シフト再生成の確認",
-        icon: "pi pi-exclamation-triangle",
-        acceptClass: "p-button-warning",
-        accept: async () => {
-          await generateAutomaticShift();
-        },
-      });
     };
 
     const printShift = () => {
@@ -2799,51 +3234,50 @@ export default {
       return time.slice(0, 5);
     };
 
-    
-const deleteShift = async () => {
-  confirm.require({
-    message: `${currentYear.value}年${currentMonth.value}月のシフトを完全に削除しますか？この操作は取り消せません。`,
-    header: 'シフト削除の確認',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    acceptLabel: '削除',
-    rejectLabel: 'キャンセル',
-    accept: async () => {
-      try {
-        loading.value = true;
+    const deleteShift = async () => {
+      confirm.require({
+        message: `${currentYear.value}年${currentMonth.value}月のシフトを完全に削除しますか？この操作は取り消せません。`,
+        header: "シフト削除の確認",
+        icon: "pi pi-exclamation-triangle",
+        acceptClass: "p-button-danger",
+        acceptLabel: "削除",
+        rejectLabel: "キャンセル",
+        accept: async () => {
+          try {
+            loading.value = true;
 
-        await store.dispatch('shift/deleteShift', {
-          year: currentYear.value,
-          month: currentMonth.value,
-          storeId: selectedStore.value.id
-        });
+            await store.dispatch("shift/deleteShift", {
+              year: currentYear.value,
+              month: currentMonth.value,
+              storeId: selectedStore.value.id,
+            });
 
-        currentShift.value = null;
-        shifts.value = [];
-        selectedDate.value = null;
-        ganttSelectedDate.value = null;
-        isEditMode.value = false;
+            currentShift.value = null;
+            shifts.value = [];
+            selectedDate.value = null;
+            ganttSelectedDate.value = null;
+            isEditMode.value = false;
 
-        toast.add({
-          severity: 'success',
-          summary: '削除完了',
-          detail: 'シフトを削除しました',
-          life: 3000
-        });
-      } catch (error) {
-        console.error('シフト削除エラー:', error);
-        toast.add({
-          severity: 'error',
-          summary: 'エラー',
-          detail: 'シフトの削除に失敗しました',
-          life: 3000
-        });
-      } finally {
-        loading.value = false;
-      }
-    }
-  });
-};
+            toast.add({
+              severity: "success",
+              summary: "削除完了",
+              detail: "シフトを削除しました",
+              life: 3000,
+            });
+          } catch (error) {
+            console.error("シフト削除エラー:", error);
+            toast.add({
+              severity: "error",
+              summary: "エラー",
+              detail: "シフトの削除に失敗しました",
+              life: 3000,
+            });
+          } finally {
+            loading.value = false;
+          }
+        },
+      });
+    };
 
     watch([currentYear, currentMonth], () => {
       loadShiftData();
@@ -4413,7 +4847,6 @@ const deleteShift = async () => {
   background: #059669;
   border-color: #059669;
 }
-
 
 .delete-button {
   background: #ef4444;
