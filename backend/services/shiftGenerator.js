@@ -29,6 +29,59 @@ class ShiftGeneratorService {
         return end.diff(start, 'minutes');
     }
 
+    async getStaffTotalHoursAllStores(staffIds, year, month) {
+        try {
+            const shiftsInMonth = await Shift.findAll({
+                where: { year, month },
+                include: [{
+                    model: ShiftAssignment,
+                    as: 'assignments',
+                    where: { staff_id: { [Op.in]: staffIds } },
+                    include: [{
+                        model: Staff,
+                        attributes: ['id', 'first_name', 'last_name']
+                    }]
+                }]
+            });
+
+            const staffHours = {};
+
+            staffIds.forEach(id => {
+                staffHours[id] = {
+                    totalMinutes: 0,
+                    staffName: ''
+                };
+            });
+
+            shiftsInMonth.forEach(shift => {
+                shift.assignments.forEach(assignment => {
+                    const staffId = assignment.staff_id;
+                    if (staffHours[staffId]) {
+                        const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
+                        staffHours[staffId].totalMinutes += workMinutes;
+                        if (!staffHours[staffId].staffName && assignment.Staff) {
+                            staffHours[staffId].staffName = `${assignment.Staff.last_name} ${assignment.Staff.first_name}`;
+                        }
+                    }
+                });
+            });
+
+            const result = {};
+            for (const staffId in staffHours) {
+                const staffInfo = await Staff.findByPk(staffId, { attributes: ['first_name', 'last_name'] });
+                result[staffId] = {
+                    total_hours: parseFloat((staffHours[staffId].totalMinutes / 60).toFixed(2)),
+                    staff_name: staffHours[staffId].staffName || (staffInfo ? `${staffInfo.last_name} ${staffInfo.first_name}` : '')
+                };
+            }
+
+            return result;
+        } catch (error) {
+            console.error('Error calculating staff total hours across all stores:', error);
+            throw new Error('Failed to calculate staff total hours.');
+        }
+    }
+
     buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period) {
         let prompt = `あなたは、スタッフの労働条件を最優先する、非常に有能なシフト管理AIです。以下のルール階層を厳密に守り、${period.startDate.format('YYYY年M月D日')}から${period.endDate.format('YYYY年M月D日')}までのシフトをJSON形式で一度に生成してください。\n\n`;
         prompt += `### ルール階層（上にあるほど優先度が高い）\n`;
@@ -141,8 +194,19 @@ class ShiftGeneratorService {
         }
         let jsonString = response.candidates[0].content.parts[0].text;
         const match = jsonString.match(/```json\n([\s\S]*)\n```/);
-        if (match && match[1]) jsonString = match[1];
-        return JSON.parse(jsonString);
+        if (match && match[1]) {
+            jsonString = match[1];
+        }
+
+        jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
+
+        try {
+            return JSON.parse(jsonString);
+        } catch (error) {
+            console.error("Failed to parse cleaned JSON:", error);
+            console.error("Cleaned JSON string:", jsonString);
+            throw new Error('AIからの応答をJSONとして解析できませんでした。');
+        }
     }
 
     async saveShift(shiftData, storeId, year, month) {
