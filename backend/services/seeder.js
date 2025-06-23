@@ -53,30 +53,58 @@ async function seedStaff() {
     }
     console.log('スタッフの初期データを登録します...');
     const staffData = [
-        { store_id: 1, first_name: '太郎', last_name: '田中', furigana: 'タナカタロウ', gender: '男性', position: '正社員', max_hours_per_month: 160, min_hours_per_month: 140, max_hours_per_day: 8, max_consecutive_days: 5 },
-        { store_id: 1, first_name: '花子', last_name: '山田', furigana: 'ヤマダハナコ', gender: '女性', position: 'アルバイト', max_hours_per_month: 80, min_hours_per_month: 40, max_hours_per_day: 6, max_consecutive_days: 4 },
-        { store_id: 2, first_name: '次郎', last_name: '鈴木', furigana: 'スズキジロウ', gender: '男性', position: '正社員', max_hours_per_month: 160, min_hours_per_month: 140, max_hours_per_day: 8, max_consecutive_days: 5 },
-        { store_id: 2, first_name: '美咲', last_name: '高橋', furigana: 'タカハシミサキ', gender: '女性', position: 'パート', max_hours_per_month: 100, min_hours_per_month: 60, max_hours_per_day: 7, max_consecutive_days: 5 },
-        { store_id: 3, first_name: '三郎', last_name: '佐藤', furigana: 'サトウサブロウ', gender: '男性', position: 'アルバイト', max_hours_per_month: 80, min_hours_per_month: 0, max_hours_per_day: 8, max_consecutive_days: 3 },
-        { store_id: 4, first_name: '愛', last_name: '伊藤', furigana: 'イトウアイ', gender: '女性', position: '正社員', max_hours_per_month: 150, min_hours_per_month: 120, max_hours_per_day: 8, max_consecutive_days: 5 },
-        { store_id: 5, first_name: '健太', last_name: '渡辺', furigana: 'ワタナベケンタ', gender: '男性', position: 'パート', max_hours_per_month: 120, min_hours_per_month: 80, max_hours_per_day: 8, max_consecutive_days: 5 },
-        { store_id: 6, first_name: 'さくら', last_name: '山本', furigana: 'ヤマモトサクラ', gender: '女性', position: 'アルバイト', max_hours_per_month: 90, min_hours_per_month: 50, max_hours_per_day: 5, max_consecutive_days: 4 },
-        { store_id: 7, first_name: '大輔', last_name: '中村', furigana: 'ナカムラダイスケ', gender: '男性', position: '店長', max_hours_per_month: 180, min_hours_per_month: 160, max_hours_per_day: 10, max_consecutive_days: 6 },
-        { store_id: 8, first_name: '陽子', last_name: '小林', furigana: 'コバヤシヨウコ', gender: '女性', position: 'パート', max_hours_per_month: 100, min_hours_per_month: 40, max_hours_per_day: 6, max_consecutive_days: 5 },
+        { id: 1, store_id: 1, first_name: '太郎', last_name: '田中', furigana: 'タナカタロウ', gender: '男性', position: '正社員', employment_type: '正社員', max_hours_per_month: 160, min_hours_per_month: 140, max_hours_per_day: 8 },
+        { id: 2, store_id: 1, first_name: '花子', last_name: '山田', furigana: 'ヤマダハナコ', gender: '女性', position: 'アルバイト', employment_type: 'アルバイト', max_hours_per_month: 80, min_hours_per_month: 40, max_hours_per_day: 6 },
+        { id: 3, store_id: 2, first_name: '次郎', last_name: '鈴木', furigana: 'スズキジロウ', gender: '男性', position: '正社員', employment_type: '正社員', max_hours_per_month: 160, min_hours_per_month: 140, max_hours_per_day: 8 },
+        { id: 4, store_id: 2, first_name: '美咲', last_name: '高橋', furigana: 'タカハシミサキ', gender: '女性', position: 'パート', employment_type: 'パート', max_hours_per_month: 100, min_hours_per_month: 60, max_hours_per_day: 7 },
+        { id: 5, store_id: 3, first_name: '三郎', last_name: '佐藤', furigana: 'サトウサブロウ', gender: '男性', position: 'アルバイト', employment_type: 'アルバイト', max_hours_per_month: 80, min_hours_per_month: 0, max_hours_per_day: 8 },
+        { id: 6, store_id: 4, first_name: '愛', last_name: '伊藤', furigana: 'イトウアイ', gender: '女性', position: '正社員', employment_type: '正社員', max_hours_per_month: 150, min_hours_per_month: 120, max_hours_per_day: 8 },
+        { id: 7, store_id: 5, first_name: '健太', last_name: '渡辺', furigana: 'ワタナベケンタ', gender: '男性', position: 'パート', employment_type: 'パート', max_hours_per_month: 120, min_hours_per_month: 80, max_hours_per_day: 8 },
+        { id: 8, store_id: 6, first_name: 'さくら', last_name: '山本', furigana: 'ヤマモトサクラ', gender: '女性', position: 'アルバイト', employment_type: 'アルバイト', max_hours_per_month: 90, min_hours_per_month: 50, max_hours_per_day: 5 },
+        { id: 9, store_id: 7, first_name: '大輔', last_name: '中村', furigana: 'ナカムラダイスケ', gender: '男性', position: '店長', employment_type: '正社員', max_hours_per_month: 180, min_hours_per_month: 160, max_hours_per_day: 10 },
+        { id: 10, store_id: 8, first_name: '陽子', last_name: '小林', furigana: 'コバヤシヨウコ', gender: '女性', position: 'パート', employment_type: 'パート', max_hours_per_month: 100, min_hours_per_month: 40, max_hours_per_day: 6 },
     ];
-    const staff = await Staff.bulkCreate(staffData);
+    await Staff.bulkCreate(staffData);
+    console.log('スタッフの基本データ登録が完了しました。');
 
-    const preferences = [];
-    staff.forEach(s => {
-        for (let day = 1; day <= 5; day++) {
-            preferences.push({ staff_id: s.id, day_of_week: day, available: true, preferred_start_time: '09:00', preferred_end_time: '17:00' });
+    const staffWorkableStores = [
+        { staffId: 1, storeIds: [1, 2] },
+        { staffId: 2, storeIds: [1] },
+        { staffId: 3, storeIds: [1, 2, 3] },
+        { staffId: 4, storeIds: [2, 3] },
+        { staffId: 5, storeIds: [3] },
+        { staffId: 6, storeIds: [4, 5] },
+        { staffId: 7, storeIds: [4, 5] },
+        { staffId: 8, storeIds: [6, 7] },
+        { staffId: 9, storeIds: [6, 7, 8] },
+        { staffId: 10, storeIds: [8] },
+    ];
+
+    for (const data of staffWorkableStores) {
+        const staff = await Staff.findByPk(data.staffId);
+        if (staff) {
+            await staff.setStores(data.storeIds);
         }
-        preferences.push({ staff_id: s.id, day_of_week: 6, available: true, preferred_start_time: '10:00', preferred_end_time: '18:00' });
-        preferences.push({ staff_id: s.id, day_of_week: 0, available: false });
+    }
+    console.log('スタッフの勤務可能店舗の設定が完了しました。');
+
+    const staffFromDb = await Staff.findAll();
+    const preferences = [];
+    staffFromDb.forEach(s => {
+        if (s.employment_type === '正社員' || s.employment_type === '店長') {
+            for (let day = 1; day <= 5; day++) {
+                preferences.push({ staff_id: s.id, day_of_week: day, available: true, preferred_start_time: '09:00', preferred_end_time: '18:00' });
+            }
+            preferences.push({ staff_id: s.id, day_of_week: 6, available: false });
+            preferences.push({ staff_id: s.id, day_of_week: 0, available: false });
+        } else {
+            for (let day = 0; day < 7; day++) {
+                preferences.push({ staff_id: s.id, day_of_week: day, available: true, preferred_start_time: '10:00', preferred_end_time: '17:00' });
+            }
+        }
     });
     await StaffDayPreference.bulkCreate(preferences);
-
-    console.log('スタッフの初期データ登録が完了しました。');
+    console.log('スタッフの希望シフト登録が完了しました。');
 }
 
 

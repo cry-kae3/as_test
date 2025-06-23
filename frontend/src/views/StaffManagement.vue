@@ -154,27 +154,21 @@
           </template>
         </Column>
 
-        <Column field="max_hours_per_month" header="月間最大" sortable :style="{ minWidth: '80px' }">
+        <Column field="max_hours_per_month" header="月間最大勤務時間" sortable :style="{ minWidth: '120px' }">
           <template #body="{ data }">
-            {{ data.max_hours_per_month || "-" }}
+            {{ data.max_hours_per_month ? data.max_hours_per_month + 'h' : "-" }}
           </template>
         </Column>
 
-        <Column field="min_hours_per_month" header="月間最小" sortable :style="{ minWidth: '80px' }">
+        <Column field="min_hours_per_month" header="月間最小勤務時間" sortable :style="{ minWidth: '120px' }">
           <template #body="{ data }">
-            {{ data.min_hours_per_month || "-" }}
+            {{ data.min_hours_per_month ? data.min_hours_per_month + 'h' : "-" }}
           </template>
         </Column>
 
-        <Column field="max_hours_per_day" header="日最大" sortable :style="{ minWidth: '70px' }">
+        <Column field="max_hours_per_day" header="1日の最大勤務時間" sortable :style="{ minWidth: '120px' }">
           <template #body="{ data }">
-            {{ data.max_hours_per_day || "-" }}
-          </template>
-        </Column>
-
-        <Column field="max_consecutive_days" header="連続最大" sortable :style="{ minWidth: '80px' }">
-          <template #body="{ data }">
-            {{ data.max_consecutive_days || "-" }}
+            {{ data.max_hours_per_day ? data.max_hours_per_day + 'h' : "-" }}
           </template>
         </Column>
 
@@ -358,19 +352,6 @@
                       suffix=" 時間"
                       :min="0"
                       :max="24"
-                    />
-                  </div>
-                </div>
-
-                <div class="p-col-12 p-md-6">
-                  <div class="field">
-                    <label for="max_consecutive_days">最大連続勤務日数</label>
-                    <InputNumber
-                      id="max_consecutive_days"
-                      v-model="staffDialog.staff.max_consecutive_days"
-                      suffix=" 日"
-                      :min="0"
-                      :max="31"
                     />
                   </div>
                 </div>
@@ -691,7 +672,6 @@ export default {
           max_hours_per_month: staffDetail.max_hours_per_month,
           min_hours_per_month: staffDetail.min_hours_per_month,
           max_hours_per_day: staffDetail.max_hours_per_day,
-          max_consecutive_days: staffDetail.max_consecutive_days,
         };
 
         if (staffDetail.dayPreferences && Array.isArray(staffDetail.dayPreferences)) {
@@ -965,7 +945,6 @@ export default {
         max_hours_per_month: null,
         min_hours_per_month: null,
         max_hours_per_day: null,
-        max_consecutive_days: null,
       };
 
       staffDialog.dayPreferences = daysOfWeek.map((day) => ({

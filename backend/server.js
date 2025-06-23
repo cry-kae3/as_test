@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const cookieParser = require('cookie-parser');
 const { logUserChange } = require('./middleware/changeLogger');
 const sessionService = require('./services/sessionService');
-const { seedStaffRequirements } = require('./services/seeder');
+const { seedDatabase } = require('./services/seeder');
 
 const { sequelize, User } = require('./models');
 const routes = require('./routes');
@@ -102,10 +102,10 @@ async function startServer() {
       }
       await sequelize.sync(syncOptions);
       await createInitialUsers();
-      await seedStaffRequirements();
+      await seedDatabase();
     } else {
       await createInitialUsers();
-      await seedStaffRequirements();
+      await seedDatabase();
     }
 
     startSessionCleanup();

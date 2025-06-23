@@ -64,13 +64,6 @@ module.exports = (sequelize, DataTypes) => {
                 min: 0,
                 max: 24
             }
-        },
-        max_consecutive_days: {
-            type: DataTypes.INTEGER,
-            allowNull: true,
-            validate: {
-                min: 0
-            }
         }
     }, {
         tableName: 'staff',

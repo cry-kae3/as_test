@@ -142,7 +142,7 @@ const actions = {
         commit('setGenerating', true);
         commit('clearError');
         try {
-            const response = await api.post('/shifts/generate', { store_id: storeId, year, month });
+            const response = await api.post('/shifts/generate', { storeId, year, month });
             commit('setCurrentShiftData', response.data);
             commit('setCurrentShift', { id: response.data.id, store_id: response.data.store_id, year: response.data.year, month: response.data.month, status: response.data.status });
             if (response.data.allStoreHours) {

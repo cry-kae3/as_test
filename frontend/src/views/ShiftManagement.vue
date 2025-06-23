@@ -88,7 +88,6 @@
             :disabled="loading"
           />
 
-          <!-- 新規追加：削除ボタン -->
           <Button
               label="シフト削除"
               icon="pi pi-trash"
@@ -1008,7 +1007,6 @@ export default {
     const storeRequirements = ref([]);
     const currentStore = ref(null);
 
-    // 統一: allStoreShifts で統一（重複するallStoreHoursを削除）
     const allStoreShifts = ref({});
 
     const ganttContainer = ref(null);
@@ -1066,93 +1064,91 @@ export default {
       return currentShift.value !== null;
     });
 
-    // 修正されたfetchAllStoreShifts関数
     const fetchAllStoreShifts = async () => {
-  if (
-    !staffList.value ||
-    staffList.value.length === 0 ||
-    !selectedStore.value
-  ) {
-    return;
-  }
-
-  try {
-    console.log('=== 他店舗シフト取得開始 ===');
-    console.log('対象期間:', currentYear.value, '年', currentMonth.value, '月');
-    console.log('除外店舗ID:', selectedStore.value.id);
-
-    const uniqueStoreIds = new Set();
-
-    staffList.value.forEach((staff) => {
-      let storeIds = [];
-      if (staff.store_ids && Array.isArray(staff.store_ids)) {
-        storeIds = staff.store_ids;
-      } else if (staff.stores && Array.isArray(staff.stores)) {
-        storeIds = staff.stores.map((s) => s.id);
+      if (
+        !staffList.value ||
+        staffList.value.length === 0 ||
+        !selectedStore.value
+      ) {
+        return;
       }
 
-      storeIds.forEach((id) => {
-        if (id !== selectedStore.value.id) {
-          uniqueStoreIds.add(id);
-        }
-      });
-    });
+      try {
+        console.log('=== 他店舗シフト取得開始 ===');
+        console.log('対象期間:', currentYear.value, '年', currentMonth.value, '月');
+        console.log('除外店舗ID:', selectedStore.value.id);
 
-    console.log('他店舗ID一覧:', Array.from(uniqueStoreIds));
+        const uniqueStoreIds = new Set();
 
-    const storeShiftsPromises = Array.from(uniqueStoreIds).map(
-      async (storeId) => {
-        try {
-          console.log(`店舗ID ${storeId} のシフト取得中...`);
-          const response = await store.dispatch(
-            "shift/fetchShiftByYearMonth",
-            {
-              year: currentYear.value,
-              month: currentMonth.value,
-              storeId: storeId,
+        staffList.value.forEach((staff) => {
+          let storeIds = [];
+          if (staff.store_ids && Array.isArray(staff.store_ids)) {
+            storeIds = staff.store_ids;
+          } else if (staff.stores && Array.isArray(staff.stores)) {
+            storeIds = staff.stores.map((s) => s.id);
+          }
+
+          storeIds.forEach((id) => {
+            if (id !== selectedStore.value.id) {
+              uniqueStoreIds.add(id);
             }
-          );
-          console.log(`店舗ID ${storeId} のシフト取得完了:`, response?.shifts?.length || 0, 'シフト');
-          return { storeId, shifts: response?.shifts || [] };
-        } catch (error) {
-          console.log(`店舗ID ${storeId} のシフトデータ取得エラー:`, error.message);
-          return { storeId, shifts: [] };
-        }
+          });
+        });
+
+        console.log('他店舗ID一覧:', Array.from(uniqueStoreIds));
+
+        const storeShiftsPromises = Array.from(uniqueStoreIds).map(
+          async (storeId) => {
+            try {
+              console.log(`店舗ID ${storeId} のシフト取得中...`);
+              const response = await store.dispatch(
+                "shift/fetchShiftByYearMonth",
+                {
+                  year: currentYear.value,
+                  month: currentMonth.value,
+                  storeId: storeId,
+                }
+              );
+              console.log(`店舗ID ${storeId} のシフト取得完了:`, response?.shifts?.length || 0, 'シフト');
+              return { storeId, shifts: response?.shifts || [] };
+            } catch (error) {
+              console.log(`店舗ID ${storeId} のシフトデータ取得エラー:`, error.message);
+              return { storeId, shifts: [] };
+            }
+          }
+        );
+
+        const results = await Promise.all(storeShiftsPromises);
+
+        allStoreShifts.value = {};
+        let totalOtherStoreShifts = 0;
+        
+        results.forEach(({ storeId, shifts }) => {
+          allStoreShifts.value[storeId] = shifts;
+          totalOtherStoreShifts += shifts.length;
+        });
+
+        console.log('=== 他店舗シフト取得完了 ===');
+        console.log('取得店舗数:', results.length);
+        console.log('総シフト数:', totalOtherStoreShifts);
+        console.log('詳細データ:', allStoreShifts.value);
+
+        staffList.value.forEach(staff => {
+          const otherStoreHours = calculateTotalHoursAllStores(staff.id) - calculateTotalHours(staff.id);
+          if (otherStoreHours > 0) {
+            console.log(`${staff.last_name} ${staff.first_name}: 他店舗 ${otherStoreHours.toFixed(1)}時間`);
+          }
+        });
+
+      } catch (error) {
+        console.error("全店舗シフトデータ取得エラー:", error);
+        allStoreShifts.value = {};
       }
-    );
-
-    const results = await Promise.all(storeShiftsPromises);
-
-    allStoreShifts.value = {};
-    let totalOtherStoreShifts = 0;
-    
-    results.forEach(({ storeId, shifts }) => {
-      allStoreShifts.value[storeId] = shifts;
-      totalOtherStoreShifts += shifts.length;
-    });
-
-    console.log('=== 他店舗シフト取得完了 ===');
-    console.log('取得店舗数:', results.length);
-    console.log('総シフト数:', totalOtherStoreShifts);
-    console.log('詳細データ:', allStoreShifts.value);
-
-    staffList.value.forEach(staff => {
-      const otherStoreHours = calculateTotalHoursAllStores(staff.id) - calculateTotalHours(staff.id);
-      if (otherStoreHours > 0) {
-        console.log(`${staff.last_name} ${staff.first_name}: 他店舗 ${otherStoreHours.toFixed(1)}時間`);
-      }
-    });
-
-  } catch (error) {
-    console.error("全店舗シフトデータ取得エラー:", error);
-    allStoreShifts.value = {};
-  }
     };
 
 
-    // calculateTotalHours 関数も修正（精度向上）
     const calculateTotalHours = (staffId) => {
-      let totalMinutes = 0; // 分単位で計算して精度向上
+      let totalMinutes = 0;
 
       shifts.value.forEach((dayShift) => {
         const assignment = dayShift.assignments.find(
@@ -1161,9 +1157,8 @@ export default {
         if (assignment) {
           const startTime = new Date(`2000-01-01T${assignment.start_time}`);
           const endTime = new Date(`2000-01-01T${assignment.end_time}`);
-          let minutes = (endTime - startTime) / (1000 * 60); // 分単位で計算
+          let minutes = (endTime - startTime) / (1000 * 60);
 
-          // 休憩時間を引く
           if (assignment.break_start_time && assignment.break_end_time) {
             const breakStart = new Date(
               `2000-01-01T${assignment.break_start_time}`
@@ -1179,16 +1174,12 @@ export default {
         }
       });
 
-      // 分から時間に変換（小数点1桁まで）
       return Math.round((totalMinutes / 60) * 10) / 10;
     };
 
-    // calculateTotalHoursAllStores 関数も修正
     const calculateTotalHoursAllStores = (staffId) => {
-      // 現在の店舗の時間を分単位で計算
       let totalMinutes = 0;
 
-      // 現在の店舗の時間を計算
       shifts.value.forEach((dayShift) => {
         const assignment = dayShift.assignments.find(
           (a) => a.staff_id === staffId
@@ -1198,7 +1189,6 @@ export default {
           const endTime = new Date(`2000-01-01T${assignment.end_time}`);
           let minutes = (endTime - startTime) / (1000 * 60);
 
-          // 休憩時間を引く
           if (assignment.break_start_time && assignment.break_end_time) {
             const breakStart = new Date(
               `2000-01-01T${assignment.break_start_time}`
@@ -1217,7 +1207,6 @@ export default {
       const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return Math.round((totalMinutes / 60) * 10) / 10;
 
-      // スタッフが所属する店舗IDのリストを取得
       let staffStoreIds = [];
       if (staff.store_ids && Array.isArray(staff.store_ids)) {
         staffStoreIds = staff.store_ids;
@@ -1225,10 +1214,8 @@ export default {
         staffStoreIds = staff.stores.map((s) => s.id);
       }
 
-      // 他店舗のシフトデータから時間を計算
       Object.entries(allStoreShifts.value).forEach(([storeId, storeShifts]) => {
         const storeIdNum = parseInt(storeId);
-        // 現在の店舗は除外し、スタッフが所属する店舗のみ対象
         if (
           storeIdNum === selectedStore.value?.id ||
           !staffStoreIds.includes(storeIdNum)
@@ -1249,7 +1236,6 @@ export default {
                 const endTime = new Date(`2000-01-01T${assignment.end_time}`);
                 let minutes = (endTime - startTime) / (1000 * 60);
 
-                // 休憩時間を引く
                 if (assignment.break_start_time && assignment.break_end_time) {
                   const breakStart = new Date(
                     `2000-01-01T${assignment.break_start_time}`
@@ -1271,14 +1257,12 @@ export default {
       return Math.round((totalMinutes / 60) * 10) / 10;
     };
 
-    // 他店舗の時間があるかチェック
     const hasTotalHoursFromOtherStores = (staffId) => {
       const currentStoreHours = calculateTotalHours(staffId);
       const allStoreHours = calculateTotalHoursAllStores(staffId);
       return allStoreHours > currentStoreHours;
     };
 
-    // 現在店舗のみの時間での範囲外チェック
     const isHoursOutOfRange = (staffId) => {
       const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
@@ -1292,7 +1276,6 @@ export default {
       return totalHours < minHours || totalHours > maxHours;
     };
 
-    // 全店舗含む時間での範囲外チェック（重要: エラー判定はこちらを使用）
     const isHoursOutOfRangeAllStores = (staffId) => {
       const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
@@ -1306,7 +1289,6 @@ export default {
       return totalHours < minHours || totalHours > maxHours;
     };
 
-    // 現在店舗のみの警告チェック
     const hasStaffWarnings = (staffId) => {
       const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
@@ -1318,7 +1300,6 @@ export default {
       return totalHours > maxMonthHours || totalHours < minMonthHours;
     };
 
-    // 全店舗含む警告チェック（重要: エラー判定はこちらを使用）
     const hasStaffWarningsAllStores = (staffId) => {
       const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
@@ -1330,7 +1311,6 @@ export default {
       return totalHours > maxMonthHours || totalHours < minMonthHours;
     };
 
-    // 現在店舗のみの警告取得
     const getStaffWarnings = (staffId) => {
       const warnings = [];
       const staff = staffList.value.find((s) => s.id === staffId);
@@ -1363,7 +1343,6 @@ export default {
       return warnings;
     };
 
-    // 全店舗含む警告取得
     const getStaffWarningsAllStores = (staffId) => {
       const warnings = [];
       const staff = staffList.value.find((s) => s.id === staffId);
@@ -1485,14 +1464,11 @@ export default {
       });
     };
 
-    // formatHours 関数を完全に修正
     const formatHours = (hours) => {
-      // 数値でない場合や無効な値の場合は0として処理
       if (typeof hours !== "number" || isNaN(hours) || hours < 0) {
         hours = 0;
       }
 
-      // 小数点の累積誤差を防ぐため、総分数で計算
       const totalMinutes = Math.round(hours * 60);
       const displayHours = Math.floor(totalMinutes / 60);
       const displayMinutes = totalMinutes % 60;
@@ -1713,13 +1689,12 @@ export default {
       return consecutiveDays;
     };
 
-    // calculateDayHours 関数も修正
     const calculateDayHours = (shift) => {
       if (!shift) return 0;
 
       const startTime = new Date(`2000-01-01T${shift.start_time}`);
       const endTime = new Date(`2000-01-01T${shift.end_time}`);
-      let minutes = (endTime - startTime) / (1000 * 60); // 分単位で計算
+      let minutes = (endTime - startTime) / (1000 * 60);
 
       if (shift.break_start_time && shift.break_end_time) {
         const breakStart = new Date(`2000-01-01T${shift.break_start_time}`);
@@ -1728,7 +1703,7 @@ export default {
         minutes -= breakMinutes;
       }
 
-      return Math.round((minutes / 60) * 10) / 10; // 時間に変換
+      return Math.round((minutes / 60) * 10) / 10;
     };
 
     const fetchStoreDetails = async (storeId) => {
@@ -1991,7 +1966,6 @@ export default {
       shiftEditorDialog.visible = true;
     };
 
-    // さらに、フロントエンドでもシステム設定から締め日を取得する処理を追加
     const fetchSystemSettings = async () => {
       try {
         const response = await api.get("/shifts/system-settings");
@@ -2101,21 +2075,18 @@ export default {
       shiftEditorDialog.visible = false;
     };
 
-    // loadShiftData関数の修正版
     const loadShiftData = async () => {
       if (!selectedStore.value) return;
 
       loading.value = true;
 
       try {
-        // スタッフデータを取得
         const staffData = await store.dispatch(
           "staff/fetchStaff",
           selectedStore.value.id
         );
         staffList.value = staffData;
 
-        // 現在の店舗のシフトデータを取得
         try {
           const shiftData = await store.dispatch(
             "shift/fetchShiftByYearMonth",
@@ -2148,7 +2119,6 @@ export default {
           }
         }
 
-        // スタッフデータが取得できてから他店舗のシフトデータを取得
         if (staffList.value && staffList.value.length > 0) {
           await fetchAllStoreShifts();
         }
@@ -2169,48 +2139,29 @@ export default {
     };
 
     const isStoreClosed = (date) => {
-      if (!currentStore.value) {
-        console.log("currentStore.value is null/undefined");
-        return false;
-      }
+        if (!currentStore.value || !currentStore.value.operating_hours) {
+            return false;
+        }
 
-      const dayOfWeek = new Date(date).getDay();
-      console.log(
-        `Checking store closed for date: ${date}, dayOfWeek: ${dayOfWeek}`
-      );
-
-      if (
-        currentStore.value.operating_hours &&
-        Array.isArray(currentStore.value.operating_hours)
-      ) {
-        console.log(
-          "operating_hours exists:",
-          currentStore.value.operating_hours
-        );
+        const dayOfWeek = new Date(date).getDay();
+        
         const operatingHours = currentStore.value.operating_hours.find(
-          (hours) => hours.day_of_week === dayOfWeek
+            (hours) => hours.day_of_week === dayOfWeek
         );
-        console.log(`Operating hours for day ${dayOfWeek}:`, operatingHours);
 
-        if (!operatingHours || operatingHours.is_closed) {
-          console.log(`Store is closed on day ${dayOfWeek}`);
-          return true;
+        if (operatingHours && operatingHours.is_closed) {
+            return true;
         }
-      } else {
-        console.log("No operating_hours data found or invalid format");
-      }
-
-      if (currentStore.value.special_holidays) {
-        if (currentStore.value.special_holidays.includes(date)) {
-          console.log(`Store is closed on ${date} (special holiday)`);
-          return true;
+        
+        if (currentStore.value.special_holidays) {
+            if (currentStore.value.special_holidays.includes(date)) {
+                return true;
+            }
         }
-      }
 
-      console.log(`Store is open on ${date}`);
-      return false;
+        return false;
     };
-    // generateDaysInMonth 関数も確認
+
     const generateDaysInMonth = () => {
       const year = currentYear.value;
       const month = currentMonth.value;
@@ -2867,7 +2818,6 @@ const deleteShift = async () => {
           storeId: selectedStore.value.id
         });
 
-        // 削除後のステート初期化
         currentShift.value = null;
         shifts.value = [];
         selectedDate.value = null;
@@ -2941,7 +2891,7 @@ const deleteShift = async () => {
     });
 
     return {
-      deleteShift,  // この行を追加
+      deleteShift,
       loading,
       saving,
       isEditMode,

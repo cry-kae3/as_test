@@ -419,41 +419,29 @@ const deleteShift = async (req, res) => {
 
 const generateShift = async (req, res) => {
     try {
-        const { store_id, year, month } = req.body;
+        const { storeId, year, month } = req.body;
 
         console.log('=== シフト生成リクエスト受信 ===');
-        console.log('パラメータ:', { store_id, year, month });
+        console.log('パラメータ:', { store_id: storeId, year, month });
         console.log('リクエストユーザー:', { id: req.user.id, role: req.user.role });
 
-        if (!store_id || !year || !month) {
+        if (!storeId || !year || !month) {
             return res.status(400).json({ message: '店舗ID、年、月は必須です' });
         }
 
         if (req.user.role === 'owner' || req.user.role === 'staff') {
             let ownerId = req.user.role === 'staff' ? req.user.parent_user_id : req.user.id;
-            const store = await Store.findOne({ where: { id: store_id, owner_id: ownerId } });
+            const store = await Store.findOne({ where: { id: storeId, owner_id: ownerId } });
             if (!store) {
                 return res.status(403).json({ message: 'この店舗にシフトを生成する権限がありません' });
             }
         }
 
         console.log('権限チェック完了、AI シフト生成開始');
-        const savedShiftData = await shiftGeneratorService.generateShift(store_id, year, month);
+        const savedShiftData = await shiftGeneratorService.generateShift(storeId, year, month);
         console.log('AI シフト生成・保存完了');
 
-        const staff = await Staff.findAll({ where: { store_id: store_id }, attributes: ['id'] });
-        const staffIds = staff.map(s => s.id);
-        const allStoreHours = staffIds.length > 0
-            ? await shiftGeneratorService.getStaffTotalHoursAllStores(staffIds, year, month)
-            : {};
-
-        const response = {
-            ...savedShiftData,
-            allStoreHours: allStoreHours
-        };
-
-        console.log('=== シフト生成API完了 ===');
-        res.status(201).json(response);
+        res.status(201).json(savedShiftData);
 
     } catch (error) {
         console.error('=== シフト生成API失敗 ===');
@@ -641,10 +629,8 @@ const validateStaffWorkingConditions = async (staffId, date, startTime, endTime,
     }
 
     if (dayPreference && dayPreference.preferred_start_time && dayPreference.preferred_end_time) {
-        const prefStart = dayPreference.preferred_start_time.substring(0, 5);
-        const prefEnd = dayPreference.preferred_end_time.substring(0, 5);
-        if (startTime < prefStart || endTime > prefEnd) {
-            warnings.push(`希望時間（${prefStart}-${prefEnd}）から外れています`);
+        if (startTime < dayPreference.preferred_start_time || endTime > dayPreference.preferred_end_time) {
+            warnings.push(`希望時間（${dayPreference.preferred_start_time}-${dayPreference.preferred_end_time}）から外れています`);
         }
     }
 
