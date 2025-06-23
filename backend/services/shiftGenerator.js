@@ -10,7 +10,7 @@ const moment = require('moment-timezone');
 class ShiftGeneratorService {
     constructor() {
         this.geminiApiKey = process.env.GEMINI_API_KEY;
-        this.geminiModel = 'gemini-1.5-pro-latest';
+        this.geminiModel = 'gemini-2.5-flash';
         this.geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${this.geminiModel}:generateContent`;
     }
 
@@ -121,100 +121,57 @@ class ShiftGeneratorService {
     }
 
     buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period) {
-        let prompt = `あなたは、労働基準法と個人の制約を厳格に遵守するシフト管理AIです。以下のルールは絶対に破ってはいけません。
+        let prompt = `シフト管理システムです。制約を厳格に守ってシフトを生成してください。
 
-### 🚨 絶対遵守ルール（違反は一切許可されません）
-1. **スタッフの「勤務不可曜日」には絶対にシフトを割り当てない**
-2. **スタッフの「休み希望日」には絶対にシフトを割り当てない**
-3. **スタッフの「1日最大勤務時間」を絶対に超過しない**
-4. **スタッフの「月間最大勤務時間」を絶対に超過しない**
-5. **スタッフの「最大連続勤務日数」を絶対に超過しない**
+期間: ${period.startDate.format('YYYY-MM-DD')} から ${period.endDate.format('YYYY-MM-DD')}
 
-### 📋 生成対象期間
-- 期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
-- 店舗: ${store.name}
-- 営業時間: ${store.opening_time} - ${store.closing_time}
-
-### 👥 スタッフ制約条件（絶対遵守）
+スタッフ制約:
 `;
 
         staffs.forEach(staff => {
-            prompt += `
-**${staff.first_name} ${staff.last_name} (ID: ${staff.id})**
-- 月間勤務時間制限: 最低${staff.min_hours_per_month || 0}時間 ～ 最大${staff.max_hours_per_month || 999}時間（絶対遵守）
-- 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間（絶対遵守）
-- 最大連続勤務日数: ${staff.max_consecutive_days || 5}日（絶対遵守）`;
-
-            const dayOffs = staff.dayOffRequests?.map(r => r.date).join(', ') || 'なし';
-            prompt += `
-- 休み希望日: ${dayOffs}（絶対に割り当て禁止）`;
+            prompt += `ID ${staff.id} (${staff.first_name} ${staff.last_name}): `;
+            prompt += `最大${staff.max_hours_per_day || 8}時間/日, `;
+            prompt += `月間${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}時間, `;
 
             const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
                 ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
-            ).join(', ') || 'なし';
-            prompt += `
-- 勤務不可曜日: ${unavailableDays}（絶対に割り当て禁止）`;
+            ) || [];
+
+            if (unavailableDays.length > 0) {
+                prompt += `勤務不可: ${unavailableDays.join(',')}曜日, `;
+            }
 
             const availableDays = staff.dayPreferences?.filter(p => p.available).map(p => {
                 const day = ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week];
-                const time = (p.preferred_start_time && p.preferred_end_time) ?
-                    ` (希望時間: ${p.preferred_start_time.slice(0, 5)}-${p.preferred_end_time.slice(0, 5)})` : '';
-                return day + time;
-            }).join(', ') || '制限なし';
-            prompt += `
-- 勤務可能曜日: ${availableDays}
+                return day;
+            }) || [];
+
+            prompt += `勤務可能: ${availableDays.join(',')}曜日
 `;
         });
 
         prompt += `
-### 🏪 店舗定休日
-`;
-        if (storeClosedDays.length > 0) {
-            storeClosedDays.forEach(day => {
-                prompt += `- ${day.specific_date || '毎週' + ['日', '月', '火', '水', '木', '金', '土'][day.day_of_week] + '曜日'}\n`;
-            });
-        } else {
-            prompt += `- なし\n`;
-        }
+重要ルール:
+1. 1日の勤務時間は絶対に各スタッフの上限を超えない
+2. 勤務不可曜日には絶対にシフトを組まない
+3. 勤務時間は8時間以下にする
 
-        prompt += `
-### 👥 店舗の人員要件（参考・努力目標）
-`;
-        if (storeRequirements.length > 0) {
-            storeRequirements.forEach(req => {
-                const day = req.specific_date ? req.specific_date : `毎週${['日', '月', '火', '水', '木', '金', '土'][req.day_of_week]}曜日`;
-                prompt += `- ${day} ${req.start_time.slice(0, 5)}-${req.end_time.slice(0, 5)}: ${req.required_staff_count}人（可能な範囲で）\n`;
-            });
-        } else {
-            prompt += `- 全時間帯で1人以上（可能な範囲で）\n`;
-        }
+以下のJSON形式で出力してください。他の文字は一切含めないでください:
 
-        prompt += `
-### ⚠️ 重要な注意事項
-- 上記のスタッフ制約は絶対に守ってください
-- 人員要件は努力目標です。スタッフ制約を破ってまで満たす必要はありません
-- 勤務不可曜日や休み希望日への割り当ては絶対に行わないでください
-- 各スタッフの最大勤務時間を絶対に超過しないでください
-
-### 📄 出力形式（この形式以外は受け付けません）
-\`\`\`json
 {
   "shifts": [
     {
-      "date": "YYYY-MM-DD",
+      "date": "2025-05-26",
       "assignments": [
         {
-          "staff_id": スタッフID,
-          "start_time": "HH:MM",
-          "end_time": "HH:MM"
+          "staff_id": 1,
+          "start_time": "09:00",
+          "end_time": "17:00"
         }
       ]
     }
   ]
-}
-\`\`\`
-
-制約を守りつつ、可能な限り良いシフトを生成してください。`;
+}`;
 
         return prompt;
     }
@@ -249,7 +206,7 @@ class ShiftGeneratorService {
         const prompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
 
         console.log("=========================================");
-        console.log("========= Enhanced Strict Prompt =========");
+        console.log("========= Simplified Prompt =========");
         console.log(prompt);
         console.log("=========================================");
 
@@ -271,11 +228,13 @@ class ShiftGeneratorService {
                     console.log('✅ 生成されたシフトは全ての制約を満たしています');
                     return this.saveShift(generatedShiftData, storeId, year, month);
                 } else {
-                    console.log('❌ 生成されたシフトに制約違反があります:', validationResult.violations);
-                    lastError = new Error(`制約違反: ${validationResult.violations.join(', ')}`);
+                    console.log('❌ 生成されたシフトに制約違反があります:', validationResult.violations.slice(0, 5));
+                    lastError = new Error(`制約違反: ${validationResult.violations.slice(0, 3).join(', ')}`);
 
                     if (attempts < maxAttempts) {
-                        console.log('再生成を試行します...');
+                        console.log('より厳格なプロンプトで再生成します...');
+                        // プロンプトをより厳しく調整
+                        prompt = this.buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, validationResult.violations);
                         continue;
                     }
                 }
@@ -291,6 +250,58 @@ class ShiftGeneratorService {
         }
 
         throw lastError || new Error('最大試行回数に達しました。制約を満たすシフトを生成できませんでした。');
+    }
+
+    buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, violations) {
+        let prompt = `前回のシフト生成で制約違反が発生しました。今度は絶対に制約を守ってください。
+
+### 前回の違反内容
+${violations.slice(0, 5).join('\n')}
+
+### 絶対厳守ルール
+`;
+
+        staffs.forEach(staff => {
+            prompt += `
+${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
+- 1日は絶対に${staff.max_hours_per_day || 8}時間以下
+- 月間は絶対に${staff.max_hours_per_month || 160}時間以下`;
+
+            const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
+                ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
+            ) || [];
+
+            if (unavailableDays.length > 0) {
+                prompt += `
+- ${unavailableDays.join(', ')}曜日は絶対に勤務させない`;
+            }
+        });
+
+        prompt += `
+
+### 期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
+
+制約を絶対に守って、より保守的なシフトを作成してください。
+勤務時間は6-8時間以内に抑えてください。
+
+\`\`\`json
+{
+  "shifts": [
+    {
+      "date": "YYYY-MM-DD", 
+      "assignments": [
+        {
+          "staff_id": スタッフID,
+          "start_time": "HH:MM",
+          "end_time": "HH:MM"
+        }
+      ]
+    }
+  ]
+}
+\`\`\``;
+
+        return prompt;
     }
 
     async validateGeneratedShift(shiftData, staffs, period) {
@@ -388,30 +399,158 @@ class ShiftGeneratorService {
     async callGeminiApi(prompt) {
         const httpsAgent = new https.Agent({ rejectUnauthorized: false });
         const url = `${this.geminiApiUrl}?key=${this.geminiApiKey}`;
-        const data = { contents: [{ parts: [{ text: prompt }] }] };
-        const config = { headers: { 'Content-Type': 'application/json' }, timeout: 120000, httpsAgent };
-        const response = await axios.post(url, data, config);
-        return response.data;
+        const data = {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                temperature: 0.2,
+                topK: 10,
+                topP: 0.9,
+                maxOutputTokens: 4096
+            },
+            safetySettings: [
+                {
+                    category: "HARM_CATEGORY_HARASSMENT",
+                    threshold: "BLOCK_NONE"
+                },
+                {
+                    category: "HARM_CATEGORY_HATE_SPEECH",
+                    threshold: "BLOCK_NONE"
+                },
+                {
+                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    threshold: "BLOCK_NONE"
+                },
+                {
+                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    threshold: "BLOCK_NONE"
+                }
+            ]
+        };
+
+        const config = {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 180000,
+            httpsAgent
+        };
+
+        try {
+            const response = await axios.post(url, data, config);
+            console.log('Gemini API 呼び出し成功');
+            return response.data;
+        } catch (error) {
+            console.error('Gemini API エラー:', error.response?.status, error.response?.statusText);
+            if (error.response?.data) {
+                console.error('Gemini API エラー詳細:', JSON.stringify(error.response.data, null, 2));
+            }
+            throw error;
+        }
     }
 
     parseGeminiResponse(response) {
-        if (!response || !response.candidates || !response.candidates[0].content || !response.candidates[0].content.parts) {
-            throw new Error('Gemini APIからのレスポンス形式が不正です。');
-        }
-        let jsonString = response.candidates[0].content.parts[0].text;
-        const match = jsonString.match(/```json\n([\s\S]*)\n```/);
-        if (match && match[1]) {
-            jsonString = match[1];
+        console.log('Gemini APIレスポンス解析開始');
+
+        // レスポンス構造の詳細チェック
+        if (!response) {
+            console.error('レスポンスがnullまたはundefined');
+            throw new Error('Gemini APIからのレスポンスが空です。');
         }
 
+        if (!response.candidates || !Array.isArray(response.candidates) || response.candidates.length === 0) {
+            console.error('candidates配列が存在しないか空:', response);
+            throw new Error('Gemini APIレスポンスにcandidatesが含まれていません。');
+        }
+
+        const candidate = response.candidates[0];
+        if (!candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+            console.error('content.partsが存在しないか空:', candidate);
+
+            // finishReasonをチェック
+            if (candidate.finishReason) {
+                console.error('finishReason:', candidate.finishReason);
+                if (candidate.finishReason === 'SAFETY') {
+                    throw new Error('Gemini APIが安全性の理由でレスポンスを拒否しました。プロンプトを調整してください。');
+                }
+                if (candidate.finishReason === 'MAX_TOKENS') {
+                    throw new Error('Gemini APIがトークン制限に達しました。プロンプトを短縮してください。');
+                }
+            }
+
+            throw new Error('Gemini APIレスポンスに有効なコンテンツが含まれていません。');
+        }
+
+        let jsonString = candidate.content.parts[0].text;
+        console.log('元のレスポンステキスト長:', jsonString.length);
+        console.log('レスポンステキストの最初の200文字:', jsonString.substring(0, 200));
+
+        // 複数のJSONブロック抽出パターンを試す
+        let extractedJson = null;
+
+        // パターン1: ```json...```
+        let match = jsonString.match(/```json\s*\n([\s\S]*?)\n\s*```/);
+        if (match && match[1]) {
+            extractedJson = match[1];
+            console.log('パターン1でJSON抽出成功');
+        }
+
+        // パターン2: ```...```（jsonタグなし）
+        if (!extractedJson) {
+            match = jsonString.match(/```\s*\n([\s\S]*?)\n\s*```/);
+            if (match && match[1] && match[1].trim().startsWith('{')) {
+                extractedJson = match[1];
+                console.log('パターン2でJSON抽出成功');
+            }
+        }
+
+        // パターン3: 直接JSONを探す
+        if (!extractedJson) {
+            match = jsonString.match(/\{[\s\S]*\}/);
+            if (match) {
+                extractedJson = match[0];
+                console.log('パターン3でJSON抽出成功');
+            }
+        }
+
+        if (extractedJson) {
+            jsonString = extractedJson;
+        } else {
+            console.log('JSONブロックが見つからない、元のテキストをそのまま使用');
+        }
+
+        // JSONクリーニング
+        jsonString = jsonString.trim();
+
+        // 末尾のカンマを削除
         jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
 
+        // 重複する括弧やブレースを削除
+        jsonString = jsonString.replace(/\}\s*\}\s*$/, '}');
+        jsonString = jsonString.replace(/^\s*\{\s*\{/, '{');
+
+        console.log('クリーニング後のJSON文字列長:', jsonString.length);
+        console.log('クリーニング後のJSON最初の200文字:', jsonString.substring(0, 200));
+
         try {
-            return JSON.parse(jsonString);
+            const parsed = JSON.parse(jsonString);
+            console.log(`シフト生成結果: ${parsed.shifts?.length || 0}日分のシフト`);
+
+            // 基本的な構造チェック
+            if (!parsed.shifts || !Array.isArray(parsed.shifts)) {
+                throw new Error('shiftsプロパティが配列ではありません');
+            }
+
+            return parsed;
         } catch (error) {
-            console.error("Failed to parse cleaned JSON:", error);
-            console.error("Cleaned JSON string:", jsonString);
-            throw new Error('AIからの応答をJSONとして解析できませんでした。');
+            console.error("JSON解析エラー:", error.message);
+            console.error("解析対象のJSON文字列:");
+            console.error(jsonString);
+
+            // より詳細なエラー情報を提供
+            const lines = jsonString.split('\n');
+            lines.forEach((line, index) => {
+                console.error(`${index + 1}: ${line}`);
+            });
+
+            throw new Error(`AIからの応答をJSONとして解析できませんでした: ${error.message}`);
         }
     }
 
@@ -423,7 +562,9 @@ class ShiftGeneratorService {
             } else {
                 shift = await Shift.create({ store_id: storeId, year, month, status: 'draft' }, { transaction: t });
             }
+
             if (shiftData && shiftData.shifts) {
+                let assignmentCount = 0;
                 for (const dayShift of shiftData.shifts) {
                     if (dayShift.assignments && Array.isArray(dayShift.assignments)) {
                         for (const assignment of dayShift.assignments) {
@@ -434,9 +575,11 @@ class ShiftGeneratorService {
                                 start_time: assignment.start_time,
                                 end_time: assignment.end_time,
                             }, { transaction: t });
+                            assignmentCount++;
                         }
                     }
                 }
+                console.log(`保存完了: ${assignmentCount}件のシフト割り当て`);
             }
             return shiftData;
         });
