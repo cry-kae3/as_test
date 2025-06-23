@@ -9,9 +9,9 @@ const moment = require('moment-timezone');
 
 class ShiftGeneratorService {
     constructor() {
-        this.geminiApiKey = process.env.GEMINI_API_KEY;
-        this.geminiModel = 'gemini-2.5-flash';
-        this.geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${this.geminiModel}:generateContent`;
+        this.claudeApiKey = process.env.CLAUDE_API_KEY;
+        this.claudeModel = 'claude-sonnet-4-20250514';
+        this.claudeApiUrl = 'https://api.anthropic.com/v1/messages';
     }
 
     getShiftPeriod(year, month, closingDay) {
@@ -203,7 +203,7 @@ class ShiftGeneratorService {
         const storeClosedDays = await StoreClosedDay.findAll({ where: { store_id: storeId } });
         const storeRequirements = await StoreStaffRequirement.findAll({ where: { store_id: storeId } });
 
-        const prompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
+        let prompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
 
         console.log("=========================================");
         console.log("========= Simplified Prompt =========");
@@ -219,8 +219,8 @@ class ShiftGeneratorService {
             console.log(`AI生成試行 ${attempts}/${maxAttempts}`);
 
             try {
-                const response = await this.callGeminiApi(prompt);
-                const generatedShiftData = this.parseGeminiResponse(response);
+                const response = await this.callClaudeApi(prompt);
+                const generatedShiftData = this.parseClaudeResponse(response);
 
                 const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, period);
 
@@ -396,89 +396,66 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         return maxConsecutive;
     }
 
-    async callGeminiApi(prompt) {
+    async callClaudeApi(prompt) {
         const httpsAgent = new https.Agent({ rejectUnauthorized: false });
-        const url = `${this.geminiApiUrl}?key=${this.geminiApiKey}`;
+        const url = this.claudeApiUrl;
+
         const data = {
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-                temperature: 0.2,
-                topK: 10,
-                topP: 0.9,
-                maxOutputTokens: 4096
-            },
-            safetySettings: [
+            model: this.claudeModel,
+            max_tokens: 4096,
+            temperature: 0.2,
+            messages: [
                 {
-                    category: "HARM_CATEGORY_HARASSMENT",
-                    threshold: "BLOCK_NONE"
-                },
-                {
-                    category: "HARM_CATEGORY_HATE_SPEECH",
-                    threshold: "BLOCK_NONE"
-                },
-                {
-                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    threshold: "BLOCK_NONE"
-                },
-                {
-                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    threshold: "BLOCK_NONE"
+                    role: "user",
+                    content: prompt
                 }
             ]
         };
 
         const config = {
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': this.claudeApiKey,
+                'anthropic-version': '2023-06-01'
+            },
             timeout: 180000,
             httpsAgent
         };
 
         try {
             const response = await axios.post(url, data, config);
-            console.log('Gemini API 呼び出し成功');
+            console.log('Claude API 呼び出し成功');
             return response.data;
         } catch (error) {
-            console.error('Gemini API エラー:', error.response?.status, error.response?.statusText);
+            console.error('Claude API エラー:', error.response?.status, error.response?.statusText);
             if (error.response?.data) {
-                console.error('Gemini API エラー詳細:', JSON.stringify(error.response.data, null, 2));
+                console.error('Claude API エラー詳細:', JSON.stringify(error.response.data, null, 2));
             }
             throw error;
         }
     }
 
-    parseGeminiResponse(response) {
-        console.log('Gemini APIレスポンス解析開始');
+    parseClaudeResponse(response) {
+        console.log('Claude APIレスポンス解析開始');
 
         // レスポンス構造の詳細チェック
         if (!response) {
             console.error('レスポンスがnullまたはundefined');
-            throw new Error('Gemini APIからのレスポンスが空です。');
+            throw new Error('Claude APIからのレスポンスが空です。');
         }
 
-        if (!response.candidates || !Array.isArray(response.candidates) || response.candidates.length === 0) {
-            console.error('candidates配列が存在しないか空:', response);
-            throw new Error('Gemini APIレスポンスにcandidatesが含まれていません。');
+        if (!response.content || !Array.isArray(response.content) || response.content.length === 0) {
+            console.error('content配列が存在しないか空:', response);
+            throw new Error('Claude APIレスポンスにcontentが含まれていません。');
         }
 
-        const candidate = response.candidates[0];
-        if (!candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
-            console.error('content.partsが存在しないか空:', candidate);
-
-            // finishReasonをチェック
-            if (candidate.finishReason) {
-                console.error('finishReason:', candidate.finishReason);
-                if (candidate.finishReason === 'SAFETY') {
-                    throw new Error('Gemini APIが安全性の理由でレスポンスを拒否しました。プロンプトを調整してください。');
-                }
-                if (candidate.finishReason === 'MAX_TOKENS') {
-                    throw new Error('Gemini APIがトークン制限に達しました。プロンプトを短縮してください。');
-                }
-            }
-
-            throw new Error('Gemini APIレスポンスに有効なコンテンツが含まれていません。');
+        const content = response.content[0];
+        if (!content.text) {
+            console.error('textが存在しない:', content);
+            throw new Error('Claude APIレスポンスに有効なテキストが含まれていません。');
         }
 
-        let jsonString = candidate.content.parts[0].text;
+        let jsonString = content.text;
         console.log('元のレスポンステキスト長:', jsonString.length);
         console.log('レスポンステキストの最初の200文字:', jsonString.substring(0, 200));
 
