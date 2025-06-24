@@ -1476,13 +1476,6 @@ export default {
         return false;
       }
 
-      const consecutiveDays = getConsecutiveWorkDays(staff.id, date);
-      const maxConsecutiveDays = staff.max_consecutive_days || 5;
-
-      if (consecutiveDays >= maxConsecutiveDays) {
-        return false;
-      }
-
       return true;
     };
 
@@ -1530,13 +1523,7 @@ export default {
       if (dayPreference && !dayPreference.available) {
         return `${dayNames[dayOfWeek]}曜日：勤務不可`;
       }
-
-      const consecutiveDays = getConsecutiveWorkDays(staff.id, date);
-      const maxConsecutiveDays = staff.max_consecutive_days || 5;
-
-      if (consecutiveDays >= maxConsecutiveDays) {
-        return `連続勤務日数上限：${consecutiveDays}/${maxConsecutiveDays}日`;
-      }
+      
 
       return "勤務不可";
     };

@@ -731,68 +731,7 @@ const calculateMonthlyHours = async (staffId, targetDate, additionalMinutes, exc
     return totalMinutes / 60;
 };
 
-const calculateConsecutiveWorkDays = async (staffId, targetDate, excludeAssignmentId = null) => {
-    const targetDateObj = new Date(targetDate);
-    let consecutiveDays = 1;
 
-    let checkDate = new Date(targetDateObj);
-    checkDate.setDate(checkDate.getDate() - 1);
-
-    while (true) {
-        const dateStr = checkDate.toISOString().split('T')[0];
-        const hasShift = await ShiftAssignment.findOne({
-            include: [{
-                model: Shift,
-                where: {
-                    year: checkDate.getFullYear(),
-                    month: checkDate.getMonth() + 1
-                }
-            }],
-            where: {
-                staff_id: staffId,
-                date: dateStr,
-                ...(excludeAssignmentId && { id: { [Op.ne]: excludeAssignmentId } })
-            }
-        });
-
-        if (hasShift) {
-            consecutiveDays++;
-            checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-            break;
-        }
-    }
-
-    checkDate = new Date(targetDateObj);
-    checkDate.setDate(checkDate.getDate() + 1);
-
-    while (true) {
-        const dateStr = checkDate.toISOString().split('T')[0];
-        const hasShift = await ShiftAssignment.findOne({
-            include: [{
-                model: Shift,
-                where: {
-                    year: checkDate.getFullYear(),
-                    month: checkDate.getMonth() + 1
-                }
-            }],
-            where: {
-                staff_id: staffId,
-                date: dateStr,
-                ...(excludeAssignmentId && { id: { [Op.ne]: excludeAssignmentId } })
-            }
-        });
-
-        if (hasShift) {
-            consecutiveDays++;
-            checkDate.setDate(checkDate.getDate() + 1);
-        } else {
-            break;
-        }
-    }
-
-    return consecutiveDays;
-};
 
 const createShiftAssignment = async (req, res) => {
     try {
