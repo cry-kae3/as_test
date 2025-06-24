@@ -52,7 +52,6 @@ const getAllDayOffRequests = async (req, res) => {
 
         res.status(200).json(formattedRequests);
     } catch (error) {
-        console.error('休み希望取得エラー:', error);
         res.status(500).json({ message: '休み希望の取得中にエラーが発生しました', error: error.message });
     }
 };
@@ -62,34 +61,37 @@ const getAllStaff = async (req, res) => {
         const { store_id } = req.query;
 
         const where = {};
-        if (store_id) {
-            where.store_id = store_id;
-        }
-
         const include = [
-            {
-                model: Store,
-                attributes: ['id', 'name'],
-                required: true
-            },
             {
                 model: StaffDayPreference,
                 as: 'dayPreferences',
-                required: false
+                required: false,
             },
             {
                 model: StaffDayOffRequest,
                 as: 'dayOffRequests',
-                required: false
+                required: false,
             },
             {
                 model: Store,
                 as: 'stores',
                 through: { attributes: [] },
                 attributes: ['id', 'name', 'area'],
-                required: false
-            }
+                required: false,
+            },
         ];
+
+        if (store_id) {
+            // store_idが指定されている場合、その店舗に紐づくスタッフのみをフィルタリング
+            include.push({
+                model: Store,
+                as: 'stores', // Staffモデルの関連付けエイリアスと一致させる
+                where: { id: store_id },
+                attributes: [], // フィルタリングのためだけで、データは不要
+                through: { attributes: [] },
+                required: true, // INNER JOINを強制し、紐付かないスタッフを除外
+            });
+        }
 
         if (req.user.role === 'owner' || req.user.role === 'staff') {
             let ownerId = req.user.id;
@@ -98,31 +100,36 @@ const getAllStaff = async (req, res) => {
                 ownerId = req.user.parent_user_id;
             }
 
-            include[0].where = { owner_id: ownerId };
+            const ownerStores = await Store.findAll({ where: { owner_id: ownerId }, attributes: ['id'] });
+            const ownerStoreIds = ownerStores.map(s => s.id);
+
+            // ログインユーザーが所有する店舗に所属するスタッフのみに絞り込む
+            include.push({
+                model: Store,
+                as: 'stores',
+                where: { id: { [Op.in]: ownerStoreIds } },
+                attributes: [],
+                through: { attributes: [] },
+                required: true
+            });
         }
 
         const staff = await Staff.findAll({
             where,
             include,
-            order: [['id', 'ASC']]
+            order: [['id', 'ASC']],
+            distinct: true, // 関連付けによる重複を排除
         });
 
         res.status(200).json(staff);
     } catch (error) {
-        console.error('スタッフ一覧取得エラー詳細:', {
-            message: error.message,
-            stack: error.stack,
-            name: error.name,
-            sql: error.sql || 'No SQL',
-            parameters: error.parameters || 'No parameters'
-        });
-
         res.status(500).json({
             message: 'スタッフ一覧の取得中にエラーが発生しました',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
         });
     }
 };
+
 
 const getStaffById = async (req, res) => {
     try {
@@ -131,29 +138,14 @@ const getStaffById = async (req, res) => {
         const include = [
             {
                 model: Store,
-                attributes: ['id', 'name'],
-                required: true
-            },
-            { model: StaffDayPreference, as: 'dayPreferences' },
-            { model: StaffDayOffRequest, as: 'dayOffRequests' },
-            {
-                model: Store,
                 as: 'stores',
                 through: { attributes: [] },
                 attributes: ['id', 'name', 'area'],
                 required: false
-            }
+            },
+            { model: StaffDayPreference, as: 'dayPreferences' },
+            { model: StaffDayOffRequest, as: 'dayOffRequests' },
         ];
-
-        if (req.user.role === 'owner' || req.user.role === 'staff') {
-            let ownerId = req.user.id;
-
-            if (req.user.role === 'staff' && req.user.parent_user_id) {
-                ownerId = req.user.parent_user_id;
-            }
-
-            include[0].where = { owner_id: ownerId };
-        }
 
         const staff = await Staff.findByPk(id, {
             include
@@ -161,6 +153,19 @@ const getStaffById = async (req, res) => {
 
         if (!staff) {
             return res.status(404).json({ message: 'スタッフが見つかりません' });
+        }
+
+        if (req.user.role === 'owner' || req.user.role === 'staff') {
+            let ownerId = req.user.id;
+            if (req.user.role === 'staff' && req.user.parent_user_id) {
+                ownerId = req.user.parent_user_id;
+            }
+            const ownerStores = await Store.findAll({ where: { owner_id: ownerId }, attributes: ['id'] });
+            const ownerStoreIds = ownerStores.map(s => s.id);
+            const canAccess = staff.stores.some(s => ownerStoreIds.includes(s.id));
+            if (!canAccess) {
+                return res.status(403).json({ message: 'このスタッフ情報にアクセスする権限がありません' });
+            }
         }
 
         if (staff.dayPreferences && !Array.isArray(staff.dayPreferences)) {
@@ -192,7 +197,6 @@ const getStaffById = async (req, res) => {
 
         res.status(200).json(completeResponse);
     } catch (error) {
-        console.error('スタッフ取得エラー:', error);
         res.status(500).json({ message: 'スタッフ情報の取得中にエラーが発生しました' });
     }
 };
@@ -308,21 +312,14 @@ const createStaff = async (req, res) => {
 
         const createdStaff = await Staff.findByPk(result.id, {
             include: [
-                { model: Store, attributes: ['id', 'name'] },
+                { model: Store, as: 'stores', through: { attributes: [] }, attributes: ['id', 'name', 'area'] },
                 { model: StaffDayPreference, as: 'dayPreferences' },
                 { model: StaffDayOffRequest, as: 'dayOffRequests' },
-                {
-                    model: Store,
-                    as: 'stores',
-                    through: { attributes: [] },
-                    attributes: ['id', 'name', 'area']
-                }
             ]
         });
 
         res.status(201).json(createdStaff);
     } catch (error) {
-        console.error('スタッフ作成エラー:', error);
         res.status(500).json({ message: 'スタッフの作成中にエラーが発生しました', error: error.message });
     }
 };
@@ -352,20 +349,11 @@ const updateStaff = async (req, res) => {
         const include = [
             {
                 model: Store,
+                as: 'stores',
                 attributes: ['id', 'name'],
-                required: true
+                through: { attributes: [] }
             }
         ];
-
-        if (req.user.role === 'owner' || req.user.role === 'staff') {
-            let ownerId = req.user.id;
-
-            if (req.user.role === 'staff' && req.user.parent_user_id) {
-                ownerId = req.user.parent_user_id;
-            }
-
-            include[0].where = { owner_id: ownerId };
-        }
 
         const staff = await Staff.findByPk(id, {
             include
@@ -374,6 +362,20 @@ const updateStaff = async (req, res) => {
         if (!staff) {
             return res.status(404).json({ message: 'スタッフが見つかりません' });
         }
+
+        if (req.user.role === 'owner' || req.user.role === 'staff') {
+            let ownerId = req.user.id;
+            if (req.user.role === 'staff' && req.user.parent_user_id) {
+                ownerId = req.user.parent_user_id;
+            }
+            const ownerStores = await Store.findAll({ where: { owner_id: ownerId }, attributes: ['id'] });
+            const ownerStoreIds = ownerStores.map(s => s.id);
+            const canAccess = staff.stores.some(s => ownerStoreIds.includes(s.id));
+            if (!canAccess) {
+                return res.status(403).json({ message: 'このスタッフ情報にアクセスする権限がありません' });
+            }
+        }
+
 
         const previousValues = {
             store_id: staff.store_id,
@@ -546,24 +548,23 @@ const updateStaff = async (req, res) => {
 
         const updatedStaff = await Staff.findByPk(id, {
             include: [
-                { model: Store, attributes: ['id', 'name'] },
-                { model: StaffDayPreference, as: 'dayPreferences' },
-                { model: StaffDayOffRequest, as: 'dayOffRequests' },
                 {
                     model: Store,
                     as: 'stores',
                     through: { attributes: [] },
                     attributes: ['id', 'name', 'area']
-                }
+                },
+                { model: StaffDayPreference, as: 'dayPreferences' },
+                { model: StaffDayOffRequest, as: 'dayOffRequests' },
             ]
         });
 
         res.status(200).json(updatedStaff);
     } catch (error) {
-        console.error('スタッフ更新エラー:', error);
         res.status(500).json({ message: 'スタッフ情報の更新中にエラーが発生しました', error: error.message });
     }
 };
+
 
 const deleteStaff = async (req, res) => {
     try {
@@ -572,20 +573,12 @@ const deleteStaff = async (req, res) => {
         const include = [
             {
                 model: Store,
+                as: 'stores',
                 attributes: ['id', 'name'],
-                required: true
+                required: true,
+                through: { attributes: [] }
             }
         ];
-
-        if (req.user.role === 'owner' || req.user.role === 'staff') {
-            let ownerId = req.user.id;
-
-            if (req.user.role === 'staff' && req.user.parent_user_id) {
-                ownerId = req.user.parent_user_id;
-            }
-
-            include[0].where = { owner_id: ownerId };
-        }
 
         const staff = await Staff.findByPk(id, {
             include
@@ -595,11 +588,24 @@ const deleteStaff = async (req, res) => {
             return res.status(404).json({ message: 'スタッフが見つかりません' });
         }
 
+        if (req.user.role === 'owner' || req.user.role === 'staff') {
+            let ownerId = req.user.id;
+            if (req.user.role === 'staff' && req.user.parent_user_id) {
+                ownerId = req.user.parent_user_id;
+            }
+            const ownerStores = await Store.findAll({ where: { owner_id: ownerId }, attributes: ['id'] });
+            const ownerStoreIds = ownerStores.map(s => s.id);
+            const canAccess = staff.stores.some(s => ownerStoreIds.includes(s.id));
+            if (!canAccess) {
+                return res.status(403).json({ message: 'このスタッフを削除する権限がありません' });
+            }
+        }
+
+
         await staff.destroy();
 
         res.status(200).json({ message: 'スタッフが削除されました' });
     } catch (error) {
-        console.error('スタッフ削除エラー:', error);
         res.status(500).json({ message: 'スタッフの削除中にエラーが発生しました' });
     }
 };
@@ -615,7 +621,6 @@ const getStaffDayPreferences = async (req, res) => {
 
         res.status(200).json(dayPreferences);
     } catch (error) {
-        console.error('希望シフト取得エラー:', error);
         res.status(500).json({ message: '希望シフト情報の取得中にエラーが発生しました' });
     }
 };
@@ -647,7 +652,6 @@ const getStaffDayOffRequests = async (req, res) => {
 
         res.status(200).json(dayOffRequests);
     } catch (error) {
-        console.error('休み希望取得エラー:', error);
         res.status(500).json({ message: '休み希望情報の取得中にエラーが発生しました' });
     }
 };
@@ -676,7 +680,6 @@ const updateDayOffRequestStatus = async (req, res) => {
 
         res.status(200).json(dayOffRequest);
     } catch (error) {
-        console.error('休み希望ステータス更新エラー:', error);
         res.status(500).json({ message: '休み希望ステータスの更新中にエラーが発生しました' });
     }
 };

@@ -1,3 +1,6 @@
+// backend/controllers/store.js
+const express = require('express');
+const router = express.Router();
 const { sequelize, Store, StoreClosedDay, StoreStaffRequirement, BusinessHours, User } = require('../models');
 const { Op } = require('sequelize');
 
@@ -49,6 +52,13 @@ exports.getAllStores = async (req, res) => {
                 'postal_code',
                 'createdAt',
                 'updatedAt'
+            ],
+            include: [
+                {
+                    model: StoreClosedDay,
+                    as: 'closedDays',
+                    required: false
+                }
             ]
         });
 
@@ -715,11 +725,28 @@ exports.saveClosedDays = async (req, res) => {
         let savedClosedDays = [];
         if (closedDaysData && closedDaysData.length > 0) {
             const processedData = closedDaysData.map(day => {
-                return {
+                const result = {
                     store_id: parseInt(id, 10),
                     day_of_week: day.day_of_week !== undefined ? day.day_of_week : null,
-                    specific_date: day.specific_date || null
+                    specific_date: null
                 };
+
+                if (day.specific_date) {
+                    // 日付形式の正規化
+                    let dateStr = day.specific_date;
+                    if (dateStr instanceof Date) {
+                        dateStr = dateStr.toISOString().split('T')[0];
+                    } else if (typeof dateStr === 'string') {
+                        // YYYY-MM-DD形式に正規化
+                        const dateObj = new Date(dateStr);
+                        if (!isNaN(dateObj.getTime())) {
+                            dateStr = dateObj.toISOString().split('T')[0];
+                        }
+                    }
+                    result.specific_date = dateStr;
+                }
+
+                return result;
             });
 
             console.log('処理済み定休日データ:', processedData);

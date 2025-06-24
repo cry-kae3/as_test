@@ -272,10 +272,10 @@
                   'is-holiday': day.isNationalHoliday,
                   'is-today': day.isToday,
                   'is-past': isPastDate(day.date),
-                  'is-editable': isEditMode && !day.isStoreClosed,
+                  'is-editable': isEditMode,
                   'has-shift': getShiftForStaff(day.date, staff.id),
                   'past-editable':
-                    isEditMode && isPastDate(day.date) && !day.isStoreClosed,
+                    isEditMode && isPastDate(day.date),
                   'is-selected': selectedDate === day.date,
                   'is-store-closed': day.isStoreClosed,
                   'can-work':
@@ -287,7 +287,7 @@
                       day.isStoreClosed) &&
                     !getShiftForStaff(day.date, staff.id),
                 }"
-                @click="!day.isStoreClosed && openShiftEditor(day, staff)"
+                @click="openShiftEditor(day, staff)"
               >
                 <div
                   v-if="getShiftForStaff(day.date, staff.id)"
@@ -980,6 +980,35 @@
         </div>
       </template>
     </Dialog>
+    
+    <Dialog v-model:visible="selectionDialogVisible" header="シフト作成方法の選択" :modal="true" :style="{ width: '50rem' }" :breakpoints="{ '960px': '75vw', '640px': '90vw' }">
+      <div class="grid">
+        <div class="col-12 md:col-6 p-2">
+          <div class="selection-card" @click="selectAIGeneration">
+            <div class="card-header">
+              <i class="pi pi-sparkles"></i>
+              <h3>AI自動生成</h3>
+            </div>
+            <p class="card-content">
+              スタッフの勤務条件を最優先にシフトを組みます。人員要件を満たさない場合があるため、生成後に手動での調整が必要になることがあります。
+            </p>
+            <Button label="AIで作成" class="p-button-primary mt-auto" />
+          </div>
+        </div>
+        <div class="col-12 md:col-6 p-2">
+          <div class="selection-card" @click="selectManualCreation">
+            <div class="card-header">
+               <i class="pi pi-pencil"></i>
+               <h3>手動作成</h3>
+            </div>
+            <p class="card-content">
+              空のシフト表が作成されます。すべての割り当てを手動で行い、ご自身で勤務条件を確認する必要があります。
+            </p>
+            <Button label="手動で作成" class="p-button-secondary mt-auto" />
+          </div>
+        </div>
+      </div>
+    </Dialog>
 
     <ConfirmDialog></ConfirmDialog>
     <Toast />
@@ -1002,6 +1031,9 @@ import Textarea from "primevue/textarea";
 import SelectButton from "primevue/selectbutton";
 import Calendar from "primevue/calendar";
 import api from "@/services/api";
+import Dialog from 'primevue/dialog';
+import Button from 'primevue/button';
+import Dropdown from 'primevue/dropdown';
 
 export default {
   name: "ShiftManagement",
@@ -1015,6 +1047,9 @@ export default {
     Textarea,
     SelectButton,
     Calendar,
+    Dialog,
+    Button,
+    Dropdown,
   },
   setup() {
     const store = useStore();
@@ -1025,6 +1060,7 @@ export default {
     const saving = ref(false);
     const isEditMode = ref(false);
     const viewMode = ref("calendar");
+    const selectionDialogVisible = ref(false);
     const selectedDate = ref(null);
     const ganttSelectedDate = ref(null);
     const ganttMinDate = ref(null);
@@ -1103,35 +1139,15 @@ export default {
 
     const isStoreClosedOnDate = (date) => {
       if (!date) {
-        console.log("[DEBUG] isStoreClosedOnDate: dateが空です");
         return false;
       }
 
-      console.log("[DEBUG] isStoreClosedOnDate開始:", {
-        date,
-        storeBusinessHoursLength: storeBusinessHours.value?.length || 0,
-        storeClosedDaysLength: storeClosedDays.value?.length || 0,
-        storeBusinessHours: storeBusinessHours.value,
-        storeClosedDays: storeClosedDays.value,
-      });
-
       const dayOfWeek = new Date(date).getDay();
-      console.log(
-        "[DEBUG] 曜日:",
-        dayOfWeek,
-        ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek]
-      );
 
       const isClosedByDayOfWeek =
         storeBusinessHours.value &&
         storeBusinessHours.value.some((hours) => {
           const match = hours.day_of_week === dayOfWeek && hours.is_closed;
-          if (match) {
-            console.log("[DEBUG] 曜日による定休日マッチ:", {
-              hours,
-              dayOfWeek,
-            });
-          }
           return match;
         });
 
@@ -1139,24 +1155,10 @@ export default {
         storeClosedDays.value &&
         storeClosedDays.value.some((closedDay) => {
           const match = closedDay.specific_date === date;
-          if (match) {
-            console.log("[DEBUG] 特定日による定休日マッチ:", {
-              closedDay,
-              date,
-            });
-          }
           return match;
         });
 
       const result = isClosedByDayOfWeek || isClosedBySpecificDate;
-
-      console.log("[DEBUG] isStoreClosedOnDate結果:", {
-        date,
-        dayOfWeek,
-        isClosedByDayOfWeek,
-        isClosedBySpecificDate,
-        result,
-      });
 
       return result;
     };
@@ -1171,16 +1173,6 @@ export default {
       }
 
       try {
-        console.log("=== 他店舗シフト取得開始 ===");
-        console.log(
-          "対象期間:",
-          currentYear.value,
-          "年",
-          currentMonth.value,
-          "月"
-        );
-        console.log("除外店舗ID:", selectedStore.value.id);
-
         const uniqueStoreIds = new Set();
 
         staffList.value.forEach((staff) => {
@@ -1198,12 +1190,9 @@ export default {
           });
         });
 
-        console.log("他店舗ID一覧:", Array.from(uniqueStoreIds));
-
         const storeShiftsPromises = Array.from(uniqueStoreIds).map(
           async (storeId) => {
             try {
-              console.log(`店舗ID ${storeId} のシフト取得中...`);
               const response = await store.dispatch(
                 "shift/fetchShiftByYearMonth",
                 {
@@ -1212,17 +1201,8 @@ export default {
                   storeId: storeId,
                 }
               );
-              console.log(
-                `店舗ID ${storeId} のシフト取得完了:`,
-                response?.shifts?.length || 0,
-                "シフト"
-              );
               return { storeId, shifts: response?.shifts || [] };
             } catch (error) {
-              console.log(
-                `店舗ID ${storeId} のシフトデータ取得エラー:`,
-                error.message
-              );
               return { storeId, shifts: [] };
             }
           }
@@ -1238,25 +1218,7 @@ export default {
           totalOtherStoreShifts += shifts.length;
         });
 
-        console.log("=== 他店舗シフト取得完了 ===");
-        console.log("取得店舗数:", results.length);
-        console.log("総シフト数:", totalOtherStoreShifts);
-        console.log("詳細データ:", allStoreShifts.value);
-
-        staffList.value.forEach((staff) => {
-          const otherStoreHours =
-            calculateTotalHoursAllStores(staff.id) -
-            calculateTotalHours(staff.id);
-          if (otherStoreHours > 0) {
-            console.log(
-              `${staff.last_name} ${
-                staff.first_name
-              }: 他店舗 ${otherStoreHours.toFixed(1)}時間`
-            );
-          }
-        });
       } catch (error) {
-        console.error("全店舗シフトデータ取得エラー:", error);
         allStoreShifts.value = {};
       }
     };
@@ -1690,16 +1652,16 @@ export default {
 
       const startTime = new Date(`2000-01-01T${shift.start_time}`);
       const endTime = new Date(`2000-01-01T${shift.end_time}`);
-      let minutes = (endTime - startTime) / (1000 * 60);
+      let workMillis = endTime - startTime;
 
       if (shift.break_start_time && shift.break_end_time) {
         const breakStart = new Date(`2000-01-01T${shift.break_start_time}`);
         const breakEnd = new Date(`2000-01-01T${shift.break_end_time}`);
-        const breakMinutes = (breakEnd - breakStart) / (1000 * 60);
-        minutes -= breakMinutes;
+        const breakMillis = breakEnd - breakStart;
+        workMillis -= breakMillis;
       }
 
-      return Math.round((minutes / 60) * 10) / 10;
+      return Math.round((workMillis / (1000 * 60 * 60)) * 100) / 100;
     };
 
     const hasStaffingShortage = (date, requirement) => {
@@ -2031,7 +1993,6 @@ export default {
         const data = await response.json();
         holidays.value = Object.keys(data);
       } catch (error) {
-        console.error("祝日データの取得に失敗:", error);
         holidays.value = [];
       }
     };
@@ -2119,9 +2080,7 @@ export default {
       try {
         const response = await api.get("/shifts/system-settings");
         systemSettings.value = response.data;
-        console.log("システム設定を取得しました:", systemSettings.value);
       } catch (error) {
-        console.error("システム設定取得エラー:", error);
         systemSettings.value = { closing_day: 25 };
       }
     };
@@ -2190,16 +2149,6 @@ export default {
         return;
       }
 
-      if (isStoreClosedOnDate(day.date)) {
-        toast.add({
-          severity: "info",
-          summary: "編集不可",
-          detail: "定休日のためシフト編集はできません",
-          life: 2000,
-        });
-        return;
-      }
-
       const shift = getShiftForStaff(day.date, staff.id);
 
       shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${day.date}`;
@@ -2236,34 +2185,20 @@ export default {
 
     const loadShiftData = async () => {
       if (!selectedStore.value) {
-        console.log("[DEBUG] loadShiftData: selectedStoreが空のため終了");
         return;
       }
-
-      console.log("[DEBUG] loadShiftData開始:", {
-        storeId: selectedStore.value.id,
-        year: currentYear.value,
-        month: currentMonth.value,
-      });
 
       loading.value = true;
 
       try {
-        console.log("[DEBUG] 店舗詳細データ取得開始");
         await fetchStoreDetails(selectedStore.value.id);
-        console.log("[DEBUG] 店舗詳細データ取得完了");
 
-        console.log("[DEBUG] スタッフデータ取得開始");
         const staffData = await store.dispatch(
           "staff/fetchStaff",
           selectedStore.value.id
         );
         staffList.value = staffData;
-        console.log("[DEBUG] スタッフデータ取得完了:", {
-          staffCount: staffData.length,
-        });
 
-        console.log("[DEBUG] シフトデータ取得開始");
         try {
           const shiftData = await store.dispatch(
             "shift/fetchShiftByYearMonth",
@@ -2283,37 +2218,27 @@ export default {
               status: shiftData.status,
             };
             shifts.value = shiftData.shifts || [];
-            console.log("[DEBUG] シフトデータ設定完了:", {
-              shiftsCount: shifts.value.length,
-            });
           } else {
             currentShift.value = null;
             shifts.value = [];
-            console.log("[DEBUG] シフトデータなし");
           }
         } catch (error) {
           if (error.response && error.response.status === 404) {
             currentShift.value = null;
             shifts.value = [];
-            console.log("[DEBUG] シフトデータ404 - データなし");
           } else {
             throw error;
           }
         }
 
         if (staffList.value && staffList.value.length > 0) {
-          console.log("[DEBUG] 全店舗シフトデータ取得開始");
           await fetchAllStoreShifts();
-          console.log("[DEBUG] 全店舗シフトデータ取得完了");
         }
 
-        console.log("[DEBUG] 日付データ生成開始");
         generateDaysInMonth();
-        console.log("[DEBUG] 日付データ生成完了");
 
         updateGanttDateRange();
       } catch (error) {
-        console.error("[ERROR] loadShiftData:", error);
         toast.add({
           severity: "error",
           summary: "エラー",
@@ -2322,7 +2247,6 @@ export default {
         });
       } finally {
         loading.value = false;
-        console.log("[DEBUG] loadShiftData完了");
       }
     };
 
@@ -2331,27 +2255,9 @@ export default {
       const month = currentMonth.value;
       const closingDay = systemSettings.value.closing_day || 25;
 
-      console.log("[DEBUG] generateDaysInMonth開始:", {
-        year,
-        month,
-        closingDay,
-      });
-
-      console.log("[DEBUG] 定休日データ状態確認:", {
-        storeBusinessHoursLength: storeBusinessHours.value?.length || 0,
-        storeClosedDaysLength: storeClosedDays.value?.length || 0,
-        storeBusinessHours: storeBusinessHours.value,
-        storeClosedDays: storeClosedDays.value,
-      });
-
       const { startDate, endDate } = getShiftPeriod(year, month, closingDay);
       const today = new Date();
       const days = [];
-
-      console.log("[DEBUG] 期間:", {
-        startDate: startDate.toISOString().split("T")[0],
-        endDate: endDate.toISOString().split("T")[0],
-      });
 
       const current = new Date(startDate);
       let processedDays = 0;
@@ -2370,11 +2276,6 @@ export default {
 
         if (storeClosedForDay) {
           closedDaysCount++;
-          console.log("[DEBUG] 定休日として設定:", {
-            date: dateStr,
-            dayOfWeek,
-            dayOfWeekLabel,
-          });
         }
 
         days.push({
@@ -2397,12 +2298,6 @@ export default {
       }
 
       daysInMonth.value = days;
-
-      console.log("[DEBUG] generateDaysInMonth完了:", {
-        totalDays: processedDays,
-        closedDaysCount,
-        closedDates: days.filter((d) => d.isStoreClosed).map((d) => d.date),
-      });
     };
 
     const previousMonth = async () => {
@@ -2433,22 +2328,17 @@ export default {
 
     const fetchStoreDetails = async (storeId) => {
       try {
-        console.log("[DEBUG] fetchStoreDetails開始:", { storeId });
-
         const storeData = await store.dispatch("store/fetchStore", storeId);
-        console.log("[DEBUG] 店舗データ取得完了:", storeData);
 
         const businessHours = await store.dispatch(
           "store/fetchStoreBusinessHours",
           storeId
         );
-        console.log("[DEBUG] 営業時間データ取得完了:", businessHours);
 
         const closedDays = await store.dispatch(
           "store/fetchStoreClosedDays",
           storeId
         );
-        console.log("[DEBUG] 定休日データ取得完了:", closedDays);
 
         currentStore.value = {
           ...storeData,
@@ -2458,25 +2348,13 @@ export default {
         storeBusinessHours.value = businessHours || [];
         storeClosedDays.value = closedDays || [];
 
-        console.log("[DEBUG] storeBusinessHours.value設定後:", {
-          length: storeBusinessHours.value.length,
-          data: storeBusinessHours.value,
-        });
-        console.log("[DEBUG] storeClosedDays.value設定後:", {
-          length: storeClosedDays.value.length,
-          data: storeClosedDays.value,
-        });
-
         const requirements = await store.dispatch(
           "store/fetchStoreStaffRequirements",
           storeId
         );
-        console.log("[DEBUG] 人員要件取得完了:", requirements);
         storeRequirements.value = requirements || [];
 
-        console.log("[DEBUG] fetchStoreDetails完了");
       } catch (error) {
-        console.error("[ERROR] fetchStoreDetails:", error);
         storeRequirements.value = [];
         storeBusinessHours.value = [];
         storeClosedDays.value = [];
@@ -2484,17 +2362,11 @@ export default {
     };
 
     const changeStore = async () => {
-      console.log("[DEBUG] changeStore開始:", {
-        newStoreId: selectedStore.value?.id,
-      });
-
       selectedDate.value = null;
       ganttSelectedDate.value = null;
 
       if (selectedStore.value) {
-        console.log("[DEBUG] 店舗変更 - データ読み込み開始");
         await loadShiftData();
-        console.log("[DEBUG] 店舗変更 - データ読み込み完了");
       }
     };
 
@@ -2515,15 +2387,7 @@ export default {
           month: currentMonth.value,
         };
 
-        console.log("=== AIシフト生成開始 ===");
-        console.log("パラメータ:", params);
-        console.log("スタッフ数:", staffList.value.length);
-        console.log("期間:", `${currentYear.value}年${currentMonth.value}月`);
-
         const result = await store.dispatch("shift/generateShift", params);
-
-        console.log("=== AIシフト生成完了 ===");
-        console.log("生成されたシフト数:", result?.shifts?.length || 0);
 
         await loadShiftData();
 
@@ -2578,9 +2442,6 @@ export default {
             life: 10000,
           });
 
-          console.log("⚠️ 生成されたシフトに警告があります");
-          console.log("スタッフ警告:", staffViolations);
-          console.log("日付警告:", dateViolations);
         } else {
           toast.add({
             severity: "success",
@@ -2589,27 +2450,9 @@ export default {
             life: 5000,
           });
 
-          console.log("✅ 制約を守ったシフトが生成されました");
         }
 
-        const totalStaffHours = staffList.value.reduce((sum, staff) => {
-          return sum + calculateTotalHours(staff.id);
-        }, 0);
-
-        console.log("=== 生成結果サマリー ===");
-        console.log("総勤務時間:", totalStaffHours.toFixed(1), "時間");
-        console.log(
-          "平均勤務時間:",
-          (totalStaffHours / staffList.value.length).toFixed(1),
-          "時間/人"
-        );
-        console.log(
-          "制約違反数:",
-          staffViolations.length + dateViolations.length
-        );
       } catch (error) {
-        console.error("=== AIシフト生成失敗 ===");
-        console.error("エラー詳細:", error);
 
         let errorMessage = "AIシフト生成に失敗しました";
 
@@ -2668,6 +2511,16 @@ export default {
         },
       });
     };
+    
+    const selectAIGeneration = () => {
+      selectionDialogVisible.value = false;
+      generateAutomaticShift();
+    };
+    
+    const selectManualCreation = () => {
+      selectionDialogVisible.value = false;
+      createEmptyShift();
+    };
 
     const createShift = async () => {
       const hasStaffData = staffList.value && staffList.value.length > 0;
@@ -2699,30 +2552,8 @@ export default {
           life: 5000,
         });
       }
-
-      confirm.require({
-        message: `シフトの作成方法を選択してください
-
-【AI自動生成】
-✅ スタッフの勤務条件を自動で守ります
-✅ 効率的なシフトが生成されます
-⚠️ 条件が厳しい場合は生成に失敗する場合があります
-
-【手動作成】  
-✅ 自由にシフトを組むことができます
-⚠️ 勤務条件の確認は手動で行う必要があります`,
-        header: "シフト作成方法の選択",
-        acceptLabel: "AI自動生成",
-        rejectLabel: "手動作成",
-        acceptClass: "p-button-primary",
-        rejectClass: "p-button-secondary",
-        accept: () => {
-          generateAutomaticShift();
-        },
-        reject: () => {
-          createEmptyShift();
-        },
-      });
+      
+      selectionDialogVisible.value = true;
     };
 
     const createEmptyShift = async () => {
@@ -2746,7 +2577,6 @@ export default {
           life: 3000,
         });
       } catch (error) {
-        console.error("シフト作成エラー:", error);
         toast.add({
           severity: "error",
           summary: "エラー",
@@ -3079,8 +2909,6 @@ export default {
           shiftData.change_reason = shiftEditorDialog.changeReason;
         }
 
-        console.log("Sending shift data:", shiftData);
-
         const existingShift = getShiftForStaff(
           shiftEditorDialog.date,
           shiftEditorDialog.staff.id
@@ -3115,11 +2943,8 @@ export default {
           life: 3000,
         });
       } catch (error) {
-        console.error("シフト保存エラー:", error);
 
         if (error.response) {
-          console.error("Response data:", error.response.data);
-          console.error("Response status:", error.response.status);
         }
 
         let errorMessage = "シフトの保存に失敗しました";
@@ -3191,7 +3016,6 @@ export default {
           });
         }
       } catch (error) {
-        console.error("シフト削除エラー:", error);
         toast.add({
           severity: "error",
           summary: "エラー",
@@ -3246,7 +3070,6 @@ export default {
               life: 3000,
             });
           } catch (error) {
-            console.error("シフト削除エラー:", error);
             toast.add({
               severity: "error",
               summary: "エラー",
@@ -3295,7 +3118,6 @@ export default {
           }
         }
       } catch (error) {
-        console.error("初期化エラー:", error);
         toast.add({
           severity: "error",
           summary: "エラー",
@@ -3311,6 +3133,7 @@ export default {
       saving,
       isEditMode,
       viewMode,
+      selectionDialogVisible,
       selectedDate,
       ganttSelectedDate,
       onGanttDateSelected,
@@ -3368,6 +3191,8 @@ export default {
       nextMonth,
       changeStore,
       createShift,
+      selectAIGeneration,
+      selectManualCreation,
       regenerateShift,
       printShift,
       saveShift,
@@ -3400,6 +3225,66 @@ export default {
 </script>
 
 <style scoped lang="scss">
+:deep(.p-confirm-dialog-message) {
+  white-space: pre-line;
+}
+
+.selection-card {
+  border: 1px solid var(--surface-d);
+  border-radius: 8px;
+  padding: 1.5rem;
+  height: 100%;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  background-color: var(--surface-a);
+
+  &:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    
+    i {
+      font-size: 1.75rem;
+      color: var(--primary-color);
+    }
+
+    h3 {
+      margin: 0;
+      font-weight: 600;
+      color: var(--text-color);
+    }
+  }
+
+  .card-content {
+    color: var(--text-color-secondary);
+    flex-grow: 1;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+    white-space: pre-line;
+    text-align: left;
+  }
+}
+
+.staff-summary-grid {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+}
+
 .shift-management {
   min-height: 100vh;
   background: #f5f7fa;
@@ -4059,11 +3944,6 @@ export default {
   background: #f3f4f6 !important;
   color: #9ca3af;
   opacity: 0.7;
-  cursor: not-allowed !important;
-}
-
-.shift-cell.is-store-closed.is-editable {
-  cursor: not-allowed !important;
 }
 
 .shift-cell.is-store-closed.is-editable:hover {
@@ -4352,7 +4232,6 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-height: 400px;
   overflow-y: auto;
 }
 
@@ -4901,6 +4780,10 @@ export default {
 .save-button:hover:not(:disabled) {
   background: #059669;
   border-color: #059669;
+}
+
+:deep(.p-confirm-dialog-message) {
+  white-space: pre-line;
 }
 
 @media (max-width: 1280px) {
