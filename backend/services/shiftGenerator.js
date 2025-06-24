@@ -120,9 +120,6 @@ class ShiftGeneratorService {
         return { errors, warnings };
     }
 
-
-
-
     async generateShift(storeId, year, month) {
         const store = await Store.findByPk(storeId);
         if (!store) throw new Error('指定された店舗が見つかりません。');
@@ -150,38 +147,61 @@ class ShiftGeneratorService {
         const storeClosedDays = await StoreClosedDay.findAll({ where: { store_id: storeId } });
         const storeRequirements = await StoreStaffRequirement.findAll({ where: { store_id: storeId } });
 
-        let prompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
-
-        console.log("=========================================");
-        console.log("========= Simplified Prompt =========");
-        console.log(prompt);
-        console.log("=========================================");
-
         let attempts = 0;
         const maxAttempts = 3;
         let lastError = null;
+        let currentPrompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
+
+        console.log("=== AI シフト生成開始 ===");
+        console.log(`期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}`);
+        console.log(`スタッフ数: ${staffs.length}名`);
 
         while (attempts < maxAttempts) {
             attempts++;
             console.log(`AI生成試行 ${attempts}/${maxAttempts}`);
 
             try {
-                const response = await this.callClaudeApi(prompt);
-                const generatedShiftData = this.parseClaudeResponse(response);
+                const response = await this.callClaudeApi(currentPrompt);
+                console.log('Claude API 呼び出し成功');
 
+                let generatedShiftData;
+                try {
+                    generatedShiftData = this.parseClaudeResponse(response);
+                    console.log('JSON解析成功');
+                } catch (parseError) {
+                    console.error(`試行 ${attempts} JSON解析エラー:`, parseError.message);
+
+                    // JSONが不完全な場合の対処
+                    if (parseError.message.includes('Unexpected end of JSON input')) {
+                        if (attempts < maxAttempts) {
+                            console.log('JSON が不完全なため、よりシンプルなプロンプトで再試行');
+                            currentPrompt = this.buildSimplePrompt(store, staffs, year, month, period);
+                            continue;
+                        }
+                    }
+                    throw parseError;
+                }
+
+                // 基本的な構造検証
+                if (!generatedShiftData || !generatedShiftData.shifts || !Array.isArray(generatedShiftData.shifts)) {
+                    throw new Error('生成されたシフトデータの構造が不正です');
+                }
+
+                console.log(`生成されたシフト: ${generatedShiftData.shifts.length}日分`);
+
+                // 制約検証
                 const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, period);
 
                 if (validationResult.isValid) {
                     console.log('✅ 生成されたシフトは全ての制約を満たしています');
                     return this.saveShift(generatedShiftData, storeId, year, month);
                 } else {
-                    console.log('❌ 生成されたシフトに制約違反があります:', validationResult.violations.slice(0, 5));
+                    console.log('❌ 制約違反検出:', validationResult.violations.slice(0, 5));
                     lastError = new Error(`制約違反: ${validationResult.violations.slice(0, 3).join(', ')}`);
 
                     if (attempts < maxAttempts) {
-                        console.log('より厳格なプロンプトで再生成します...');
-                        // プロンプトをより厳しく調整
-                        prompt = this.buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, validationResult.violations);
+                        console.log('制約違反のため、より厳格なプロンプトで再生成');
+                        currentPrompt = this.buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, validationResult.violations);
                         continue;
                     }
                 }
@@ -190,14 +210,40 @@ class ShiftGeneratorService {
                 lastError = error;
 
                 if (attempts < maxAttempts) {
-                    console.log('再生成を試行します...');
+                    console.log('エラーのため再試行します...');
+
+                    // API エラーの場合は少し待機
+                    if (error.message.includes('API')) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
                     continue;
                 }
             }
         }
 
-        throw lastError || new Error('最大試行回数に達しました。制約を満たすシフトを生成できませんでした。');
+        console.error('=== シフト生成失敗 ===');
+        console.error(`最大試行回数 ${maxAttempts} に達しました`);
+        throw lastError || new Error('制約を満たすシフトを生成できませんでした。スタッフの勤務条件を見直してください。');
     }
+
+    buildSimplePrompt(store, staffs, year, month, period) {
+        let prompt = `期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
+    
+    スタッフ制約:
+    `;
+
+        staffs.forEach(staff => {
+            prompt += `ID:${staff.id} ${staff.first_name}: 月間${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}h, 1日最大${staff.max_hours_per_day || 8}h\n`;
+        });
+
+        prompt += `
+    シンプルなシフトをJSON形式で出力:
+    
+    {"shifts":[{"date":"YYYY-MM-DD","assignments":[{"staff_id":1,"start_time":"09:00","end_time":"17:00"}]}]}`;
+
+        return prompt;
+    }
+    
 
     buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, violations) {
         let prompt = `前回のシフト生成で制約違反が発生しました。今度は絶対に制約を守ってください。
@@ -252,68 +298,102 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
     }
 
 
-    // backend/services/shiftGenerator.js の改善版
-
     buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period) {
-        // まず数学的制約を事前計算
+        // 数学的制約を事前計算
         const analysis = this.calculateStaffConstraints(staffs, period);
 
-        let prompt = `シフト管理システムです。以下の数学的制約を厳格に守ってシフトを生成してください。
-
-期間: ${period.startDate.format('YYYY-MM-DD')} から ${period.endDate.format('YYYY-MM-DD')}
-総日数: ${analysis.totalDays}日間
-
-=== 各スタッフの数学的制約（必須遵守）===
-`;
+        let prompt = `あなたはシフト管理システムです。以下の条件を厳守してシフトを生成してください。
+    
+    ## 期間情報
+    - 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
+    - 総日数: ${analysis.totalDays}日間
+    
+    ## スタッフ制約（絶対遵守）
+    `;
 
         staffs.forEach(staff => {
             const staffAnalysis = analysis.staff[staff.id];
+            const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p => ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]) || [];
+            const dayOffDates = staff.dayOffRequests?.filter(req => req.status === 'approved' || req.status === 'pending').map(req => req.date) || [];
 
             prompt += `
-${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
-・勤務可能日数: ${staffAnalysis.workableDays}日
-・月間必要時間: ${staff.min_hours_per_month}-${staff.max_hours_per_month}時間
-・1日あたり推奨時間: ${staffAnalysis.recommendedDailyHours}時間
-・1日最大時間: ${staff.max_hours_per_day || 8}時間
-・勤務可能曜日: ${staffAnalysis.availableDaysText}
-・勤務不可曜日: ${staffAnalysis.unavailableDaysText}
-
-→ 実現方法: ${staffAnalysis.strategy}`;
+    【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
+    - 月間時間: ${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}時間
+    - 1日最大: ${staff.max_hours_per_day || 8}時間
+    - 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
+    - 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}
+    - 推奨1日時間: ${staffAnalysis.recommendedDailyHours}時間`;
         });
 
         prompt += `
-
-=== 重要な数学的ルール ===
-1. 各スタッフの月間時間は上記の必要時間範囲内に収める
-2. 1日の勤務時間は各スタッフの最大時間を絶対に超えない
-3. 勤務不可曜日には絶対に割り当てない
-4. 上記の「実現方法」に従って時間配分する
-
-=== シフト生成の具体的指示 ===
-- 各スタッフの推奨1日時間を基準にして割り当てる
-- 月間時間が不足する場合は一部の日で時間を延長する
-- 月間時間が超過する場合は一部の日で時間を短縮するか休みにする
-- 毎日同じ時間である必要はない
-
-以下のJSON形式で正確に出力してください：
-
-{
-  "shifts": [
+    
+    ## 重要ルール
+    1. 各スタッフの月間時間は必ず上記範囲内に収める
+    2. 1日の勤務時間は絶対に最大時間を超えない  
+    3. 勤務不可曜日には絶対に割り当てない
+    4. 休み希望日には絶対に割り当てない
+    5. 推奨時間を基準に均等配分する
+    
+    ## 出力形式
+    以下のJSON形式で正確に出力してください。余計な説明は不要です。
+    
     {
-      "date": "YYYY-MM-DD",
-      "assignments": [
+      "shifts": [
         {
-          "staff_id": 数値,
-          "start_time": "HH:MM",
-          "end_time": "HH:MM"
+          "date": "YYYY-MM-DD",
+          "assignments": [
+            {
+              "staff_id": 1,
+              "start_time": "09:00", 
+              "end_time": "17:00"
+            }
+          ]
         }
       ]
-    }
-  ]
-}`;
+    }`;
 
         return prompt;
     }
+
+    buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, violations) {
+        let prompt = `前回のシフト生成で制約違反が発生しました。今度は絶対に制約を守ってください。
+    
+    ## 前回の主な違反
+    ${violations.slice(0, 3).join('\n')}
+    
+    ## より厳しい制約
+    `;
+
+        staffs.forEach(staff => {
+            prompt += `
+    ${staff.first_name} ${staff.last_name}: 
+    - 1日は絶対に${staff.max_hours_per_day || 8}時間以下
+    - 月間は絶対に${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}時間
+    - 勤務時間は6-8時間以内で保守的に設定`;
+        });
+
+        prompt += `
+    
+    制約を絶対に守って、より保守的なシフトを作成してください。
+    
+    {
+      "shifts": [
+        {
+          "date": "YYYY-MM-DD",
+          "assignments": [
+            {
+              "staff_id": 1,
+              "start_time": "09:00",
+              "end_time": "17:00"
+            }
+          ]
+        }
+      ]
+    }`;
+
+        return prompt;
+    }
+
 
     // 数学的制約を事前計算する新しいメソッド
     calculateStaffConstraints(staffs, period) {
@@ -605,15 +685,8 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             console.log('JSONブロックが見つからない、元のテキストをそのまま使用');
         }
 
-        // JSONクリーニング
-        jsonString = jsonString.trim();
-
-        // 末尾のカンマを削除
-        jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
-
-        // 重複する括弧やブレースを削除
-        jsonString = jsonString.replace(/\}\s*\}\s*$/, '}');
-        jsonString = jsonString.replace(/^\s*\{\s*\{/, '{');
+        // JSONクリーニングと修復処理
+        jsonString = this.cleanAndRepairJson(jsonString);
 
         console.log('クリーニング後のJSON文字列長:', jsonString.length);
         console.log('クリーニング後のJSON最初の200文字:', jsonString.substring(0, 200));
@@ -641,6 +714,84 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 
             throw new Error(`AIからの応答をJSONとして解析できませんでした: ${error.message}`);
         }
+    }
+
+    cleanAndRepairJson(jsonString) {
+        // JSONクリーニング
+        jsonString = jsonString.trim();
+
+        // 末尾のカンマを削除
+        jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
+
+        // 重複する括弧やブレースを削除
+        jsonString = jsonString.replace(/\}\s*\}\s*$/, '}');
+        jsonString = jsonString.replace(/^\s*\{\s*\{/, '{');
+
+        // 不完全なJSONの修復を試行
+        if (!jsonString.endsWith('}')) {
+            console.log('JSON修復を試行: 不完全な終了の検出');
+
+            // 基本的な構造チェック
+            const openBraces = (jsonString.match(/\{/g) || []).length;
+            const closeBraces = (jsonString.match(/\}/g) || []).length;
+            const openBrackets = (jsonString.match(/\[/g) || []).length;
+            const closeBrackets = (jsonString.match(/\]/g) || []).length;
+
+            console.log(`括弧の数: { ${openBraces}, } ${closeBraces}, [ ${openBrackets}, ] ${closeBrackets}`);
+
+            // 不足している閉じ括弧を追加
+            let missingCloseBrackets = openBrackets - closeBrackets;
+            let missingCloseBraces = openBraces - closeBraces;
+
+            // 最後の不完全な部分を検出して削除
+            const lastCompleteEntry = this.findLastCompleteEntry(jsonString);
+            if (lastCompleteEntry) {
+                jsonString = lastCompleteEntry;
+                console.log('最後の完全なエントリまで切り詰めました');
+            }
+
+            // 必要な閉じ括弧を追加
+            while (missingCloseBrackets > 0) {
+                jsonString += ']';
+                missingCloseBrackets--;
+            }
+            while (missingCloseBraces > 0) {
+                jsonString += '}';
+                missingCloseBraces--;
+            }
+
+            console.log('JSON修復完了');
+        }
+
+        return jsonString;
+    }
+
+    findLastCompleteEntry(jsonString) {
+        // shifts配列内の最後の完全なエントリを見つける
+        const shiftsMatch = jsonString.match(/"shifts":\s*\[([\s\S]*)/);
+        if (!shiftsMatch) return null;
+
+        const shiftsContent = shiftsMatch[1];
+
+        // 完全なオブジェクトパターンを探す
+        const completeObjectPattern = /\{[^{}]*"date":\s*"[^"]+",\s*"assignments":\s*\[[^\]]*\]\s*\}/g;
+        const matches = [];
+        let match;
+
+        while ((match = completeObjectPattern.exec(shiftsContent)) !== null) {
+            matches.push({
+                match: match[0],
+                endIndex: match.index + match[0].length
+            });
+        }
+
+        if (matches.length === 0) return null;
+
+        // 最後の完全なマッチまでの文字列を構築
+        const lastMatch = matches[matches.length - 1];
+        const truncatedShifts = shiftsContent.substring(0, lastMatch.endIndex);
+
+        return `{"shifts":[${truncatedShifts}]}`;
     }
 
     async saveShift(shiftData, storeId, year, month) {
