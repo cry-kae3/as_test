@@ -1523,7 +1523,6 @@ export default {
       if (dayPreference && !dayPreference.available) {
         return `${dayNames[dayOfWeek]}曜日：勤務不可`;
       }
-      
 
       return "勤務不可";
     };
@@ -1587,67 +1586,6 @@ export default {
     const hasRequirementShortage = (date, requirement) => {
       const assignedCount = getAssignedStaffCount(date, requirement);
       return assignedCount < requirement.required_staff_count;
-    };
-
-    const getConsecutiveWorkDays = (staffId, currentDate) => {
-      if (!shifts.value || shifts.value.length === 0) return 0;
-
-      const currentDateObj = new Date(currentDate);
-      let consecutiveDays = 0;
-      let checkDate = new Date(currentDateObj);
-
-      while (true) {
-        const dateStr = `${checkDate.getFullYear()}-${(checkDate.getMonth() + 1)
-          .toString()
-          .padStart(2, "0")}-${checkDate
-          .getDate()
-          .toString()
-          .padStart(2, "0")}`;
-
-        const hasShift = shifts.value.some(
-          (dayShift) =>
-            dayShift.date === dateStr &&
-            dayShift.assignments.some(
-              (assignment) => assignment.staff_id === staffId
-            )
-        );
-
-        if (hasShift) {
-          consecutiveDays++;
-          checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-          break;
-        }
-      }
-
-      checkDate = new Date(currentDateObj);
-      checkDate.setDate(checkDate.getDate() + 1);
-
-      while (true) {
-        const dateStr = `${checkDate.getFullYear()}-${(checkDate.getMonth() + 1)
-          .toString()
-          .padStart(2, "0")}-${checkDate
-          .getDate()
-          .toString()
-          .padStart(2, "0")}`;
-
-        const hasShift = shifts.value.some(
-          (dayShift) =>
-            dayShift.date === dateStr &&
-            dayShift.assignments.some(
-              (assignment) => assignment.staff_id === staffId
-            )
-        );
-
-        if (hasShift) {
-          consecutiveDays++;
-          checkDate.setDate(checkDate.getDate() + 1);
-        } else {
-          break;
-        }
-      }
-
-      return consecutiveDays;
     };
 
     const calculateDayHours = (shift) => {
@@ -1859,51 +1797,7 @@ export default {
         });
       }
 
-      const workDays = shifts.value
-        .filter((dayShift) =>
-          dayShift.assignments.some((a) => a.staff_id === staffId)
-        )
-        .map((dayShift) => dayShift.date)
-        .sort();
-
-      if (workDays.length > 0) {
-        const maxConsecutive = calculateMaxConsecutiveDays(workDays);
-        const allowedConsecutive = staff.max_consecutive_days || 5;
-
-        if (maxConsecutive > allowedConsecutive) {
-          warnings.push({
-            type: "consecutive_days",
-            icon: "pi pi-clock",
-            message: `最大連続勤務日数超過 (${maxConsecutive}日 > ${allowedConsecutive}日)`,
-            severity: "error",
-          });
-        }
-      }
-
       return warnings;
-    };
-
-    const calculateMaxConsecutiveDays = (workDays) => {
-      if (workDays.length === 0) return 0;
-
-      const sortedDays = workDays.sort();
-      let maxConsecutive = 1;
-      let currentConsecutive = 1;
-
-      for (let i = 1; i < sortedDays.length; i++) {
-        const prevDate = new Date(sortedDays[i - 1]);
-        const currentDate = new Date(sortedDays[i]);
-        const diffDays = (currentDate - prevDate) / (1000 * 60 * 60 * 24);
-
-        if (diffDays === 1) {
-          currentConsecutive++;
-          maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
-        } else {
-          currentConsecutive = 1;
-        }
-      }
-
-      return maxConsecutive;
     };
 
     const hasShiftViolation = (date, staffId) => {
@@ -1935,21 +1829,6 @@ export default {
       );
       if (dayOffRequest) {
         return true;
-      }
-
-      const workDays = shifts.value
-        .filter((dayShift) =>
-          dayShift.assignments.some((a) => a.staff_id === staffId)
-        )
-        .map((dayShift) => dayShift.date);
-
-      if (workDays.includes(date)) {
-        const consecutiveDays = getConsecutiveWorkDaysForDate(staffId, date);
-        const maxConsecutiveDays = staff.max_consecutive_days || 5;
-
-        if (consecutiveDays > maxConsecutiveDays) {
-          return true;
-        }
       }
 
       return false;
@@ -2006,59 +1885,7 @@ export default {
         });
       }
 
-      const consecutiveDays = getConsecutiveWorkDaysForDate(staffId, date);
-      const maxConsecutiveDays = staff.max_consecutive_days || 5;
-
-      if (consecutiveDays > maxConsecutiveDays) {
-        violations.push({
-          type: "consecutive_days",
-          icon: "pi pi-calendar",
-          message: `連続勤務日数が上限を超過 (${consecutiveDays}日 > ${maxConsecutiveDays}日)`,
-          severity: "error",
-        });
-      }
-
       return violations;
-    };
-
-    const getConsecutiveWorkDaysForDate = (staffId, targetDate) => {
-      const workDays = shifts.value
-        .filter((dayShift) =>
-          dayShift.assignments.some((a) => a.staff_id === staffId)
-        )
-        .map((dayShift) => dayShift.date)
-        .sort();
-
-      if (!workDays.includes(targetDate)) return 0;
-
-      let consecutiveDays = 1;
-      const targetIndex = workDays.indexOf(targetDate);
-
-      for (let i = targetIndex - 1; i >= 0; i--) {
-        const prevDate = new Date(workDays[i]);
-        const checkDate = new Date(workDays[i + 1]);
-        const diffDays = (checkDate - prevDate) / (1000 * 60 * 60 * 24);
-
-        if (diffDays === 1) {
-          consecutiveDays++;
-        } else {
-          break;
-        }
-      }
-
-      for (let i = targetIndex + 1; i < workDays.length; i++) {
-        const currentDate = new Date(workDays[i]);
-        const prevDate = new Date(workDays[i - 1]);
-        const diffDays = (currentDate - prevDate) / (1000 * 60 * 60 * 24);
-
-        if (diffDays === 1) {
-          consecutiveDays++;
-        } else {
-          break;
-        }
-      }
-
-      return consecutiveDays;
     };
 
     const hasDateWarnings = (date) => {
@@ -3379,7 +3206,6 @@ export default {
       formatTime,
       calculateTotalHours,
       getDailyRequirements,
-      getConsecutiveWorkDays,
       calculateDayHours,
       fetchStoreDetails,
       hasStaffingShortage,
@@ -3403,6 +3229,7 @@ export default {
   },
 };
 </script>
+
 <style scoped lang="scss">
 .shift-management {
   min-height: 100vh;
@@ -4050,9 +3877,6 @@ export default {
 
 .shift-cell.past-editable:hover {
   background: #fef3c7;
-}
-
-.shift-cell.is-selected {
 }
 
 .shift-time-card {
@@ -4811,6 +4635,15 @@ export default {
 .delete-button:hover:not(:disabled) {
   background: #dc2626;
   border-color: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(239, 68, 68, 0.3);
+}
+
+.delete-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .cancel-button {
@@ -4835,26 +4668,84 @@ export default {
   border-color: #059669;
 }
 
-.delete-button {
-  background: #ef4444;
-  color: white;
-  border: 1px solid #ef4444;
+/* 既存のスタイルに以下を追加・修正 */
+
+/* 日付ヘッダーの店舗定休日スタイル */
+.date-cell-header.is-store-closed {
+  background: #f3f4f6 !important; /* より明確なグレー背景 */
+  color: #6b7280;
+  opacity: 0.8;
 }
 
-.delete-button:hover:not(:disabled) {
-  background: #dc2626;
-  border-color: #dc2626;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgba(239, 68, 68, 0.3);
+.date-cell-header.is-store-closed .date-number,
+.date-cell-header.is-store-closed .date-weekday {
+  color: #6b7280 !important;
 }
 
-.delete-button:disabled {
-  opacity: 0.5;
+/* 店舗定休日かつ選択されている場合 */
+.date-cell-header.is-store-closed.is-selected {
+  background: #d1d5db !important;
+  color: #374151;
+}
+
+/* シフトセルの店舗定休日スタイル */
+.shift-cell.is-store-closed {
+  background: #f3f4f6 !important;
+  color: #9ca3af;
+  opacity: 0.7;
+}
+
+/* 店舗定休日のシフトセル内の要素 */
+.shift-cell.is-store-closed .no-shift {
+  color: #9ca3af !important;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
 }
 
+/* 店舗定休日は編集不可にする */
+.shift-cell.is-store-closed.is-editable {
+  cursor: not-allowed !important;
+}
+
+.shift-cell.is-store-closed.is-editable:hover {
+  background: #f3f4f6 !important;
+  transform: none !important;
+}
+
+/* 定休日インジケーター（オプション：祝日マークのようなもの） */
+.closed-day-indicator {
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: #9ca3af;
+  color: white;
+  font-weight: 600;
+}
+
+/* ガントチャートビューでの店舗定休日 */
+.gantt-staff-row.store-closed-day .gantt-timeline {
+  background: #f3f4f6 !important;
+  opacity: 0.7;
+}
+
+/* 店舗定休日の場合、シフトブロックを表示しない */
+.gantt-timeline.is-store-closed {
+  background: #f3f4f6 !important;
+  cursor: not-allowed;
+}
+
+.gantt-timeline.is-store-closed::after {
+  content: "定休日";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #9ca3af;
+  font-size: 0.75rem;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+// レスポンシブデザイン
 @media (max-width: 1280px) {
   .calendar-view,
   .gantt-view {

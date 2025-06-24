@@ -651,12 +651,6 @@ const validateStaffWorkingConditions = async (staffId, date, startTime, endTime,
         warnings.push(`月間最小勤務時間（${staff.min_hours_per_month}時間）を下回ります（${monthlyHours.toFixed(1)}時間）`);
     }
 
-    const consecutiveDays = await calculateConsecutiveWorkDays(staffId, date, excludeAssignmentId);
-
-    if (staff.max_consecutive_days && consecutiveDays > staff.max_consecutive_days) {
-        errors.push(`最大連続勤務日数（${staff.max_consecutive_days}日）を超過します（${consecutiveDays}日）`);
-    }
-
     if (workHours > 8 && (!breakStartTime || !breakEndTime)) {
         errors.push('8時間超の勤務には最低60分の休憩が必要です');
     } else if (workHours > 6 && (!breakStartTime || !breakEndTime)) {
@@ -730,8 +724,6 @@ const calculateMonthlyHours = async (staffId, targetDate, additionalMinutes, exc
 
     return totalMinutes / 60;
 };
-
-
 
 const createShiftAssignment = async (req, res) => {
     try {

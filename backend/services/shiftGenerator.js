@@ -171,7 +171,6 @@ class ShiftGeneratorService {
                 } catch (parseError) {
                     console.error(`試行 ${attempts} JSON解析エラー:`, parseError.message);
 
-                    // JSONが不完全な場合の対処
                     if (parseError.message.includes('Unexpected end of JSON input')) {
                         if (attempts < maxAttempts) {
                             console.log('JSON が不完全なため、よりシンプルなプロンプトで再試行');
@@ -182,14 +181,12 @@ class ShiftGeneratorService {
                     throw parseError;
                 }
 
-                // 基本的な構造検証
                 if (!generatedShiftData || !generatedShiftData.shifts || !Array.isArray(generatedShiftData.shifts)) {
                     throw new Error('生成されたシフトデータの構造が不正です');
                 }
 
                 console.log(`生成されたシフト: ${generatedShiftData.shifts.length}日分`);
 
-                // 制約検証
                 const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, period);
 
                 if (validationResult.isValid) {
@@ -212,7 +209,6 @@ class ShiftGeneratorService {
                 if (attempts < maxAttempts) {
                     console.log('エラーのため再試行します...');
 
-                    // API エラーの場合は少し待機
                     if (error.message.includes('API')) {
                         await new Promise(resolve => setTimeout(resolve, 2000));
                     }
@@ -243,7 +239,7 @@ class ShiftGeneratorService {
 
         return prompt;
     }
-    
+
 
     buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, violations) {
         let prompt = `前回のシフト生成で制約違反が発生しました。今度は絶対に制約を守ってください。
@@ -299,7 +295,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 
 
     buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period) {
-        // 数学的制約を事前計算
         const analysis = this.calculateStaffConstraints(staffs, period);
 
         let prompt = `あなたはシフト管理システムです。以下の条件を厳守してシフトを生成してください。
@@ -394,8 +389,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         return prompt;
     }
 
-
-    // 数学的制約を事前計算する新しいメソッド
     calculateStaffConstraints(staffs, period) {
         const startDate = period.startDate.toDate();
         const endDate = period.endDate.toDate();
@@ -407,7 +400,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         };
 
         staffs.forEach(staff => {
-            // 勤務可能日数を正確に計算
             let workableDays = 0;
             const availableDayOfWeeks = staff.dayPreferences
                 ?.filter(p => p.available)
@@ -434,18 +426,15 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             const maxHours = staff.max_hours_per_month || 160;
             const maxDailyHours = staff.max_hours_per_day || 8;
 
-            // 推奨1日時間を計算
-            const targetHours = (minHours + maxHours) / 2; // 中間値を目標
+            const targetHours = (minHours + maxHours) / 2;
             const recommendedDailyHours = Math.min(
-                Math.ceil((targetHours / workableDays) * 4) / 4, // 15分単位で切り上げ
+                Math.ceil((targetHours / workableDays) * 4) / 4,
                 maxDailyHours
             );
 
-            // 実現可能性チェック
             const maxPossibleHours = workableDays * maxDailyHours;
             const isMinAchievable = minHours <= maxPossibleHours;
 
-            // 戦略を決定
             let strategy;
             if (!isMinAchievable) {
                 strategy = `⚠️ 最小時間${minHours}hは物理的に不可能（最大可能: ${maxPossibleHours}h）`;
@@ -477,21 +466,18 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         return analysis;
     }
 
-    // より詳細な検証を行う改善版
     async validateGeneratedShift(shiftData, staffs, period) {
         const violations = [];
         const staffWorkHours = {};
 
         console.log('=== シフト検証開始 ===');
 
-        // 事前計算
         const analysis = this.calculateStaffConstraints(staffs, period);
 
         if (!shiftData || !shiftData.shifts) {
             return { isValid: false, violations: ['シフトデータが不正です'] };
         }
 
-        // 各日のシフトをチェック
         for (const dayShift of shiftData.shifts) {
             const date = dayShift.date;
             const dayOfWeek = new Date(date).getDay();
@@ -507,14 +493,12 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                     continue;
                 }
 
-                // 勤務可能曜日チェック
                 const availableDays = staff.dayPreferences?.filter(p => p.available).map(p => p.day_of_week) || [];
                 if (!availableDays.includes(dayOfWeek)) {
                     const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
                     violations.push(`${staff.first_name} ${staff.last_name} (${date}): ${dayNames[dayOfWeek]}曜日は勤務不可`);
                 }
 
-                // 1日勤務時間チェック
                 const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
                 const workHours = workMinutes / 60;
                 const maxDailyHours = staff.max_hours_per_day || 8;
@@ -523,7 +507,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                     violations.push(`${staff.first_name} ${staff.last_name} (${date}): 1日勤務時間超過 (${workHours.toFixed(1)}h > ${maxDailyHours}h)`);
                 }
 
-                // 月間勤務時間を集計
                 if (!staffWorkHours[staffId]) {
                     staffWorkHours[staffId] = 0;
                 }
@@ -531,7 +514,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             }
         }
 
-        // 月間勤務時間チェック
         for (const staff of staffs) {
             const staffId = staff.id;
             const totalMinutes = staffWorkHours[staffId] || 0;
@@ -563,29 +545,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             violations,
             analysis
         };
-    }
-
-    calculateMaxConsecutiveDays(workDays) {
-        if (workDays.length === 0) return 0;
-
-        const sortedDays = workDays.sort();
-        let maxConsecutive = 1;
-        let currentConsecutive = 1;
-
-        for (let i = 1; i < sortedDays.length; i++) {
-            const prevDate = new Date(sortedDays[i - 1]);
-            const currentDate = new Date(sortedDays[i]);
-            const diffDays = (currentDate - prevDate) / (1000 * 60 * 60 * 24);
-
-            if (diffDays === 1) {
-                currentConsecutive++;
-                maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
-            } else {
-                currentConsecutive = 1;
-            }
-        }
-
-        return maxConsecutive;
     }
 
     async callClaudeApi(prompt) {
@@ -630,7 +589,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
     parseClaudeResponse(response) {
         console.log('Claude APIレスポンス解析開始');
 
-        // レスポンス構造の詳細チェック
         if (!response) {
             console.error('レスポンスがnullまたはundefined');
             throw new Error('Claude APIからのレスポンスが空です。');
@@ -651,17 +609,14 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         console.log('元のレスポンステキスト長:', jsonString.length);
         console.log('レスポンステキストの最初の200文字:', jsonString.substring(0, 200));
 
-        // 複数のJSONブロック抽出パターンを試す
         let extractedJson = null;
 
-        // パターン1: ```json...```
         let match = jsonString.match(/```json\s*\n([\s\S]*?)\n\s*```/);
         if (match && match[1]) {
             extractedJson = match[1];
             console.log('パターン1でJSON抽出成功');
         }
 
-        // パターン2: ```...```（jsonタグなし）
         if (!extractedJson) {
             match = jsonString.match(/```\s*\n([\s\S]*?)\n\s*```/);
             if (match && match[1] && match[1].trim().startsWith('{')) {
@@ -670,7 +625,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             }
         }
 
-        // パターン3: 直接JSONを探す
         if (!extractedJson) {
             match = jsonString.match(/\{[\s\S]*\}/);
             if (match) {
@@ -685,7 +639,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             console.log('JSONブロックが見つからない、元のテキストをそのまま使用');
         }
 
-        // JSONクリーニングと修復処理
         jsonString = this.cleanAndRepairJson(jsonString);
 
         console.log('クリーニング後のJSON文字列長:', jsonString.length);
@@ -695,7 +648,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             const parsed = JSON.parse(jsonString);
             console.log(`シフト生成結果: ${parsed.shifts?.length || 0}日分のシフト`);
 
-            // 基本的な構造チェック
             if (!parsed.shifts || !Array.isArray(parsed.shifts)) {
                 throw new Error('shiftsプロパティが配列ではありません');
             }
@@ -706,7 +658,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             console.error("解析対象のJSON文字列:");
             console.error(jsonString);
 
-            // より詳細なエラー情報を提供
             const lines = jsonString.split('\n');
             lines.forEach((line, index) => {
                 console.error(`${index + 1}: ${line}`);
@@ -717,21 +668,16 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
     }
 
     cleanAndRepairJson(jsonString) {
-        // JSONクリーニング
         jsonString = jsonString.trim();
 
-        // 末尾のカンマを削除
         jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
 
-        // 重複する括弧やブレースを削除
         jsonString = jsonString.replace(/\}\s*\}\s*$/, '}');
         jsonString = jsonString.replace(/^\s*\{\s*\{/, '{');
 
-        // 不完全なJSONの修復を試行
         if (!jsonString.endsWith('}')) {
             console.log('JSON修復を試行: 不完全な終了の検出');
 
-            // 基本的な構造チェック
             const openBraces = (jsonString.match(/\{/g) || []).length;
             const closeBraces = (jsonString.match(/\}/g) || []).length;
             const openBrackets = (jsonString.match(/\[/g) || []).length;
@@ -739,18 +685,15 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 
             console.log(`括弧の数: { ${openBraces}, } ${closeBraces}, [ ${openBrackets}, ] ${closeBrackets}`);
 
-            // 不足している閉じ括弧を追加
             let missingCloseBrackets = openBrackets - closeBrackets;
             let missingCloseBraces = openBraces - closeBraces;
 
-            // 最後の不完全な部分を検出して削除
             const lastCompleteEntry = this.findLastCompleteEntry(jsonString);
             if (lastCompleteEntry) {
                 jsonString = lastCompleteEntry;
                 console.log('最後の完全なエントリまで切り詰めました');
             }
 
-            // 必要な閉じ括弧を追加
             while (missingCloseBrackets > 0) {
                 jsonString += ']';
                 missingCloseBrackets--;
@@ -767,13 +710,11 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
     }
 
     findLastCompleteEntry(jsonString) {
-        // shifts配列内の最後の完全なエントリを見つける
         const shiftsMatch = jsonString.match(/"shifts":\s*\[([\s\S]*)/);
         if (!shiftsMatch) return null;
 
         const shiftsContent = shiftsMatch[1];
 
-        // 完全なオブジェクトパターンを探す
         const completeObjectPattern = /\{[^{}]*"date":\s*"[^"]+",\s*"assignments":\s*\[[^\]]*\]\s*\}/g;
         const matches = [];
         let match;
@@ -787,7 +728,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 
         if (matches.length === 0) return null;
 
-        // 最後の完全なマッチまでの文字列を構築
         const lastMatch = matches[matches.length - 1];
         const truncatedShifts = shiftsContent.substring(0, lastMatch.endIndex);
 
