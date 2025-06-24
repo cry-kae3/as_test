@@ -190,6 +190,16 @@
                 <div v-if="day.isNationalHoliday" class="holiday-indicator">
                   祝
                 </div>
+                <div
+                  v-if="
+                    day.isStoreClosed &&
+                    !day.isNationalHoliday &&
+                    !day.isWeekend
+                  "
+                  class="closed-day-indicator"
+                >
+                  休
+                </div>
               </div>
             </div>
           </div>
@@ -262,19 +272,22 @@
                   'is-holiday': day.isNationalHoliday,
                   'is-today': day.isToday,
                   'is-past': isPastDate(day.date),
-                  'is-editable': isEditMode,
+                  'is-editable': isEditMode && !day.isStoreClosed,
                   'has-shift': getShiftForStaff(day.date, staff.id),
-                  'past-editable': isEditMode && isPastDate(day.date),
+                  'past-editable':
+                    isEditMode && isPastDate(day.date) && !day.isStoreClosed,
                   'is-selected': selectedDate === day.date,
                   'is-store-closed': day.isStoreClosed,
                   'can-work':
                     canStaffWorkOnDate(staff, day.date) &&
-                    !getShiftForStaff(day.date, staff.id),
+                    !getShiftForStaff(day.date, staff.id) &&
+                    !day.isStoreClosed,
                   unavailable:
-                    !canStaffWorkOnDate(staff, day.date) &&
+                    (!canStaffWorkOnDate(staff, day.date) ||
+                      day.isStoreClosed) &&
                     !getShiftForStaff(day.date, staff.id),
                 }"
-                @click="openShiftEditor(day, staff)"
+                @click="!day.isStoreClosed && openShiftEditor(day, staff)"
               >
                 <div
                   v-if="getShiftForStaff(day.date, staff.id)"
@@ -311,6 +324,12 @@
                       </div>
                     </div>
                   </div>
+                </div>
+                <div
+                  v-else-if="day.isStoreClosed"
+                  class="store-closed-indicator"
+                >
+                  <span class="closed-text">定休日</span>
                 </div>
                 <div v-else class="no-shift">
                   <span
@@ -500,7 +519,6 @@
           </div>
         </div>
       </div>
-
       <div v-if="viewMode === 'gantt'" class="gantt-view">
         <div v-if="selectedDate" class="gantt-container">
           <div class="gantt-header">
@@ -547,6 +565,7 @@
                 :class="{
                   'has-warnings': hasStaffWarningsAllStores(staff.id),
                   'hours-violation': isHoursOutOfRangeAllStores(staff.id),
+                  'store-closed-day': isStoreClosedOnDate(selectedDate),
                 }"
               >
                 <div
@@ -603,7 +622,13 @@
 
                 <div
                   class="gantt-timeline"
-                  @click="openGanttShiftEditor(selectedDate, staff, $event)"
+                  :class="{
+                    'is-store-closed': isStoreClosedOnDate(selectedDate),
+                  }"
+                  @click="
+                    !isStoreClosedOnDate(selectedDate) &&
+                      openGanttShiftEditor(selectedDate, staff, $event)
+                  "
                 >
                   <div class="gantt-grid">
                     <div
@@ -615,7 +640,10 @@
                   </div>
 
                   <div
-                    v-if="!getShiftForStaff(selectedDate, staff.id)"
+                    v-if="
+                      !getShiftForStaff(selectedDate, staff.id) &&
+                      !isStoreClosedOnDate(selectedDate)
+                    "
                     class="gantt-availability-indicator"
                     :style="getGanttAvailabilityStyle(staff, selectedDate)"
                     :title="getGanttAvailabilityTooltip(staff, selectedDate)"
@@ -628,11 +656,17 @@
                       getGanttBarStyle(getShiftForStaff(selectedDate, staff.id))
                     "
                     :class="{
-                      'is-editable': isEditMode,
+                      'is-editable':
+                        isEditMode && !isStoreClosedOnDate(selectedDate),
                       'is-past-editable':
-                        isEditMode && isPastDate(selectedDate),
+                        isEditMode &&
+                        isPastDate(selectedDate) &&
+                        !isStoreClosedOnDate(selectedDate),
                     }"
-                    @click.stop="openShiftEditor({ date: selectedDate }, staff)"
+                    @click.stop="
+                      !isStoreClosedOnDate(selectedDate) &&
+                        openShiftEditor({ date: selectedDate }, staff)
+                    "
                   >
                     <span class="shift-time-text">
                       {{
@@ -952,6 +986,7 @@
   </div>
 </template>
 
+
 <script>
 import { ref, reactive, computed, onMounted, watch, nextTick } from "vue";
 import { useStore } from "vuex";
@@ -1006,6 +1041,8 @@ export default {
     const holidays = ref([]);
     const storeRequirements = ref([]);
     const currentStore = ref(null);
+    const storeBusinessHours = ref([]);
+    const storeClosedDays = ref([]);
 
     const allStoreShifts = ref({});
 
@@ -1063,6 +1100,66 @@ export default {
     const hasCurrentShift = computed(() => {
       return currentShift.value !== null;
     });
+
+    const isStoreClosedOnDate = (date) => {
+      if (!date) {
+        console.log("[DEBUG] isStoreClosedOnDate: dateが空です");
+        return false;
+      }
+
+      console.log("[DEBUG] isStoreClosedOnDate開始:", {
+        date,
+        storeBusinessHoursLength: storeBusinessHours.value?.length || 0,
+        storeClosedDaysLength: storeClosedDays.value?.length || 0,
+        storeBusinessHours: storeBusinessHours.value,
+        storeClosedDays: storeClosedDays.value,
+      });
+
+      const dayOfWeek = new Date(date).getDay();
+      console.log(
+        "[DEBUG] 曜日:",
+        dayOfWeek,
+        ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek]
+      );
+
+      const isClosedByDayOfWeek =
+        storeBusinessHours.value &&
+        storeBusinessHours.value.some((hours) => {
+          const match = hours.day_of_week === dayOfWeek && hours.is_closed;
+          if (match) {
+            console.log("[DEBUG] 曜日による定休日マッチ:", {
+              hours,
+              dayOfWeek,
+            });
+          }
+          return match;
+        });
+
+      const isClosedBySpecificDate =
+        storeClosedDays.value &&
+        storeClosedDays.value.some((closedDay) => {
+          const match = closedDay.specific_date === date;
+          if (match) {
+            console.log("[DEBUG] 特定日による定休日マッチ:", {
+              closedDay,
+              date,
+            });
+          }
+          return match;
+        });
+
+      const result = isClosedByDayOfWeek || isClosedBySpecificDate;
+
+      console.log("[DEBUG] isStoreClosedOnDate結果:", {
+        date,
+        dayOfWeek,
+        isClosedByDayOfWeek,
+        isClosedBySpecificDate,
+        result,
+      });
+
+      return result;
+    };
 
     const fetchAllStoreShifts = async () => {
       if (
@@ -1605,38 +1702,6 @@ export default {
       return Math.round((minutes / 60) * 10) / 10;
     };
 
-    const fetchStoreDetails = async (storeId) => {
-      try {
-        const storeData = await store.dispatch("store/fetchStore", storeId);
-
-        const businessHours = await store.dispatch(
-          "store/fetchStoreBusinessHours",
-          storeId
-        );
-
-        currentStore.value = {
-          ...storeData,
-          operating_hours: businessHours || [],
-        };
-
-        console.log(
-          "fetchStoreDetails - currentStore.value:",
-          currentStore.value
-        );
-        console.log("fetchStoreDetails - operating_hours:", businessHours);
-
-        const requirements = await store.dispatch(
-          "store/fetchStoreStaffRequirements",
-          storeId
-        );
-        console.log("取得した人員要件:", requirements);
-        storeRequirements.value = requirements || [];
-      } catch (error) {
-        console.error("店舗詳細情報の取得に失敗しました:", error);
-        storeRequirements.value = [];
-      }
-    };
-
     const hasStaffingShortage = (date, requirement) => {
       const assignedCount = getAssignedStaffCount(date, requirement);
       return assignedCount < requirement.required_staff_count;
@@ -2023,6 +2088,7 @@ export default {
 
     const openGanttShiftEditor = (date, staff, event) => {
       if (!isEditMode.value) return;
+      if (isStoreClosedOnDate(date)) return;
 
       const existingShift = getShiftForStaff(date, staff.id);
       if (existingShift) return;
@@ -2124,6 +2190,16 @@ export default {
         return;
       }
 
+      if (isStoreClosedOnDate(day.date)) {
+        toast.add({
+          severity: "info",
+          summary: "編集不可",
+          detail: "定休日のためシフト編集はできません",
+          life: 2000,
+        });
+        return;
+      }
+
       const shift = getShiftForStaff(day.date, staff.id);
 
       shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${day.date}`;
@@ -2159,17 +2235,35 @@ export default {
     };
 
     const loadShiftData = async () => {
-      if (!selectedStore.value) return;
+      if (!selectedStore.value) {
+        console.log("[DEBUG] loadShiftData: selectedStoreが空のため終了");
+        return;
+      }
+
+      console.log("[DEBUG] loadShiftData開始:", {
+        storeId: selectedStore.value.id,
+        year: currentYear.value,
+        month: currentMonth.value,
+      });
 
       loading.value = true;
 
       try {
+        console.log("[DEBUG] 店舗詳細データ取得開始");
+        await fetchStoreDetails(selectedStore.value.id);
+        console.log("[DEBUG] 店舗詳細データ取得完了");
+
+        console.log("[DEBUG] スタッフデータ取得開始");
         const staffData = await store.dispatch(
           "staff/fetchStaff",
           selectedStore.value.id
         );
         staffList.value = staffData;
+        console.log("[DEBUG] スタッフデータ取得完了:", {
+          staffCount: staffData.length,
+        });
 
+        console.log("[DEBUG] シフトデータ取得開始");
         try {
           const shiftData = await store.dispatch(
             "shift/fetchShiftByYearMonth",
@@ -2189,27 +2283,37 @@ export default {
               status: shiftData.status,
             };
             shifts.value = shiftData.shifts || [];
+            console.log("[DEBUG] シフトデータ設定完了:", {
+              shiftsCount: shifts.value.length,
+            });
           } else {
             currentShift.value = null;
             shifts.value = [];
+            console.log("[DEBUG] シフトデータなし");
           }
         } catch (error) {
           if (error.response && error.response.status === 404) {
             currentShift.value = null;
             shifts.value = [];
+            console.log("[DEBUG] シフトデータ404 - データなし");
           } else {
             throw error;
           }
         }
 
         if (staffList.value && staffList.value.length > 0) {
+          console.log("[DEBUG] 全店舗シフトデータ取得開始");
           await fetchAllStoreShifts();
+          console.log("[DEBUG] 全店舗シフトデータ取得完了");
         }
 
+        console.log("[DEBUG] 日付データ生成開始");
         generateDaysInMonth();
+        console.log("[DEBUG] 日付データ生成完了");
+
         updateGanttDateRange();
       } catch (error) {
-        console.error("シフトデータの取得に失敗しました:", error);
+        console.error("[ERROR] loadShiftData:", error);
         toast.add({
           severity: "error",
           summary: "エラー",
@@ -2218,31 +2322,8 @@ export default {
         });
       } finally {
         loading.value = false;
+        console.log("[DEBUG] loadShiftData完了");
       }
-    };
-
-    const isStoreClosed = (date) => {
-      if (!currentStore.value || !currentStore.value.operating_hours) {
-        return false;
-      }
-
-      const dayOfWeek = new Date(date).getDay();
-
-      const operatingHours = currentStore.value.operating_hours.find(
-        (hours) => hours.day_of_week === dayOfWeek
-      );
-
-      if (operatingHours && operatingHours.is_closed) {
-        return true;
-      }
-
-      if (currentStore.value.special_holidays) {
-        if (currentStore.value.special_holidays.includes(date)) {
-          return true;
-        }
-      }
-
-      return false;
     };
 
     const generateDaysInMonth = () => {
@@ -2250,21 +2331,32 @@ export default {
       const month = currentMonth.value;
       const closingDay = systemSettings.value.closing_day || 25;
 
-      console.log(
-        `カレンダー生成: ${year}年${month}月, 締め日: ${closingDay}日`
-      );
+      console.log("[DEBUG] generateDaysInMonth開始:", {
+        year,
+        month,
+        closingDay,
+      });
+
+      console.log("[DEBUG] 定休日データ状態確認:", {
+        storeBusinessHoursLength: storeBusinessHours.value?.length || 0,
+        storeClosedDaysLength: storeClosedDays.value?.length || 0,
+        storeBusinessHours: storeBusinessHours.value,
+        storeClosedDays: storeClosedDays.value,
+      });
 
       const { startDate, endDate } = getShiftPeriod(year, month, closingDay);
       const today = new Date();
       const days = [];
 
-      console.log(
-        `期間: ${startDate.toISOString().split("T")[0]} から ${
-          endDate.toISOString().split("T")[0]
-        }`
-      );
+      console.log("[DEBUG] 期間:", {
+        startDate: startDate.toISOString().split("T")[0],
+        endDate: endDate.toISOString().split("T")[0],
+      });
 
       const current = new Date(startDate);
+      let processedDays = 0;
+      let closedDaysCount = 0;
+
       while (current <= endDate) {
         const dateStr = `${current.getFullYear()}-${(current.getMonth() + 1)
           .toString()
@@ -2274,7 +2366,16 @@ export default {
           dayOfWeek
         ];
 
-        const storeClosedForDay = isStoreClosed(dateStr);
+        const storeClosedForDay = isStoreClosedOnDate(dateStr);
+
+        if (storeClosedForDay) {
+          closedDaysCount++;
+          console.log("[DEBUG] 定休日として設定:", {
+            date: dateStr,
+            dayOfWeek,
+            dayOfWeekLabel,
+          });
+        }
 
         days.push({
           date: dateStr,
@@ -2292,10 +2393,16 @@ export default {
         });
 
         current.setDate(current.getDate() + 1);
+        processedDays++;
       }
 
       daysInMonth.value = days;
-      console.log(`生成された日数: ${days.length}日`);
+
+      console.log("[DEBUG] generateDaysInMonth完了:", {
+        totalDays: processedDays,
+        closedDaysCount,
+        closedDates: days.filter((d) => d.isStoreClosed).map((d) => d.date),
+      });
     };
 
     const previousMonth = async () => {
@@ -2324,13 +2431,71 @@ export default {
       await loadShiftData();
     };
 
+    const fetchStoreDetails = async (storeId) => {
+      try {
+        console.log("[DEBUG] fetchStoreDetails開始:", { storeId });
+
+        const storeData = await store.dispatch("store/fetchStore", storeId);
+        console.log("[DEBUG] 店舗データ取得完了:", storeData);
+
+        const businessHours = await store.dispatch(
+          "store/fetchStoreBusinessHours",
+          storeId
+        );
+        console.log("[DEBUG] 営業時間データ取得完了:", businessHours);
+
+        const closedDays = await store.dispatch(
+          "store/fetchStoreClosedDays",
+          storeId
+        );
+        console.log("[DEBUG] 定休日データ取得完了:", closedDays);
+
+        currentStore.value = {
+          ...storeData,
+          operating_hours: businessHours || [],
+        };
+
+        storeBusinessHours.value = businessHours || [];
+        storeClosedDays.value = closedDays || [];
+
+        console.log("[DEBUG] storeBusinessHours.value設定後:", {
+          length: storeBusinessHours.value.length,
+          data: storeBusinessHours.value,
+        });
+        console.log("[DEBUG] storeClosedDays.value設定後:", {
+          length: storeClosedDays.value.length,
+          data: storeClosedDays.value,
+        });
+
+        const requirements = await store.dispatch(
+          "store/fetchStoreStaffRequirements",
+          storeId
+        );
+        console.log("[DEBUG] 人員要件取得完了:", requirements);
+        storeRequirements.value = requirements || [];
+
+        console.log("[DEBUG] fetchStoreDetails完了");
+      } catch (error) {
+        console.error("[ERROR] fetchStoreDetails:", error);
+        storeRequirements.value = [];
+        storeBusinessHours.value = [];
+        storeClosedDays.value = [];
+      }
+    };
+
     const changeStore = async () => {
+      console.log("[DEBUG] changeStore開始:", {
+        newStoreId: selectedStore.value?.id,
+      });
+
       selectedDate.value = null;
       ganttSelectedDate.value = null;
+
       if (selectedStore.value) {
-        await fetchStoreDetails(selectedStore.value.id);
+        console.log("[DEBUG] 店舗変更 - データ読み込み開始");
+        await loadShiftData();
+        console.log("[DEBUG] 店舗変更 - データ読み込み完了");
       }
-      await loadShiftData();
     };
 
     const generateAutomaticShift = async () => {
@@ -2793,6 +2958,8 @@ export default {
               shift.end_time
             )}
            </td>`;
+          } else if (day.isStoreClosed) {
+            printHtml += `<td class="${cellClass}">定休日</td>`;
           } else {
             printHtml += `<td class="${cellClass}">-</td>`;
           }
@@ -3170,8 +3337,11 @@ export default {
       ganttBody,
       storeRequirements,
       currentStore,
+      storeBusinessHours,
+      storeClosedDays,
       allStoreShifts,
       hasCurrentShift,
+      isStoreClosedOnDate,
       isHoursOutOfRange,
       isHoursOutOfRangeAllStores,
       hasTotalHoursFromOtherStores,
@@ -3224,7 +3394,6 @@ export default {
       getWorkUnavailabilityReason,
       getGanttAvailabilityStyle,
       getGanttAvailabilityTooltip,
-      isStoreClosed,
     };
   },
 };
@@ -3608,16 +3777,14 @@ export default {
 }
 
 .date-cell-header.is-store-closed {
-  background: #d9d9d9;
+  background: #f3f4f6 !important;
+  color: #6b7280;
+  opacity: 0.8;
 }
 
 .date-cell-header.is-store-closed .date-number,
 .date-cell-header.is-store-closed .date-weekday {
-  color: #6b7280;
-}
-
-.shift-cell.is-store-closed {
-  background: #d9d9d9;
+  color: #6b7280 !important;
 }
 
 .date-cell-header.is-selected {
@@ -3625,7 +3792,7 @@ export default {
 }
 
 .date-cell-header.is-store-closed.is-selected {
-  background: #d1d5db;
+  background: #d1d5db !important;
 }
 
 .date-number {
@@ -3644,6 +3811,15 @@ export default {
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
   background: #dc2626;
+  color: white;
+  font-weight: 600;
+}
+
+.closed-day-indicator {
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: #9ca3af;
   color: white;
   font-weight: 600;
 }
@@ -3879,6 +4055,22 @@ export default {
   background: #fef3c7;
 }
 
+.shift-cell.is-store-closed {
+  background: #f3f4f6 !important;
+  color: #9ca3af;
+  opacity: 0.7;
+  cursor: not-allowed !important;
+}
+
+.shift-cell.is-store-closed.is-editable {
+  cursor: not-allowed !important;
+}
+
+.shift-cell.is-store-closed.is-editable:hover {
+  background: #f3f4f6 !important;
+  transform: none !important;
+}
+
 .shift-time-card {
   background: #10b981;
   color: white;
@@ -3966,6 +4158,27 @@ export default {
 .shift-cell.is-editable .no-shift {
   color: #10b981;
   font-weight: 600;
+}
+
+.shift-cell.is-store-closed .no-shift {
+  color: #9ca3af !important;
+  cursor: not-allowed;
+}
+
+.store-closed-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 0.7rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.closed-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
 }
 
 .work-available-indicator {
@@ -4362,6 +4575,11 @@ export default {
   background: #fef3c7;
 }
 
+.gantt-staff-row.store-closed-day .gantt-timeline {
+  background: #f3f4f6 !important;
+  opacity: 0.7;
+}
+
 .gantt-staff-info {
   min-width: 240px;
   width: 240px;
@@ -4430,6 +4648,23 @@ export default {
   align-items: center;
   background: white;
   flex: 1;
+}
+
+.gantt-timeline.is-store-closed {
+  background: #f3f4f6 !important;
+  cursor: not-allowed;
+}
+
+.gantt-timeline.is-store-closed::after {
+  content: "定休日";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #9ca3af;
+  font-size: 0.75rem;
+  font-weight: 500;
+  pointer-events: none;
 }
 
 .gantt-grid {
@@ -4668,84 +4903,6 @@ export default {
   border-color: #059669;
 }
 
-/* 既存のスタイルに以下を追加・修正 */
-
-/* 日付ヘッダーの店舗定休日スタイル */
-.date-cell-header.is-store-closed {
-  background: #f3f4f6 !important; /* より明確なグレー背景 */
-  color: #6b7280;
-  opacity: 0.8;
-}
-
-.date-cell-header.is-store-closed .date-number,
-.date-cell-header.is-store-closed .date-weekday {
-  color: #6b7280 !important;
-}
-
-/* 店舗定休日かつ選択されている場合 */
-.date-cell-header.is-store-closed.is-selected {
-  background: #d1d5db !important;
-  color: #374151;
-}
-
-/* シフトセルの店舗定休日スタイル */
-.shift-cell.is-store-closed {
-  background: #f3f4f6 !important;
-  color: #9ca3af;
-  opacity: 0.7;
-}
-
-/* 店舗定休日のシフトセル内の要素 */
-.shift-cell.is-store-closed .no-shift {
-  color: #9ca3af !important;
-  cursor: not-allowed;
-}
-
-/* 店舗定休日は編集不可にする */
-.shift-cell.is-store-closed.is-editable {
-  cursor: not-allowed !important;
-}
-
-.shift-cell.is-store-closed.is-editable:hover {
-  background: #f3f4f6 !important;
-  transform: none !important;
-}
-
-/* 定休日インジケーター（オプション：祝日マークのようなもの） */
-.closed-day-indicator {
-  font-size: 0.65rem;
-  padding: 0.125rem 0.375rem;
-  border-radius: 4px;
-  background: #9ca3af;
-  color: white;
-  font-weight: 600;
-}
-
-/* ガントチャートビューでの店舗定休日 */
-.gantt-staff-row.store-closed-day .gantt-timeline {
-  background: #f3f4f6 !important;
-  opacity: 0.7;
-}
-
-/* 店舗定休日の場合、シフトブロックを表示しない */
-.gantt-timeline.is-store-closed {
-  background: #f3f4f6 !important;
-  cursor: not-allowed;
-}
-
-.gantt-timeline.is-store-closed::after {
-  content: "定休日";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #9ca3af;
-  font-size: 0.75rem;
-  font-weight: 500;
-  pointer-events: none;
-}
-
-// レスポンシブデザイン
 @media (max-width: 1280px) {
   .calendar-view,
   .gantt-view {
