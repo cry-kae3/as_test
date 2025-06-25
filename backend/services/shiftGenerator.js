@@ -9,9 +9,9 @@ const moment = require('moment-timezone');
 
 class ShiftGeneratorService {
     constructor() {
-        this.claudeApiKey = process.env.CLAUDE_API_KEY;
-        this.claudeModel = 'claude-sonnet-4-20250514';
-        this.claudeApiUrl = 'https://api.anthropic.com/v1/messages';
+        this.geminiApiKey = process.env.GEMINI_API_KEY;
+        this.geminiModel = 'gemini-2.5-flash';
+        this.geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${this.geminiModel}:generateContent`;
     }
 
     getShiftPeriod(year, month, closingDay) {
@@ -160,11 +160,11 @@ class ShiftGeneratorService {
             attempts++;
 
             try {
-                const response = await this.callClaudeApi(currentPrompt);
+                const response = await this.callGeminiApi(currentPrompt);
 
                 let generatedShiftData;
                 try {
-                    generatedShiftData = this.parseClaudeResponse(response);
+                    generatedShiftData = this.parseGeminiResponse(response);
                 } catch (parseError) {
 
                     if (parseError.message.includes('Unexpected end of JSON input')) {
@@ -484,27 +484,46 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         };
     }
 
-    async callClaudeApi(prompt) {
+    async callGeminiApi(prompt) {
         const httpsAgent = new https.Agent({ rejectUnauthorized: false });
-        const url = this.claudeApiUrl;
+        const url = `${this.geminiApiUrl}?key=${this.geminiApiKey}`;
 
         const data = {
-            model: this.claudeModel,
-            max_tokens: 4096,
-            temperature: 0.2,
-            messages: [
+            contents: [{
+                parts: [{
+                    text: prompt
+                }]
+            }],
+            generationConfig: {
+                temperature: 0.2,
+                topK: 1,
+                topP: 1,
+                maxOutputTokens: 4096,
+                responseMimeType: "application/json"
+            },
+            safetySettings: [
                 {
-                    role: "user",
-                    content: prompt
+                    category: "HARM_CATEGORY_HARASSMENT",
+                    threshold: "BLOCK_NONE"
+                },
+                {
+                    category: "HARM_CATEGORY_HATE_SPEECH",
+                    threshold: "BLOCK_NONE"
+                },
+                {
+                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    threshold: "BLOCK_NONE"
+                },
+                {
+                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    threshold: "BLOCK_NONE"
                 }
             ]
         };
 
         const config = {
             headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': this.claudeApiKey,
-                'anthropic-version': '2023-06-01'
+                'Content-Type': 'application/json'
             },
             timeout: 180000,
             httpsAgent
@@ -515,24 +534,29 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             return response.data;
         } catch (error) {
             if (error.response?.data) {
+                console.error('Gemini API Error:', error.response.data);
             }
             throw error;
         }
     }
 
-    parseClaudeResponse(response) {
-
+    parseGeminiResponse(response) {
         if (!response) {
-            throw new Error('Claude APIからのレスポンスが空です。');
+            throw new Error('Gemini APIからのレスポンスが空です。');
         }
 
-        if (!response.content || !Array.isArray(response.content) || response.content.length === 0) {
-            throw new Error('Claude APIレスポンスにcontentが含まれていません。');
+        if (!response.candidates || !Array.isArray(response.candidates) || response.candidates.length === 0) {
+            throw new Error('Gemini APIレスポンスにcandidatesが含まれていません。');
         }
 
-        const content = response.content[0];
+        const candidate = response.candidates[0];
+        if (!candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+            throw new Error('Gemini APIレスポンスに有効なcontentが含まれていません。');
+        }
+
+        const content = candidate.content.parts[0];
         if (!content.text) {
-            throw new Error('Claude APIレスポンスに有効なテキストが含まれていません。');
+            throw new Error('Gemini APIレスポンスに有効なテキストが含まれていません。');
         }
 
         let jsonString = content.text;
@@ -561,10 +585,10 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         if (extractedJson) {
             jsonString = extractedJson;
         } else {
+            console.log('Gemini Response Text:', content.text);
         }
 
         jsonString = this.cleanAndRepairJson(jsonString);
-
 
         try {
             const parsed = JSON.parse(jsonString);
@@ -575,9 +599,10 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 
             return parsed;
         } catch (error) {
-
+            console.error('JSON Parse Error:', error);
             const lines = jsonString.split('\n');
             lines.forEach((line, index) => {
+                console.error(`Line ${index + 1}: ${line}`);
             });
 
             throw new Error(`AIからの応答をJSONとして解析できませんでした: ${error.message}`);
