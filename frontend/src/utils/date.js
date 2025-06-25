@@ -99,35 +99,6 @@ export const calculateHoursBetween = (startTime, endTime) => {
     return parseFloat(diffHours.toFixed(2));
 };
 
-// 勤務時間（休憩考慮済み）を時間単位で計算する
-export const calculateWorkHours = (shift) => {
-    if (!shift || !shift.start_time || !shift.end_time) return 0;
-
-    const start = new Date(`2000-01-01T${shift.start_time}:00`);
-    const end = new Date(`2000-01-01T${shift.end_time}:00`);
-
-    let workMillis = end.getTime() - start.getTime();
-    if (workMillis < 0) { // 深夜シフト対応
-        workMillis += 24 * 60 * 60 * 1000;
-    }
-
-    let breakMillis = 0;
-    if (shift.break_start_time && shift.break_end_time) {
-        const breakStart = new Date(`2000-01-01T${shift.break_start_time}:00`);
-        const breakEnd = new Date(`2000-01-01T${shift.break_end_time}:00`);
-        breakMillis = breakEnd.getTime() - breakStart.getTime();
-        if (breakMillis < 0) { // 深夜休憩対応
-            breakMillis += 24 * 60 * 60 * 1000;
-        }
-    }
-
-    const netMillis = workMillis - breakMillis;
-    const hours = netMillis > 0 ? netMillis / (1000 * 60 * 60) : 0;
-
-    // 小数点第2位で丸める
-    return Math.round(hours * 100) / 100;
-};
-
 // 勤務時間から必要な休憩時間を計算
 export const calculateRequiredBreak = (startTime, endTime) => {
     const workHours = calculateHoursBetween(startTime, endTime);

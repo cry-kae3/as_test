@@ -10,7 +10,7 @@ const moment = require('moment-timezone');
 class ShiftGeneratorService {
     constructor() {
         this.claudeApiKey = process.env.CLAUDE_API_KEY;
-        this.claudeModel = 'claude-3-5-sonnet-20240620';
+        this.claudeModel = 'claude-sonnet-4-20250514';
         this.claudeApiUrl = 'https://api.anthropic.com/v1/messages';
     }
 
@@ -125,7 +125,6 @@ class ShiftGeneratorService {
 
         const settings = await SystemSetting.findOne({ where: { user_id: store.owner_id } });
         const closingDay = settings ? settings.closing_day : 25;
-        const autoSetBreakTime = settings?.additional_settings?.auto_set_break_time !== false;
 
         const period = this.getShiftPeriod(year, month, closingDay);
 
@@ -155,23 +154,30 @@ class ShiftGeneratorService {
         let attempts = 0;
         const maxAttempts = 3;
         let lastError = null;
-        let currentPrompt = this.buildOverworkPermissivePrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
+        let currentPrompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
 
         while (attempts < maxAttempts) {
             attempts++;
 
             try {
                 const response = await this.callClaudeApi(currentPrompt);
-                let generatedShiftData = this.parseClaudeResponse(response);
+
+                let generatedShiftData;
+                try {
+                    generatedShiftData = this.parseClaudeResponse(response);
+                } catch (parseError) {
+
+                    if (parseError.message.includes('Unexpected end of JSON input')) {
+                        if (attempts < maxAttempts) {
+                            currentPrompt = this.buildSimplePrompt(store, staffs, year, month, period);
+                            continue;
+                        }
+                    }
+                    throw parseError;
+                }
 
                 if (!generatedShiftData || !generatedShiftData.shifts || !Array.isArray(generatedShiftData.shifts)) {
                     throw new Error('生成されたシフトデータの構造が不正です');
-                }
-
-                generatedShiftData = this.adjustOvertimeHours(generatedShiftData, staffs);
-
-                if (autoSetBreakTime) {
-                    generatedShiftData = this.addBreaksToGeneratedShift(generatedShiftData);
                 }
 
                 const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, period);
@@ -180,6 +186,7 @@ class ShiftGeneratorService {
                     return this.saveShift(generatedShiftData, storeId, year, month);
                 } else {
                     lastError = new Error(`制約違反: ${validationResult.violations.slice(0, 3).join(', ')}`);
+
                     if (attempts < maxAttempts) {
                         currentPrompt = this.buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, validationResult.violations);
                         continue;
@@ -187,157 +194,18 @@ class ShiftGeneratorService {
                 }
             } catch (error) {
                 lastError = error;
-                if (error.message.includes('Unexpected end of JSON input') && attempts < maxAttempts) {
-                    currentPrompt = this.buildSimplePrompt(store, staffs, year, month, period);
-                    continue;
-                }
-                if (error.message.includes('API') && attempts < maxAttempts) {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                if (attempts < maxAttempts) {
+
+                    if (error.message.includes('API')) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
                     continue;
                 }
             }
         }
 
         throw lastError || new Error('制約を満たすシフトを生成できませんでした。スタッフの勤務条件を見直してください。');
-    }
-
-    addBreaksToGeneratedShift(generatedShiftData) {
-        generatedShiftData.shifts.forEach(dayShift => {
-            dayShift.assignments.forEach(assignment => {
-                const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
-                const workHours = workMinutes / 60;
-                let breakMinutes = 0;
-
-                if (workHours > 8) {
-                    breakMinutes = 60;
-                } else if (workHours > 6) {
-                    breakMinutes = 45;
-                }
-
-                if (breakMinutes > 0) {
-                    const shiftStart = moment(assignment.start_time, 'HH:mm');
-                    const shiftDuration = workMinutes;
-
-                    const breakStartTime = shiftStart.clone().add(Math.floor((shiftDuration - breakMinutes) / 2), 'minutes');
-
-                    assignment.break_start_time = breakStartTime.format('HH:mm');
-                    assignment.break_end_time = breakStartTime.clone().add(breakMinutes, 'minutes').format('HH:mm');
-                } else {
-                    assignment.break_start_time = null;
-                    assignment.break_end_time = null;
-                }
-            });
-        });
-        return generatedShiftData;
-    }
-
-    adjustOvertimeHours(generatedShiftData, staffs) {
-        const staffWorkDetails = {};
-        const dailyAssignments = {};
-
-        generatedShiftData.shifts.forEach(dayShift => {
-            dailyAssignments[dayShift.date] = dayShift.assignments.length;
-            dayShift.assignments.forEach(assignment => {
-                if (!staffWorkDetails[assignment.staff_id]) {
-                    const staffInfo = staffs.find(s => s.id === assignment.staff_id);
-                    staffWorkDetails[assignment.staff_id] = {
-                        totalMinutes: 0,
-                        shifts: [],
-                        maxHours: staffInfo ? staffInfo.max_hours_per_month || Infinity : Infinity,
-                    };
-                }
-                const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
-                staffWorkDetails[assignment.staff_id].totalMinutes += workMinutes;
-                staffWorkDetails[assignment.staff_id].shifts.push({ ...assignment, date: dayShift.date, workMinutes });
-            });
-        });
-
-        Object.keys(staffWorkDetails).forEach(staffId => {
-            const staffDetail = staffWorkDetails[staffId];
-            let overtimeMinutes = staffDetail.totalMinutes - (staffDetail.maxHours * 60);
-
-            if (overtimeMinutes > 0) {
-                staffDetail.shifts.sort((a, b) => {
-                    const staffCountA = dailyAssignments[a.date] || 0;
-                    const staffCountB = dailyAssignments[b.date] || 0;
-                    if (staffCountA !== staffCountB) {
-                        return staffCountB - staffCountA;
-                    }
-                    return a.workMinutes - b.workMinutes;
-                });
-
-                for (const shiftToRemove of staffDetail.shifts) {
-                    if (overtimeMinutes <= 0) break;
-
-                    const dayShift = generatedShiftData.shifts.find(ds => ds.date === shiftToRemove.date);
-                    if (dayShift) {
-                        const assignmentIndex = dayShift.assignments.findIndex(a =>
-                            a.staff_id == staffId &&
-                            a.start_time === shiftToRemove.start_time &&
-                            a.end_time === shiftToRemove.end_time
-                        );
-
-                        if (assignmentIndex !== -1) {
-                            dayShift.assignments.splice(assignmentIndex, 1);
-                            overtimeMinutes -= shiftToRemove.workMinutes;
-                            dailyAssignments[shiftToRemove.date]--;
-                        }
-                    }
-                }
-            }
-        });
-
-        return generatedShiftData;
-    }
-
-    buildOverworkPermissivePrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period) {
-        let prompt = `あなたはシフト管理システムです。以下の条件に従ってシフトを生成してください。
-
-## 期間情報
-- 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
-
-## スタッフ制約
-`;
-        staffs.forEach(staff => {
-            const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p => ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]) || [];
-            const dayOffDates = staff.dayOffRequests?.filter(req => req.status === 'approved' || req.status === 'pending').map(req => req.date) || [];
-
-            prompt += `
-【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
-- 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間 (絶対遵守)
-- 月間勤務時間目安: ${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}時間 (超過しても良いが、なるべく範囲内に)
-- 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'} (絶対遵守)
-- 休み希望日: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'} (絶対遵守)
-`;
-        });
-
-        prompt += `
-## 重要ルール
-1. **1日の勤務時間は、各スタッフの1日最大勤務時間を超えない範囲で、可能な限り長く割り当ててください。**
-2. 勤務不可曜日と休み希望日には、絶対にシフトを割り当てないでください。
-3. 休憩時間はこちらで設定するため、考慮する必要はありません。
-4. 月間勤務時間は目安です。多少超過しても構いませんが、できるだけ範囲内に収めてください。
-
-## 出力形式
-以下のJSON形式で正確に出力してください。余計な説明は不要です。
-
-\`\`\`json
-{
-  "shifts": [
-    {
-      "date": "YYYY-MM-DD",
-      "assignments": [
-        {
-          "staff_id": 1,
-          "start_time": "09:00", 
-          "end_time": "17:00"
-        }
-      ]
-    }
-  ]
-}
-\`\`\``;
-        return prompt;
     }
 
     buildSimplePrompt(store, staffs, year, month, period) {
@@ -798,8 +666,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                                 date: dayShift.date,
                                 start_time: assignment.start_time,
                                 end_time: assignment.end_time,
-                                break_start_time: assignment.break_start_time,
-                                break_end_time: assignment.break_end_time,
                             }, { transaction: t });
                             assignmentCount++;
                         }

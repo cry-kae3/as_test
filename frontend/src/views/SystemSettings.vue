@@ -63,17 +63,6 @@
                 最低勤務時間は必須です
               </small>
             </div>
-
-            <div class="field">
-              <label for="auto_set_break_time">AIシフト生成時の休憩自動設定</label>
-              <div class="flex align-items-center">
-                <InputSwitch id="auto_set_break_time" v-model="settings.additional_settings.auto_set_break_time" />
-                <span class="ml-2">{{ settings.additional_settings.auto_set_break_time ? '有効' : '無効' }}</span>
-              </div>
-              <small class="form-help">
-                有効にすると、AIがシフトを生成する際に日本の労働法に基づき自動で休憩時間を設定します。
-              </small>
-            </div>
           </div>
         </template>
       </Card>
@@ -105,15 +94,13 @@ import { ref, reactive, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import InputNumber from 'primevue/inputnumber';
 import ProgressSpinner from 'primevue/progressspinner';
-import InputSwitch from 'primevue/inputswitch';
 import api from '@/services/api';
 
 export default {
   name: 'SystemSettings',
   components: {
     InputNumber,
-    ProgressSpinner,
-    InputSwitch
+    ProgressSpinner
   },
   setup() {
     const toast = useToast();
@@ -126,9 +113,7 @@ export default {
     const settings = reactive({
       closing_day: null,
       min_daily_hours: null,
-      additional_settings: {
-        auto_set_break_time: true
-      }
+      additional_settings: {}
     });
 
     const fetchSettings = async () => {
@@ -140,12 +125,9 @@ export default {
         
         settings.closing_day = data.closing_day;
         settings.min_daily_hours = data.min_daily_hours;
-        settings.additional_settings = {
-          auto_set_break_time: true,
-          ...(data.additional_settings || {})
-        };
+        settings.additional_settings = data.additional_settings || {};
         
-        originalSettings.value = JSON.parse(JSON.stringify(settings));
+        originalSettings.value = { ...settings };
       } catch (error) {
         console.error('システム設定取得エラー:', error);
         toast.add({
@@ -192,7 +174,7 @@ export default {
           additional_settings: settings.additional_settings
         });
         
-        originalSettings.value = JSON.parse(JSON.stringify(settings));
+        originalSettings.value = { ...settings };
         submitted.value = false;
         
         toast.add({
@@ -215,10 +197,9 @@ export default {
     };
 
     const resetSettings = () => {
-      const original = JSON.parse(JSON.stringify(originalSettings.value));
-      settings.closing_day = original.closing_day;
-      settings.min_daily_hours = original.min_daily_hours;
-      settings.additional_settings = original.additional_settings;
+      settings.closing_day = originalSettings.value.closing_day;
+      settings.min_daily_hours = originalSettings.value.min_daily_hours;
+      settings.additional_settings = originalSettings.value.additional_settings;
       submitted.value = false;
       
       toast.add({
