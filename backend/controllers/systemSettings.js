@@ -18,11 +18,19 @@ const getSystemSettings = async (req, res) => {
                 closing_day: 25,
                 min_daily_hours: 4.0,
                 timezone: 'Asia/Tokyo',
-                additional_settings: {}
+                additional_settings: { auto_set_break_time: true }
             });
         }
 
-        res.status(200).json(settings);
+        const mergedSettings = {
+            ...settings.toJSON(),
+            additional_settings: {
+                auto_set_break_time: true,
+                ...(settings.additional_settings || {})
+            }
+        };
+
+        res.status(200).json(mergedSettings);
     } catch (error) {
         console.error('システム設定取得エラー:', error);
         res.status(500).json({ message: 'システム設定の取得中にエラーが発生しました' });
@@ -65,7 +73,7 @@ const updateSystemSettings = async (req, res) => {
                 closing_day: closing_day || 25,
                 min_daily_hours: min_daily_hours || 4.0,
                 timezone: 'Asia/Tokyo',
-                additional_settings: additional_settings || {}
+                additional_settings: additional_settings || { auto_set_break_time: true }
             });
         }
 
