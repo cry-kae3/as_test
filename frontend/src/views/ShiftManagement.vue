@@ -36,27 +36,6 @@
         />
       </div>
 
-      <div class="view-controls">
-        <div class="view-mode-tabs">
-          <button
-            class="view-tab"
-            :class="{ active: viewMode === 'calendar' }"
-            @click="setViewMode('calendar')"
-          >
-            <i class="pi pi-table"></i>
-            カレンダー
-          </button>
-          <button
-            class="view-tab"
-            :class="{ active: viewMode === 'gantt' }"
-            @click="setViewMode('gantt')"
-          >
-            <i class="pi pi-chart-bar"></i>
-            ガントチャート
-          </button>
-        </div>
-      </div>
-
       <div class="action-controls">
         <Button
           v-if="!hasCurrentShift"
@@ -142,7 +121,8 @@
         <span>編集モード - セルをクリックして編集</span>
       </div>
 
-      <div v-if="viewMode === 'calendar'" class="calendar-view">
+      <!-- カレンダー表示 -->
+      <div class="calendar-view">
         <div class="calendar-container">
           <div class="calendar-header">
             <div class="staff-column-header">
@@ -293,6 +273,14 @@
                   v-if="getShiftForStaff(day.date, staff.id)"
                   class="shift-time-card"
                 >
+                   <Button
+                      v-if="isEditMode"
+                      icon="pi pi-times"
+                      class="p-button-rounded p-button-danger p-button-text quick-delete-btn"
+                      @click.stop="confirmQuickDelete(getShiftForStaff(day.date, staff.id))"
+                      title="シフトを削除"
+                      size="small"
+                    />
                   <div class="shift-start">
                     {{
                       formatTime(
@@ -305,6 +293,12 @@
                     {{
                       formatTime(getShiftForStaff(day.date, staff.id).end_time)
                     }}
+                  </div>
+                   <div v-if="getShiftForStaff(day.date, staff.id).break_start_time" class="break-time-indicator">
+                    <i class="pi pi-coffee"></i>
+                    <span>
+                      {{ formatTime(getShiftForStaff(day.date, staff.id).break_start_time) }} - {{ formatTime(getShiftForStaff(day.date, staff.id).break_end_time) }}
+                    </span>
                   </div>
                   <div
                     v-if="hasShiftViolation(day.date, staff.id)"
@@ -352,178 +346,189 @@
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="gantt-info-panel">
-          <div class="date-info-header">
-            <div class="date-navigation-header">
-              <Button
-                icon="pi pi-chevron-left"
-                class="nav-button-small"
-                @click="previousDate"
-                :disabled="loading"
-              />
-              <h3>{{ formatDateForGantt(selectedDate) }}</h3>
-              <Button
-                icon="pi pi-chevron-right"
-                class="nav-button-small"
-                @click="nextDate"
-                :disabled="loading"
-              />
+      <!-- 日次情報パネル -->
+      <div v-if="selectedDate" class="daily-info-panel">
+        <div class="date-info-header">
+          <div class="date-navigation-header">
+            <Button
+              icon="pi pi-chevron-left"
+              class="nav-button-small"
+              @click="previousDate"
+              :disabled="loading"
+            />
+            <h3>{{ formatDateForGantt(selectedDate) }}</h3>
+            <Button
+              icon="pi pi-chevron-right"
+              class="nav-button-small"
+              @click="nextDate"
+              :disabled="loading"
+            />
+          </div>
+          <div v-if="hasDateWarnings(selectedDate)" class="date-warnings">
+            <div
+              v-for="warning in getDateWarnings(selectedDate)"
+              :key="warning.type"
+              class="warning-item"
+              :class="warning.type"
+            >
+              <i :class="warning.icon"></i>
+              <span>{{ warning.message }}</span>
             </div>
-            <div v-if="hasDateWarnings(selectedDate)" class="date-warnings">
+          </div>
+        </div>
+
+        <div class="requirements-section">
+          <h4 class="section-title">
+            <i class="pi pi-users"></i>
+            人員要件
+          </h4>
+          <div
+            v-if="getDailyRequirements(selectedDate).length > 0"
+            class="requirements-list"
+          >
+            <div
+              v-for="req in getDailyRequirements(selectedDate)"
+              :key="`req-${req.start_time}-${req.end_time}`"
+              class="requirement-item"
+              :class="{
+                shortage: hasStaffingShortage(selectedDate, req),
+              }"
+            >
+              <div class="time-range">
+                {{ formatTime(req.start_time) }} -
+                {{ formatTime(req.end_time) }}
+              </div>
+              <div class="staff-count">
+                <span class="assigned-count">{{
+                  getAssignedStaffCount(selectedDate, req)
+                }}</span>
+                <span class="separator">/</span>
+                <span class="required-count">{{
+                  req.required_staff_count
+                }}</span>
+                <span class="count-unit">名</span>
+              </div>
               <div
-                v-for="warning in getDateWarnings(selectedDate)"
-                :key="warning.type"
-                class="warning-item"
-                :class="warning.type"
+                v-if="hasStaffingShortage(selectedDate, req)"
+                class="shortage-icon"
               >
-                <i :class="warning.icon"></i>
-                <span>{{ warning.message }}</span>
+                <i class="pi pi-exclamation-triangle"></i>
               </div>
             </div>
           </div>
+          <div v-else class="no-requirements">
+            <i class="pi pi-info-circle"></i>
+            <span>設定なし</span>
+          </div>
+        </div>
 
-          <div class="requirements-section">
-            <h4 class="section-title">
-              <i class="pi pi-users"></i>
-              人員要件
-            </h4>
+        <div class="staff-summary-section">
+          <h4 class="section-title">
+            <i class="pi pi-clock"></i>
+            {{ formatDateForGantt(selectedDate) }}の勤務スタッフ
+          </h4>
+          <div class="staff-summary-grid">
             <div
-              v-if="getDailyRequirements(selectedDate).length > 0"
-              class="requirements-list"
+              v-for="staff in getDailyShiftStaff(selectedDate)"
+              :key="`summary-${staff.id}`"
+              class="staff-summary-card"
+              :class="{
+                'has-warnings': hasStaffWarningsAllStores(staff.id),
+                'hours-violation': isHoursOutOfRangeAllStores(staff.id),
+              }"
             >
-              <div
-                v-for="req in getDailyRequirements(selectedDate)"
-                :key="`req-${req.start_time}-${req.end_time}`"
-                class="requirement-item"
-                :class="{
-                  shortage: hasStaffingShortage(selectedDate, req),
-                }"
-              >
-                <div class="time-range">
-                  {{ formatTime(req.start_time) }} -
-                  {{ formatTime(req.end_time) }}
+              <div class="staff-header">
+                <div class="staff-avatar-tiny">
+                  {{ staff.first_name.charAt(0) }}
                 </div>
-                <div class="staff-count">
-                  <span class="assigned-count">{{
-                    getAssignedStaffCount(selectedDate, req)
-                  }}</span>
-                  <span class="separator">/</span>
-                  <span class="required-count">{{
-                    req.required_staff_count
-                  }}</span>
-                  <span class="count-unit">名</span>
+                <div class="staff-name-summary">
+                  {{ staff.last_name }} {{ staff.first_name }}
                 </div>
                 <div
-                  v-if="hasStaffingShortage(selectedDate, req)"
-                  class="shortage-icon"
+                  v-if="hasStaffWarningsAllStores(staff.id)"
+                  class="warning-indicator-small"
                 >
                   <i class="pi pi-exclamation-triangle"></i>
                 </div>
               </div>
-            </div>
-            <div v-else class="no-requirements">
-              <i class="pi pi-info-circle"></i>
-              <span>設定なし</span>
-            </div>
-          </div>
 
-          <div class="staff-summary-section">
-            <h4 class="section-title">
-              <i class="pi pi-user"></i>
-              スタッフ状況
-            </h4>
-            <div class="staff-summary-grid">
-              <div
-                v-for="staff in staffList"
-                :key="`summary-${staff.id}`"
-                class="staff-summary-card"
-                :class="{
-                  'has-warnings': hasStaffWarningsAllStores(staff.id),
-                  'hours-violation': isHoursOutOfRangeAllStores(staff.id),
-                }"
-              >
-                <div class="staff-header">
-                  <div class="staff-avatar-tiny">
-                    {{ staff.first_name.charAt(0) }}
-                  </div>
-                  <div class="staff-name-summary">
-                    {{ staff.last_name }} {{ staff.first_name }}
-                  </div>
-                  <div
-                    v-if="hasStaffWarningsAllStores(staff.id)"
-                    class="warning-indicator-small"
+              <div class="summary-stats">
+                <div class="stat-item">
+                  <span
+                    class="stat-value"
+                    :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
+                    >{{ formatHours(calculateTotalHours(staff.id)) }}</span
                   >
-                    <i class="pi pi-exclamation-triangle"></i>
-                  </div>
+                  <span
+                    v-if="hasTotalHoursFromOtherStores(staff.id)"
+                    class="total-hours-all-stores"
+                    :class="{
+                      'out-of-range': isHoursOutOfRangeAllStores(staff.id),
+                    }"
+                  >
+                    ({{
+                      formatHours(calculateTotalHoursAllStores(staff.id))
+                    }})
+                  </span>
+                  <span class="stat-range">
+                    / {{ formatHours(staff.min_hours_per_month || 0) }} -
+                    {{ formatHours(staff.max_hours_per_month || 0) }}
+                  </span>
                 </div>
 
-                <div class="summary-stats">
-                  <div class="stat-item">
-                    <span
-                      class="stat-value"
-                      :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
-                      >{{ formatHours(calculateTotalHours(staff.id)) }}</span
-                    >
-                    <span
-                      v-if="hasTotalHoursFromOtherStores(staff.id)"
-                      class="total-hours-all-stores"
-                      :class="{
-                        'out-of-range': isHoursOutOfRangeAllStores(staff.id),
-                      }"
-                    >
-                      ({{
-                        formatHours(calculateTotalHoursAllStores(staff.id))
-                      }})
-                    </span>
-                    <span class="stat-range">
-                      / {{ formatHours(staff.min_hours_per_month || 0) }} -
-                      {{ formatHours(staff.max_hours_per_month || 0) }}
-                    </span>
-                  </div>
-
-                  <div
-                    v-if="getShiftForStaff(selectedDate, staff.id)"
-                    class="today-shift"
-                  >
-                    <span class="today-hours">
-                      本日:
-                      {{
-                        formatHours(
-                          calculateDayHours(
-                            getShiftForStaff(selectedDate, staff.id)
-                          )
+                <div class="today-shift">
+                  <span class="today-hours">
+                    本日:
+                    {{
+                      formatHours(
+                        calculateDayHours(
+                          getShiftForStaff(selectedDate, staff.id)
                         )
-                      }}
-                    </span>
+                      )
+                    }}
+                  </span>
+                  <div
+                    v-if="hasShiftViolation(selectedDate, staff.id)"
+                    class="violations"
+                  >
                     <div
-                      v-if="hasShiftViolation(selectedDate, staff.id)"
-                      class="violations"
+                      v-for="violation in getShiftViolations(
+                        selectedDate,
+                        staff.id
+                      )"
+                      :key="violation.type"
+                      class="violation-badge"
+                      :title="violation.message"
                     >
-                      <div
-                        v-for="violation in getShiftViolations(
-                          selectedDate,
-                          staff.id
-                        )"
-                        :key="violation.type"
-                        class="violation-badge"
-                        :title="violation.message"
-                      >
-                        <i class="pi pi-exclamation-triangle"></i>
-                      </div>
+                      <i class="pi pi-exclamation-triangle"></i>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
+            <div v-if="getDailyShiftStaff(selectedDate).length === 0" class="no-shift-staff">
+              <i class="pi pi-info-circle"></i>
+              <span>シフトに入っているスタッフはいません</span>
+            </div>
           </div>
         </div>
       </div>
-      <div v-if="viewMode === 'gantt'" class="gantt-view">
-        <div v-if="selectedDate" class="gantt-container">
+
+      <!-- ガントチャート表示 -->
+      <div v-if="selectedDate" class="gantt-section">
+        <div class="gantt-section-header">
+          <h3>
+            <i class="pi pi-chart-bar"></i>
+            {{ formatDateForGantt(selectedDate) }}の時間別シフト
+          </h3>
+        </div>
+
+        <div class="gantt-container">
           <div class="gantt-header">
             <div class="gantt-staff-header">
-              <span>スタッフ</span>
+              <span>勤務スタッフ</span>
             </div>
             <div class="gantt-timeline-header" ref="ganttTimelineHeader">
               <div
@@ -668,6 +673,11 @@
                         openShiftEditor({ date: selectedDate }, staff)
                     "
                   >
+                     <div
+                        v-if="getShiftForStaff(selectedDate, staff.id).break_start_time"
+                        class="gantt-break-bar"
+                        :style="getGanttBreakBarStyle(getShiftForStaff(selectedDate, staff.id))"
+                      ></div>
                     <span class="shift-time-text">
                       {{
                         formatTime(
@@ -686,182 +696,6 @@
                       class="gantt-violation-icon"
                     >
                       <i class="pi pi-exclamation-triangle"></i>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="!selectedDate" class="gantt-no-date">
-          <div class="empty-icon">
-            <i class="pi pi-calendar"></i>
-          </div>
-          <h3>日付を選択してください</h3>
-          <p>ガントチャートを表示するには日付を選択してください</p>
-        </div>
-
-        <div class="gantt-info-panel">
-          <div v-if="selectedDate" class="date-info-header">
-            <div class="date-navigation-header">
-              <Button
-                icon="pi pi-chevron-left"
-                class="nav-button-small"
-                @click="previousDate"
-                :disabled="loading"
-              />
-              <h3>{{ formatDateForGantt(selectedDate) }}</h3>
-              <Button
-                icon="pi pi-chevron-right"
-                class="nav-button-small"
-                @click="nextDate"
-                :disabled="loading"
-              />
-            </div>
-            <div v-if="hasDateWarnings(selectedDate)" class="date-warnings">
-              <div
-                v-for="warning in getDateWarnings(selectedDate)"
-                :key="warning.type"
-                class="warning-item"
-                :class="warning.type"
-              >
-                <i :class="warning.icon"></i>
-                <span>{{ warning.message }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="selectedDate" class="requirements-section">
-            <h4 class="section-title">
-              <i class="pi pi-users"></i>
-              人員要件
-            </h4>
-            <div
-              v-if="getDailyRequirements(selectedDate).length > 0"
-              class="requirements-list"
-            >
-              <div
-                v-for="req in getDailyRequirements(selectedDate)"
-                :key="`req-${req.start_time}-${req.end_time}`"
-                class="requirement-item"
-                :class="{
-                  shortage: hasStaffingShortage(selectedDate, req),
-                }"
-              >
-                <div class="time-range">
-                  {{ formatTime(req.start_time) }} -
-                  {{ formatTime(req.end_time) }}
-                </div>
-                <div class="staff-count">
-                  <span class="assigned-count">{{
-                    getAssignedStaffCount(selectedDate, req)
-                  }}</span>
-                  <span class="separator">/</span>
-                  <span class="required-count">{{
-                    req.required_staff_count
-                  }}</span>
-                  <span class="count-unit">名</span>
-                </div>
-                <div
-                  v-if="hasStaffingShortage(selectedDate, req)"
-                  class="shortage-icon"
-                >
-                  <i class="pi pi-exclamation-triangle"></i>
-                </div>
-              </div>
-            </div>
-            <div v-else class="no-requirements">
-              <i class="pi pi-info-circle"></i>
-              <span>設定なし</span>
-            </div>
-          </div>
-
-          <div class="staff-summary-section">
-            <h4 class="section-title">
-              <i class="pi pi-user"></i>
-              スタッフ状況
-            </h4>
-            <div class="staff-summary-grid">
-              <div
-                v-for="staff in staffList"
-                :key="`gantt-summary-${staff.id}`"
-                class="staff-summary-card"
-                :class="{
-                  'has-warnings': hasStaffWarningsAllStores(staff.id),
-                  'hours-violation': isHoursOutOfRangeAllStores(staff.id),
-                }"
-              >
-                <div class="staff-header">
-                  <div class="staff-avatar-tiny">
-                    {{ staff.first_name.charAt(0) }}
-                  </div>
-                  <div class="staff-name-summary">
-                    {{ staff.last_name }} {{ staff.first_name }}
-                  </div>
-                  <div
-                    v-if="hasStaffWarningsAllStores(staff.id)"
-                    class="warning-indicator-small"
-                  >
-                    <i class="pi pi-exclamation-triangle"></i>
-                  </div>
-                </div>
-
-                <div class="summary-stats">
-                  <div class="stat-item">
-                    <span
-                      class="stat-value"
-                      :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
-                      >{{ formatHours(calculateTotalHours(staff.id)) }}</span
-                    >
-                    <span
-                      v-if="hasTotalHoursFromOtherStores(staff.id)"
-                      class="total-hours-all-stores"
-                      :class="{
-                        'out-of-range': isHoursOutOfRangeAllStores(staff.id),
-                      }"
-                    >
-                      ({{
-                        formatHours(calculateTotalHoursAllStores(staff.id))
-                      }})
-                    </span>
-                    <span class="stat-range">
-                      / {{ formatHours(staff.min_hours_per_month || 0) }} -
-                      {{ formatHours(staff.max_hours_per_month || 0) }}
-                    </span>
-                  </div>
-
-                  <div
-                    v-if="
-                      selectedDate && getShiftForStaff(selectedDate, staff.id)
-                    "
-                    class="today-shift"
-                  >
-                    <span class="today-hours">
-                      本日:
-                      {{
-                        formatHours(
-                          calculateDayHours(
-                            getShiftForStaff(selectedDate, staff.id)
-                          )
-                        )
-                      }}
-                    </span>
-                    <div
-                      v-if="hasShiftViolation(selectedDate, staff.id)"
-                      class="violations"
-                    >
-                      <div
-                        v-for="violation in getShiftViolations(
-                          selectedDate,
-                          staff.id
-                        )"
-                        :key="violation.type"
-                        class="violation-badge"
-                        :title="violation.message"
-                      >
-                        <i class="pi pi-exclamation-triangle"></i>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -888,7 +722,7 @@
 
         <div class="time-inputs-section">
           <div class="time-input-group">
-            <label class="form-label">開始時間</label>
+            <label class="form-label">勤務開始</label>
             <div class="time-selector">
               <Dropdown
                 v-model="shiftEditorDialog.startTimeHour"
@@ -897,6 +731,7 @@
                 optionValue="value"
                 placeholder="時"
                 class="time-dropdown"
+                @change="handleShiftTimeChange"
               />
               <span class="time-separator">:</span>
               <Dropdown
@@ -906,12 +741,13 @@
                 optionValue="value"
                 placeholder="分"
                 class="time-dropdown"
+                @change="handleShiftTimeChange"
               />
             </div>
           </div>
 
           <div class="time-input-group">
-            <label class="form-label">終了時間</label>
+            <label class="form-label">勤務終了</label>
             <div class="time-selector">
               <Dropdown
                 v-model="shiftEditorDialog.endTimeHour"
@@ -920,6 +756,7 @@
                 optionValue="value"
                 placeholder="時"
                 class="time-dropdown"
+                 @change="handleShiftTimeChange"
               />
               <span class="time-separator">:</span>
               <Dropdown
@@ -929,18 +766,68 @@
                 optionValue="value"
                 placeholder="分"
                 class="time-dropdown"
+                 @change="handleShiftTimeChange"
               />
             </div>
           </div>
-        </div>
-
-        <div class="form-group checkbox-group">
-          <Checkbox
-            v-model="shiftEditorDialog.isRestDay"
-            binary
-            class="form-checkbox"
-          />
-          <label class="checkbox-label">休日として設定</label>
+          
+          <Divider />
+          
+           <div class="form-group break-settings-group">
+            <div class="checkbox-group">
+              <Checkbox v-model="shiftEditorDialog.hasBreak" :binary="true" inputId="hasBreakCheck" />
+              <label for="hasBreakCheck" class="checkbox-label">休憩を設定する</label>
+            </div>
+            
+            <div class="break-time-inputs" :class="{ 'disabled': !shiftEditorDialog.hasBreak }">
+              <div class="time-selector">
+                <Dropdown
+                  v-model="shiftEditorDialog.breakStartTimeHour"
+                  :options="hourOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="休憩開始 時"
+                  class="time-dropdown"
+                  showClear
+                  :disabled="!shiftEditorDialog.hasBreak"
+                />
+                <span class="time-separator">:</span>
+                <Dropdown
+                  v-model="shiftEditorDialog.breakStartTimeMinute"
+                  :options="minuteOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="分"
+                  class="time-dropdown"
+                  showClear
+                  :disabled="!shiftEditorDialog.hasBreak"
+                />
+              </div>
+              <div class="time-selector mt-2">
+                <Dropdown
+                  v-model="shiftEditorDialog.breakEndTimeHour"
+                  :options="hourOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="休憩終了 時"
+                  class="time-dropdown"
+                  showClear
+                  :disabled="!shiftEditorDialog.hasBreak"
+                />
+                <span class="time-separator">:</span>
+                <Dropdown
+                  v-model="shiftEditorDialog.breakEndTimeMinute"
+                  :options="minuteOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="分"
+                  class="time-dropdown"
+                  showClear
+                  :disabled="!shiftEditorDialog.hasBreak"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         <div v-if="shiftEditorDialog.isPast" class="form-group">
@@ -1030,10 +917,11 @@ import Checkbox from "primevue/checkbox";
 import Textarea from "primevue/textarea";
 import SelectButton from "primevue/selectbutton";
 import Calendar from "primevue/calendar";
-import api from "@/services/api";
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import Dropdown from 'primevue/dropdown';
+import Divider from 'primevue/divider';
+import api from "@/services/api";
 
 export default {
   name: "ShiftManagement",
@@ -1050,6 +938,7 @@ export default {
     Dialog,
     Button,
     Dropdown,
+    Divider,
   },
   setup() {
     const store = useStore();
@@ -1059,12 +948,8 @@ export default {
     const loading = ref(false);
     const saving = ref(false);
     const isEditMode = ref(false);
-    const viewMode = ref("calendar");
     const selectionDialogVisible = ref(false);
     const selectedDate = ref(null);
-    const ganttSelectedDate = ref(null);
-    const ganttMinDate = ref(null);
-    const ganttMaxDate = ref(null);
     const currentYear = ref(new Date().getFullYear());
     const currentMonth = ref(new Date().getMonth() + 1);
     const selectedStore = ref(null);
@@ -1073,7 +958,7 @@ export default {
     const shifts = ref([]);
     const daysInMonth = ref([]);
     const currentShift = ref(null);
-    const systemSettings = ref({ closing_day: 25 });
+    const systemSettings = ref(null);
     const holidays = ref([]);
     const storeRequirements = ref([]);
     const currentStore = ref(null);
@@ -1111,13 +996,6 @@ export default {
       return hours;
     });
 
-    const dateOptions = computed(() => {
-      return daysInMonth.value.map((day) => ({
-        label: formatDateForGantt(day.date),
-        value: day.date,
-      }));
-    });
-
     const shiftEditorDialog = reactive({
       visible: false,
       title: "",
@@ -1127,6 +1005,11 @@ export default {
       startTimeMinute: "00",
       endTimeHour: "18",
       endTimeMinute: "00",
+      hasBreak: false,
+      breakStartTimeHour: "",
+      breakStartTimeMinute: "",
+      breakEndTimeHour: "",
+      breakEndTimeMinute: "",
       isRestDay: false,
       isPast: false,
       hasShift: false,
@@ -1136,6 +1019,18 @@ export default {
     const hasCurrentShift = computed(() => {
       return currentShift.value !== null;
     });
+
+    // 選択された日付にシフトに入っているスタッフのみを取得
+    const getDailyShiftStaff = (date) => {
+      if (!date || !staffList.value) return [];
+      
+      const dayShifts = shifts.value.find((shift) => shift.date === date);
+      if (!dayShifts || !dayShifts.assignments) return [];
+
+      const shiftStaffIds = dayShifts.assignments.map(assignment => assignment.staff_id);
+      
+      return staffList.value.filter(staff => shiftStaffIds.includes(staff.id));
+    };
 
     const isStoreClosedOnDate = (date) => {
       if (!date) {
@@ -1408,28 +1303,6 @@ export default {
       return warnings;
     };
 
-    const updateGanttDateRange = () => {
-      if (daysInMonth.value.length > 0) {
-        ganttMinDate.value = new Date(daysInMonth.value[0].date);
-        ganttMaxDate.value = new Date(
-          daysInMonth.value[daysInMonth.value.length - 1].date
-        );
-      }
-    };
-
-    const onGanttDateSelected = (date) => {
-      if (date) {
-        const dateStr = `${date.getFullYear()}-${(date.getMonth() + 1)
-          .toString()
-          .padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`;
-
-        const validDate = daysInMonth.value.find((day) => day.date === dateStr);
-        if (validDate) {
-          selectedDate.value = dateStr;
-        }
-      }
-    };
-
     const previousDate = () => {
       if (!selectedDate.value || daysInMonth.value.length === 0) return;
 
@@ -1438,7 +1311,6 @@ export default {
       );
       if (currentIndex > 0) {
         selectedDate.value = daysInMonth.value[currentIndex - 1].date;
-        ganttSelectedDate.value = new Date(selectedDate.value);
       }
     };
 
@@ -1450,7 +1322,6 @@ export default {
       );
       if (currentIndex < daysInMonth.value.length - 1) {
         selectedDate.value = daysInMonth.value[currentIndex + 1].date;
-        ganttSelectedDate.value = new Date(selectedDate.value);
       }
     };
 
@@ -1511,6 +1382,74 @@ export default {
       } else {
         return `${displayHours}時間${displayMinutes}分`;
       }
+    };
+
+    const handleShiftTimeChange = () => {
+      // 休憩時間の自動クリア処理（必要に応じて）
+      if (!shiftEditorDialog.hasBreak) {
+        shiftEditorDialog.breakStartTimeHour = "";
+        shiftEditorDialog.breakStartTimeMinute = "";
+        shiftEditorDialog.breakEndTimeHour = "";
+        shiftEditorDialog.breakEndTimeMinute = "";
+      }
+    };
+
+    const confirmQuickDelete = (shift) => {
+      if (!shift) return;
+      
+      confirm.require({
+        message: 'このシフトを削除しますか？',
+        header: 'シフト削除の確認',
+        icon: 'pi pi-exclamation-triangle',
+        acceptClass: 'p-button-danger',
+        acceptLabel: '削除',
+        rejectLabel: 'キャンセル',
+        accept: async () => {
+          try {
+            await store.dispatch("shift/deleteShiftAssignment", {
+              year: currentYear.value,
+              month: currentMonth.value,
+              assignmentId: shift.id,
+            });
+
+            await loadShiftData();
+
+            toast.add({
+              severity: "success",
+              summary: "削除完了",
+              detail: "シフトを削除しました",
+              life: 3000,
+            });
+          } catch (error) {
+            toast.add({
+              severity: "error",
+              summary: "エラー",
+              detail: "シフトの削除に失敗しました",
+              life: 3000,
+            });
+          }
+        },
+      });
+    };
+
+    const getGanttBreakBarStyle = (shift) => {
+      if (!shift || !shift.break_start_time || !shift.break_end_time) {
+        return { display: 'none' };
+      }
+
+      const breakStartFloat = parseTimeToFloat(shift.break_start_time);
+      const breakEndFloat = parseTimeToFloat(shift.break_end_time);
+      const shiftStartFloat = parseTimeToFloat(shift.start_time);
+
+      const hourWidth = 60;
+      const breakStartOffset = (breakStartFloat - shiftStartFloat) * hourWidth;
+      const breakWidth = (breakEndFloat - breakStartFloat) * hourWidth;
+
+      return {
+        left: `${breakStartOffset}px`,
+        width: `${breakWidth}px`,
+        display: 'block',
+      };
     };
 
     const canStaffWorkOnDate = (staff, date) => {
@@ -1953,14 +1892,8 @@ export default {
       return warnings;
     };
 
-    const setViewMode = (mode) => {
-      viewMode.value = mode;
-    };
-
     const selectDate = (date) => {
       selectedDate.value = date;
-      ganttSelectedDate.value = new Date(date);
-      viewMode.value = "gantt";
       nextTick(() => {
         if (ganttBody.value) {
           ganttBody.value.scrollLeft = 0;
@@ -2167,6 +2100,23 @@ export default {
         shiftEditorDialog.endTimeMinute = endTime.minute;
         shiftEditorDialog.isRestDay = shift.is_day_off;
         shiftEditorDialog.hasShift = true;
+
+        // 休憩時間の処理
+        if (shift.break_start_time && shift.break_end_time) {
+          shiftEditorDialog.hasBreak = true;
+          const breakStart = parseTimeToComponents(shift.break_start_time);
+          const breakEnd = parseTimeToComponents(shift.break_end_time);
+          shiftEditorDialog.breakStartTimeHour = breakStart.hour;
+          shiftEditorDialog.breakStartTimeMinute = breakStart.minute;
+          shiftEditorDialog.breakEndTimeHour = breakEnd.hour;
+          shiftEditorDialog.breakEndTimeMinute = breakEnd.minute;
+        } else {
+          shiftEditorDialog.hasBreak = false;
+          shiftEditorDialog.breakStartTimeHour = "";
+          shiftEditorDialog.breakStartTimeMinute = "";
+          shiftEditorDialog.breakEndTimeHour = "";
+          shiftEditorDialog.breakEndTimeMinute = "";
+        }
       } else {
         shiftEditorDialog.startTimeHour = "09";
         shiftEditorDialog.startTimeMinute = "00";
@@ -2174,6 +2124,11 @@ export default {
         shiftEditorDialog.endTimeMinute = "00";
         shiftEditorDialog.isRestDay = false;
         shiftEditorDialog.hasShift = false;
+        shiftEditorDialog.hasBreak = false;
+        shiftEditorDialog.breakStartTimeHour = "";
+        shiftEditorDialog.breakStartTimeMinute = "";
+        shiftEditorDialog.breakEndTimeHour = "";
+        shiftEditorDialog.breakEndTimeMinute = "";
       }
 
       shiftEditorDialog.visible = true;
@@ -2236,8 +2191,6 @@ export default {
         }
 
         generateDaysInMonth();
-
-        updateGanttDateRange();
       } catch (error) {
         toast.add({
           severity: "error",
@@ -2300,6 +2253,57 @@ export default {
       daysInMonth.value = days;
     };
 
+    const setDefaultSelectedDate = () => {
+      const today = new Date();
+      const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+
+      const todayExists = daysInMonth.value.some(
+        (day) => day.date === todayString
+      );
+
+      if (todayExists) {
+        selectedDate.value = todayString;
+      } else {
+        const firstDayOfMonthString = `${currentYear.value}-${String(
+          currentMonth.value
+        ).padStart(2, "0")}-01`;
+        const firstDayOfMonthExists = daysInMonth.value.some(
+          (day) => day.date === firstDayOfMonthString
+        );
+
+        if (firstDayOfMonthExists) {
+          selectedDate.value = firstDayOfMonthString;
+        } else if (daysInMonth.value.length > 0) {
+          selectedDate.value = daysInMonth.value[0].date;
+        } else {
+          selectedDate.value = null;
+        }
+      }
+    };
+
+    const setDefaultMonthView = () => {
+      if (!systemSettings.value) return;
+
+      const today = new Date();
+      const closingDay = systemSettings.value.closing_day || 25;
+      let year = today.getFullYear();
+      let month = today.getMonth() + 1;
+
+      if (today.getDate() > closingDay) {
+        if (month === 12) {
+          month = 1;
+          year += 1;
+        } else {
+          month += 1;
+        }
+      }
+
+      currentYear.value = year;
+      currentMonth.value = month;
+    };
+
     const previousMonth = async () => {
       if (currentMonth.value === 1) {
         currentYear.value--;
@@ -2307,10 +2311,9 @@ export default {
       } else {
         currentMonth.value--;
       }
-      selectedDate.value = null;
-      ganttSelectedDate.value = null;
       await fetchHolidays(currentYear.value);
       await loadShiftData();
+      setDefaultSelectedDate();
     };
 
     const nextMonth = async () => {
@@ -2320,10 +2323,9 @@ export default {
       } else {
         currentMonth.value++;
       }
-      selectedDate.value = null;
-      ganttSelectedDate.value = null;
       await fetchHolidays(currentYear.value);
       await loadShiftData();
+      setDefaultSelectedDate();
     };
 
     const fetchStoreDetails = async (storeId) => {
@@ -2362,11 +2364,9 @@ export default {
     };
 
     const changeStore = async () => {
-      selectedDate.value = null;
-      ganttSelectedDate.value = null;
-
       if (selectedStore.value) {
         await loadShiftData();
+        setDefaultSelectedDate();
       }
     };
 
@@ -2905,6 +2905,28 @@ export default {
           notes: null,
         };
 
+        // 休憩時間の処理
+        if (shiftEditorDialog.hasBreak && 
+            shiftEditorDialog.breakStartTimeHour && 
+            shiftEditorDialog.breakStartTimeMinute &&
+            shiftEditorDialog.breakEndTimeHour && 
+            shiftEditorDialog.breakEndTimeMinute) {
+          const breakStartTime = combineTimeComponents(
+            shiftEditorDialog.breakStartTimeHour,
+            shiftEditorDialog.breakStartTimeMinute
+          );
+          const breakEndTime = combineTimeComponents(
+            shiftEditorDialog.breakEndTimeHour,
+            shiftEditorDialog.breakEndTimeMinute
+          );
+          
+          // 休憩時間の妥当性チェック
+          if (breakStartTime >= startTime && breakEndTime <= endTime && breakStartTime < breakEndTime) {
+            shiftData.break_start_time = breakStartTime;
+            shiftData.break_end_time = breakEndTime;
+          }
+        }
+
         if (shiftEditorDialog.isPast) {
           shiftData.change_reason = shiftEditorDialog.changeReason;
         }
@@ -3060,7 +3082,6 @@ export default {
             currentShift.value = null;
             shifts.value = [];
             selectedDate.value = null;
-            ganttSelectedDate.value = null;
             isEditMode.value = false;
 
             toast.add({
@@ -3083,14 +3104,17 @@ export default {
       });
     };
 
-    watch([currentYear, currentMonth], () => {
-      loadShiftData();
+    watch([currentYear, currentMonth], async () => {
+      await loadShiftData();
+      setDefaultSelectedDate();
     });
 
     onMounted(async () => {
       try {
         generateTimeOptions();
         await fetchSystemSettings();
+        setDefaultMonthView();
+
         await fetchHolidays(currentYear.value);
 
         const storeData = await store.dispatch("store/fetchStores");
@@ -3100,22 +3124,7 @@ export default {
           selectedStore.value = storeData[0];
           await fetchStoreDetails(selectedStore.value.id);
           await loadShiftData();
-
-          const today = new Date();
-          const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
-            .toString()
-            .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
-
-          const todayExists = daysInMonth.value.some(
-            (day) => day.date === todayString
-          );
-          if (todayExists) {
-            selectedDate.value = todayString;
-            ganttSelectedDate.value = new Date(todayString);
-          } else if (daysInMonth.value.length > 0) {
-            selectedDate.value = daysInMonth.value[0].date;
-            ganttSelectedDate.value = new Date(selectedDate.value);
-          }
+          setDefaultSelectedDate();
         }
       } catch (error) {
         toast.add({
@@ -3132,15 +3141,8 @@ export default {
       loading,
       saving,
       isEditMode,
-      viewMode,
       selectionDialogVisible,
       selectedDate,
-      ganttSelectedDate,
-      onGanttDateSelected,
-      previousDate,
-      nextDate,
-      ganttMinDate,
-      ganttMaxDate,
       timelineHours,
       hourOptions,
       minuteOptions,
@@ -3154,7 +3156,6 @@ export default {
       currentShift,
       systemSettings,
       shiftEditorDialog,
-      dateOptions,
       ganttContainer,
       ganttTimelineHeader,
       ganttBody,
@@ -3164,6 +3165,7 @@ export default {
       storeClosedDays,
       allStoreShifts,
       hasCurrentShift,
+      getDailyShiftStaff,
       isStoreClosedOnDate,
       isHoursOutOfRange,
       isHoursOutOfRangeAllStores,
@@ -3173,7 +3175,6 @@ export default {
       hasStaffWarningsAllStores,
       getStaffWarnings,
       getStaffWarningsAllStores,
-      setViewMode,
       selectDate,
       syncGanttScroll,
       formatDateForGantt,
@@ -3189,6 +3190,8 @@ export default {
       closeShiftEditor,
       previousMonth,
       nextMonth,
+      previousDate,
+      nextDate,
       changeStore,
       createShift,
       selectAIGeneration,
@@ -3219,12 +3222,37 @@ export default {
       getWorkUnavailabilityReason,
       getGanttAvailabilityStyle,
       getGanttAvailabilityTooltip,
+      handleShiftTimeChange,
+      confirmQuickDelete,
+      getGanttBreakBarStyle,
     };
   },
 };
 </script>
 
 <style scoped lang="scss">
+.shift-cell.can-work {
+  background-color: #f0fdf4; /* Light green background */
+  position: relative;
+}
+
+/* Add a pseudo-element for the dashed border to avoid interfering with existing borders */
+.shift-cell.can-work::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  border: 2px dashed #10b981;
+  border-radius: 4px;
+  pointer-events: none; /* Make sure the cell is still clickable */
+}
+
+.shift-cell.can-work:hover {
+  background-color: #dcfce7;
+}
+
 :deep(.p-confirm-dialog-message) {
   white-space: pre-line;
 }
@@ -3277,18 +3305,29 @@ export default {
   }
 }
 
-.staff-summary-grid {
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  overflow-y: auto;
-}
-
 .shift-management {
   min-height: 100vh;
   background: #f5f7fa;
   padding: 1.5rem;
+  max-width: 100%;
+  margin: 0 auto;
+  min-width: 768px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1536px) {
+  .shift-management {
+    padding: 2rem 3rem;
+    max-width: 1400px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .shift-management {
+    padding: 2rem 4rem;
+    max-width: 1600px;
+  }
 }
 
 .header-section {
@@ -3313,6 +3352,21 @@ export default {
   justify-content: space-between;
   gap: 1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  max-width: 100%;
+}
+
+@media (min-width: 1536px) {
+  .control-panel {
+    padding: 2rem;
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 1920px) {
+  .control-panel {
+    padding: 2.5rem;
+    gap: 2rem;
+  }
 }
 
 .period-controls {
@@ -3385,69 +3439,6 @@ export default {
   min-width: 220px;
 }
 
-.view-controls {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.view-mode-tabs {
-  display: flex;
-  background: #f0f0f0;
-  border-radius: 8px;
-  padding: 0.25rem;
-}
-
-.view-tab {
-  padding: 0.5rem 1rem;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  font-weight: 500;
-  font-size: 0.875rem;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.view-tab:hover {
-  color: #333;
-}
-
-.view-tab.active {
-  background: white;
-  color: #3b82f6;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.date-selector {
-  min-width: 200px;
-}
-
-.gantt-date-navigator {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #f8f9fa;
-  padding: 0.5rem;
-  border-radius: 8px;
-}
-
-.selected-date-display {
-  min-width: 120px;
-  text-align: center;
-  font-weight: 600;
-  color: #2c3e50;
-  font-size: 0.875rem;
-}
-
-.date-picker {
-  min-width: 120px;
-}
-
 .action-controls {
   display: flex;
   gap: 0.75rem;
@@ -3494,7 +3485,8 @@ export default {
 }
 
 .regenerate-button,
-.print-button {
+.print-button,
+.delete-button {
   background: white;
   color: #666;
   border: 1px solid #e0e0e0;
@@ -3506,9 +3498,19 @@ export default {
   border-color: #ccc;
 }
 
+.delete-button {
+  background: #ef4444;
+  color: white;
+  border: 1px solid #ef4444;
+}
+
+.delete-button:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
 .loading-state,
-.empty-state,
-.gantt-no-date {
+.empty-state {
   background: white;
   border-radius: 12px;
   padding: 4rem 2rem;
@@ -3541,16 +3543,14 @@ export default {
   color: #3b82f6;
 }
 
-.empty-state h3,
-.gantt-no-date h3 {
+.empty-state h3 {
   font-size: 1.5rem;
   font-weight: 600;
   color: #2c3e50;
   margin-bottom: 0.5rem;
 }
 
-.empty-state p,
-.gantt-no-date p {
+.empty-state p {
   color: #666;
   margin-bottom: 2rem;
 }
@@ -3575,7 +3575,8 @@ export default {
 
 .calendar-view {
   display: flex;
-  height: calc(100vh - 300px);
+  height: auto;
+  min-height: 50vh;
 }
 
 .calendar-container {
@@ -3870,29 +3871,10 @@ export default {
   color: #94a3b8;
 }
 
-.staff-warnings {
-  display: flex;
-  gap: 0.25rem;
-  margin-top: 0.25rem;
-}
-
 .warning-indicator-staff {
   color: #f59e0b;
   font-size: 0.8rem;
   cursor: help;
-}
-
-.warning-badge {
-  font-size: 0.7rem;
-  padding: 0.125rem 0.375rem;
-  border-radius: 4px;
-  background: #fbbf24;
-  color: #78350f;
-  font-weight: 600;
-  cursor: help;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
 }
 
 .shift-cell {
@@ -3971,6 +3953,104 @@ export default {
 .shift-time-card:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.quick-delete-btn {
+  position: absolute !important;
+  top: -8px;
+  right: -8px;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: #ef4444 !important;
+  border: 2px solid white !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease-in-out !important;
+  color: white !important;
+}
+
+.quick-delete-btn:hover {
+  background: #dc2626 !important;
+  transform: scale(1.1) !important;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+.shift-time-card:hover .quick-delete-btn {
+  opacity: 1;
+  visibility: visible;
+}
+
+.quick-delete-btn .pi {
+  font-size: 10px !important;
+}
+
+.break-time-indicator {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.break-time-indicator .pi {
+  font-size: 0.6rem;
+}
+
+.gantt-break-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8px;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.8),
+    rgba(255, 255, 255, 0.8) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  z-index: 5;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.break-settings-group {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.break-time-inputs {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: opacity 0.2s;
+}
+
+.break-time-inputs.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
 }
 
 .shift-start,
@@ -4073,15 +4153,18 @@ export default {
   font-size: 1.2rem;
 }
 
-.gantt-info-panel {
+/* 日次情報パネル */
+.daily-info-panel {
   width: 320px;
   background: #f8f9fa;
   border-left: 2px solid #e5e7eb;
   padding: 1rem;
-  overflow-y: auto;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  flex-shrink: 0;
+  height: auto;
 }
 
 .date-info-header {
@@ -4138,6 +4221,8 @@ export default {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
 }
 
 .section-title {
@@ -4232,7 +4317,6 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  overflow-y: auto;
 }
 
 .staff-summary-card {
@@ -4347,20 +4431,54 @@ export default {
   gap: 0.25rem;
 }
 
-.gantt-view {
-  height: calc(100vh - 300px);
+.no-shift-staff {
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* ガントチャートセクション */
+.gantt-section {
+  margin-top: 2rem;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.gantt-section-header {
+  background: #f8f9fa;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.gantt-section-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gantt-section-header i {
+  color: #3b82f6;
 }
 
 .gantt-container {
-  flex: 1;
   display: flex;
   flex-direction: column;
   background: white;
-  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  min-height: 300px;
+  flex: 1;
 }
 
 .gantt-header {
@@ -4622,6 +4740,27 @@ export default {
   pointer-events: none;
 }
 
+.gantt-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  min-height: 200px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin: 1rem;
+}
+
+.empty-gantt-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* ダイアログとフォーム */
 .shift-editor-dialog .p-dialog-content {
   padding: 1.5rem;
 }
@@ -4685,12 +4824,6 @@ export default {
   font-size: 1.25rem;
   font-weight: 600;
   color: #64748b;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
 .form-textarea {
@@ -4782,136 +4915,107 @@ export default {
   border-color: #059669;
 }
 
-:deep(.p-confirm-dialog-message) {
-  white-space: pre-line;
-}
-
-@media (max-width: 1280px) {
-  .calendar-view,
-  .gantt-view {
+/* レスポンシブ対応 */
+@media (max-width: 1200px) {
+  .gantt-area {
     flex-direction: column;
   }
 
-  .gantt-info-panel {
+  .daily-info-panel {
     width: 100%;
+    min-width: auto;
+    border-right: none;
+    border-bottom: 2px solid #e5e7eb;
     flex-direction: row;
-    border-left: none;
-    border-top: 2px solid #e5e7eb;
-    overflow-x: auto;
-    padding: 1rem;
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+
+  .date-info-header {
+    flex: 0 0 280px;
   }
 
   .requirements-section,
   .staff-summary-section {
-    min-width: 300px;
+    flex: 1;
   }
 }
 
 @media (max-width: 768px) {
   .shift-management {
     padding: 1rem;
+    min-width: 768px;
+    margin-left: 0;
+    margin-right: 0;
+    width: 100vw;
+    box-sizing: border-box;
   }
 
   .control-panel {
     flex-direction: column;
     align-items: stretch;
-    gap: 1.5rem;
+    gap: 1rem;
   }
 
   .period-controls,
-  .view-controls,
   .action-controls {
     width: 100%;
     justify-content: center;
-  }
-
-  .view-controls {
-    flex-direction: column;
-  }
-
-  .date-selector {
-    width: 100%;
-  }
-
-  .gantt-date-navigator {
-    justify-content: center;
-  }
-
-  .action-controls {
     flex-wrap: wrap;
+  }
+
+  .action-controls {
+    gap: 0.5rem;
   }
 
   .action-button {
     flex: 1;
-    min-width: 120px;
+    min-width: 140px;
+  }
+
+  .calendar-container {
+    min-height: 350px;
+    max-height: 55vh;
   }
 
   .staff-column-header,
   .staff-info,
   .gantt-staff-header,
   .gantt-staff-info {
-    min-width: 160px;
-    width: 160px;
+    min-width: 200px;
+    width: 200px;
   }
 
   .date-cell-wrapper,
   .shift-cell {
-    min-width: 60px;
-    width: 60px;
+    min-width: 70px;
+    width: 70px;
   }
 
-  .gantt-info-panel {
-    flex-direction: column;
-    max-height: 50vh;
-  }
-}
-
-@media (max-width: 480px) {
-  .page-title {
-    font-size: 1.5rem;
+  .daily-info-panel {
+    flex-direction: column !important;
+    padding: 1rem;
+    gap: 1rem;
   }
 
-  .period-display {
-    min-width: 80px;
+  .date-info-header {
+    flex: none !important;
+    min-width: auto;
   }
 
-  .month {
-    font-size: 1rem;
+  .requirements-section,
+  .staff-summary-section {
+    max-height: none;
+    min-width: auto;
   }
 
-  .store-selector {
-    min-width: 100%;
+  .requirements-list,
+  .staff-summary-grid {
+    max-height: none;
   }
 
-  .action-button {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .staff-avatar {
-    width: 32px;
-    height: 32px;
-    font-size: 0.8rem;
-  }
-
-  .shift-time-card {
-    min-width: 50px;
-    font-size: 0.65rem;
-    padding: 0.375rem 0.25rem;
-  }
-
-  .time-selector {
-    flex-direction: column;
-    max-width: 100%;
-  }
-
-  .time-dropdown {
-    width: 100%;
-  }
-
-  .gantt-date-navigator {
-    flex-wrap: wrap;
-    gap: 0.25rem;
+  .gantt-container {
+    min-height: 250px;
   }
 }
 </style>
