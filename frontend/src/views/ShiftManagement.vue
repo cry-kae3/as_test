@@ -1,4 +1,20 @@
-<template>
+.date-warnings-section .section-title {
+  padding: 0;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.date-warnings-section .section-title i {
+  color: #f59e0b;
+  font-size: 1rem;
+}<template>
   <div class="shift-management">
     <div class="header-section">
       <h1 class="page-title">シフト管理</h1>
@@ -371,6 +387,9 @@
               :disabled="loading"
             />
             <div class="gantt-date-selector">
+              <div class="selected-date-display">
+                {{ formatSelectedDateDisplay(selectedDate) }}
+              </div>
               <Calendar
                 v-model="selectedDateCalendar"
                 dateFormat="mm/dd"
@@ -575,35 +594,12 @@
 
       <!-- 日次情報パネル -->
       <div v-if="selectedDate" class="daily-info-panel">
-        <div class="date-info-header">
-          <div class="date-navigation-header">
-            <Button
-              icon="pi pi-chevron-left"
-              class="nav-button-small"
-              @click="previousDate"
-              :disabled="loading"
-            />
-            <div class="date-selector-wrapper">
-              <Calendar
-                v-model="selectedDateCalendar"
-                dateFormat="mm/dd"
-                :showIcon="true"
-                iconDisplay="input"
-                class="date-input"
-                @date-select="onDateSelect"
-                :minDate="minSelectableDate"
-                :maxDate="maxSelectableDate"
-                :manualInput="false"
-              />
-            </div>
-            <Button
-              icon="pi pi-chevron-right"
-              class="nav-button-small"
-              @click="nextDate"
-              :disabled="loading"
-            />
-          </div>
-          <div v-if="hasDateWarnings(selectedDate)" class="date-warnings">
+        <div v-if="hasDateWarnings(selectedDate)" class="date-warnings-section">
+          <h4 class="section-title">
+            <i class="pi pi-exclamation-triangle"></i>
+            警告・注意事項
+          </h4>
+          <div class="date-warnings">
             <div
               v-for="warning in getDateWarnings(selectedDate)"
               :key="warning.type"
@@ -950,9 +946,7 @@
   </div>
 </template>
 
-
 <script>
-// 既存のコードと同じ
 import { ref, reactive, computed, onMounted, watch, nextTick } from "vue";
 import { useStore } from "vuex";
 import { useToast } from "primevue/usetoast";
@@ -994,6 +988,7 @@ export default {
     const toast = useToast();
     const confirm = useConfirm();
 
+    // リアクティブな状態
     const loading = ref(false);
     const saving = ref(false);
     const isEditMode = ref(false);
@@ -1013,20 +1008,23 @@ export default {
     const currentStore = ref(null);
     const storeBusinessHours = ref([]);
     const storeClosedDays = ref([]);
-
     const allStoreShifts = ref({});
 
+    // DOM参照
     const ganttContainer = ref(null);
     const ganttTimelineHeader = ref(null);
     const ganttBody = ref(null);
 
+    // 時間オプション
     const hourOptions = ref([]);
     const minuteOptions = ref([]);
 
+    // カレンダー関連
     const selectedDateCalendar = ref(null);
     const minSelectableDate = ref(null);
     const maxSelectableDate = ref(null);
 
+    // 時間オプション生成
     const generateTimeOptions = () => {
       hourOptions.value = Array.from({ length: 24 }, (_, i) => ({
         label: i.toString().padStart(2, "0"),
@@ -1041,6 +1039,7 @@ export default {
       ];
     };
 
+    // タイムライン時間
     const timelineHours = computed(() => {
       const hours = [];
       for (let hour = 0; hour <= 23; hour++) {
@@ -1049,6 +1048,7 @@ export default {
       return hours;
     });
 
+    // シフトエディタダイアログ
     const shiftEditorDialog = reactive({
       visible: false,
       title: "",
@@ -1069,12 +1069,12 @@ export default {
       changeReason: "",
     });
 
+    // 現在のシフトがあるかどうか
     const hasCurrentShift = computed(() => {
       return currentShift.value !== null;
     });
 
-    // 既存のコード（省略）
-
+    // 日次シフトスタッフ取得
     const getDailyShiftStaff = (date) => {
       if (!date || !staffList.value) return [];
       
@@ -1086,6 +1086,7 @@ export default {
       return staffList.value.filter(staff => shiftStaffIds.includes(staff.id));
     };
 
+    // 店舗が特定日に閉店かどうか
     const isStoreClosedOnDate = (date) => {
       if (!date) {
         return false;
@@ -1112,6 +1113,7 @@ export default {
       return result;
     };
 
+    // 全店舗のシフトデータ取得
     const fetchAllStoreShifts = async () => {
       if (
         !staffList.value ||
@@ -1172,6 +1174,7 @@ export default {
       }
     };
 
+    // 当店舗の総勤務時間計算
     const calculateTotalHours = (staffId) => {
       let totalMinutes = 0;
 
@@ -1202,9 +1205,11 @@ export default {
       return Math.round((totalMinutes / 60) * 10) / 10;
     };
 
+    // 全店舗の総勤務時間計算
     const calculateTotalHoursAllStores = (staffId) => {
       let totalMinutes = 0;
 
+      // 現在の店舗の勤務時間を計算
       shifts.value.forEach((dayShift) => {
         const assignment = dayShift.assignments.find(
           (a) => a.staff_id === staffId
@@ -1239,6 +1244,7 @@ export default {
         staffStoreIds = staff.stores.map((s) => s.id);
       }
 
+      // 他店舗の勤務時間を加算
       Object.entries(allStoreShifts.value).forEach(([storeId, storeShifts]) => {
         const storeIdNum = parseInt(storeId);
         if (
@@ -1282,13 +1288,14 @@ export default {
       return Math.round((totalMinutes / 60) * 10) / 10;
     };
 
-    // 既存のコード（以降のすべての関数も省略）
+    // 他店舗での勤務があるかチェック
     const hasTotalHoursFromOtherStores = (staffId) => {
       const currentStoreHours = calculateTotalHours(staffId);
       const allStoreHours = calculateTotalHoursAllStores(staffId);
       return allStoreHours > currentStoreHours;
     };
 
+    // 当店舗の勤務時間が範囲外かチェック
     const isHoursOutOfRange = (staffId) => {
       const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
@@ -1302,6 +1309,7 @@ export default {
       return totalHours < minHours || totalHours > maxHours;
     };
 
+    // 全店舗の勤務時間が範囲外かチェック
     const isHoursOutOfRangeAllStores = (staffId) => {
       const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
@@ -1315,6 +1323,7 @@ export default {
       return totalHours < minHours || totalHours > maxHours;
     };
 
+    // スタッフ警告（当店舗のみ）
     const hasStaffWarnings = (staffId) => {
       const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
@@ -1326,6 +1335,7 @@ export default {
       return totalHours > maxMonthHours || totalHours < minMonthHours;
     };
 
+    // スタッフ警告取得（当店舗のみ）
     const getStaffWarnings = (staffId) => {
       const warnings = [];
       const staff = staffList.value.find((s) => s.id === staffId);
@@ -1358,6 +1368,7 @@ export default {
       return warnings;
     };
 
+    // 前の日付へ移動
     const previousDate = () => {
       if (!selectedDate.value || daysInMonth.value.length === 0) return;
 
@@ -1369,6 +1380,7 @@ export default {
       }
     };
 
+    // 次の日付へ移動
     const nextDate = () => {
       if (!selectedDate.value || daysInMonth.value.length === 0) return;
 
@@ -1380,6 +1392,7 @@ export default {
       }
     };
 
+    // 日次要件取得
     const getDailyRequirements = (date) => {
       if (!storeRequirements.value || storeRequirements.value.length === 0) {
         return [];
@@ -1400,6 +1413,7 @@ export default {
       );
     };
 
+    // 時間要件があるかチェック
     const hasHourRequirements = (date, hour) => {
       const requirements = getDailyRequirements(date);
       return requirements.some((req) => {
@@ -1409,11 +1423,13 @@ export default {
       });
     };
 
+    // 時間不足があるかチェック
     const hasHourShortage = (date, hour) => {
       const requirements = getHourRequirements(date, hour);
       return requirements.some((req) => hasRequirementShortage(date, req));
     };
 
+    // 時間要件取得
     const getHourRequirements = (date, hour) => {
       const requirements = getDailyRequirements(date);
       return requirements.filter((req) => {
@@ -1423,6 +1439,7 @@ export default {
       });
     };
 
+    // 時間フォーマット
     const formatHours = (hours) => {
       if (typeof hours !== "number" || isNaN(hours) || hours < 0) {
         hours = 0;
@@ -1439,6 +1456,7 @@ export default {
       }
     };
 
+    // シフト時間変更処理
     const handleShiftTimeChange = () => {
       if (!shiftEditorDialog.hasBreak) {
         shiftEditorDialog.breakStartTimeHour = "";
@@ -1448,6 +1466,7 @@ export default {
       }
     };
 
+    // クイック削除確認
     const confirmQuickDelete = (shift) => {
       if (!shift) return;
       
@@ -1486,6 +1505,7 @@ export default {
       });
     };
 
+    // ガントチャート休憩バースタイル
     const getGanttBreakBarStyle = (shift) => {
       if (!shift || !shift.break_start_time || !shift.break_end_time) {
         return { display: 'none' };
@@ -1506,6 +1526,7 @@ export default {
       };
     };
 
+    // スタッフが特定日に勤務可能かチェック
     const canStaffWorkOnDate = (staff, date) => {
       const hasDayOffRequest =
         staff.dayOffRequests &&
@@ -1531,6 +1552,7 @@ export default {
       return true;
     };
 
+    // 勤務可能性ツールチップ取得
     const getWorkAvailabilityTooltip = (staff, date) => {
       const dayOfWeek = new Date(date).getDay();
       const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
@@ -1553,6 +1575,7 @@ export default {
       return tooltip;
     };
 
+    // 勤務不可理由取得
     const getWorkUnavailabilityReason = (staff, date) => {
       const dayOffRequest =
         staff.dayOffRequests &&
@@ -1579,6 +1602,7 @@ export default {
       return "勤務不可";
     };
 
+    // ガントチャート可用性スタイル
     const getGanttAvailabilityStyle = (staff, date) => {
       if (!canStaffWorkOnDate(staff, date)) {
         return { display: "none" };
@@ -1613,6 +1637,7 @@ export default {
       };
     };
 
+    // ガントチャート可用性ツールチップ
     const getGanttAvailabilityTooltip = (staff, date) => {
       const dayOfWeek = new Date(date).getDay();
       const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
@@ -1635,11 +1660,13 @@ export default {
       )}-${formatTime(dayPreference.preferred_end_time)}`;
     };
 
+    // 要件不足があるかチェック
     const hasRequirementShortage = (date, requirement) => {
       const assignedCount = getAssignedStaffCount(date, requirement);
       return assignedCount < requirement.required_staff_count;
     };
 
+    // 日勤務時間計算
     const calculateDayHours = (shift) => {
       if (!shift) return 0;
 
@@ -1657,11 +1684,13 @@ export default {
       return Math.round((workMillis / (1000 * 60 * 60)) * 100) / 100;
     };
 
+    // 人員不足があるかチェック
     const hasStaffingShortage = (date, requirement) => {
       const assignedCount = getAssignedStaffCount(date, requirement);
       return assignedCount < requirement.required_staff_count;
     };
 
+    // 割り当てられたスタッフ数取得
     const getAssignedStaffCount = (date, requirement) => {
       const dayShifts = shifts.value.find((shift) => shift.date === date);
       if (!dayShifts) return 0;
@@ -1677,6 +1706,7 @@ export default {
       }).length;
     };
 
+    // スタッフ警告（全店舗）があるかチェック
     const hasStaffWarningsAllStores = (staffId) => {
       const staff = staffList.value.find((s) => s.id === staffId);
       if (!staff) return false;
@@ -1727,6 +1757,7 @@ export default {
       return hasViolation;
     };
 
+    // スタッフ警告（全店舗）取得
     const getStaffWarningsAllStores = (staffId) => {
       const warnings = [];
       const staff = staffList.value.find((s) => s.id === staffId);
@@ -1820,6 +1851,7 @@ export default {
       return warnings;
     };
 
+    // シフト違反があるかチェック
     const hasShiftViolation = (date, staffId) => {
       const shift = getShiftForStaff(date, staffId);
       if (!shift) return false;
@@ -1854,6 +1886,7 @@ export default {
       return false;
     };
 
+    // シフト違反内容取得
     const getShiftViolations = (date, staffId) => {
       const violations = [];
       const shift = getShiftForStaff(date, staffId);
@@ -1908,6 +1941,7 @@ export default {
       return violations;
     };
 
+    // 日付警告があるかチェック
     const hasDateWarnings = (date) => {
       const requirements = getDailyRequirements(date);
       return (
@@ -1916,6 +1950,7 @@ export default {
       );
     };
 
+    // 日付警告取得
     const getDateWarnings = (date) => {
       const warnings = [];
       const requirements = getDailyRequirements(date);
@@ -1946,6 +1981,7 @@ export default {
       return warnings;
     };
 
+    // 日付選択
     const selectDate = (date) => {
       selectedDate.value = date;
       updateSelectedDateCalendar();
@@ -1956,12 +1992,14 @@ export default {
       });
     };
 
+    // 選択日付カレンダー更新
     const updateSelectedDateCalendar = () => {
       if (selectedDate.value) {
         selectedDateCalendar.value = new Date(selectedDate.value);
       }
     };
 
+    // 日付範囲更新
     const updateDateRanges = () => {
       if (daysInMonth.value.length > 0) {
         minSelectableDate.value = new Date(daysInMonth.value[0].date);
@@ -1969,6 +2007,7 @@ export default {
       }
     };
 
+    // 日付選択イベント
     const onDateSelect = (event) => {
       if (event.value) {
         const selectedDateStr = formatDateToString(event.value);
@@ -1978,10 +2017,12 @@ export default {
       }
     };
 
+    // ガントチャート日付選択イベント
     const onGanttDateSelect = (event) => {
       onDateSelect(event);
     };
 
+    // 日付を文字列にフォーマット
     const formatDateToString = (date) => {
       const year = date.getFullYear();
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -1989,6 +2030,7 @@ export default {
       return `${year}-${month}-${day}`;
     };
 
+    // ガントチャートスクロール同期
     const syncGanttScroll = () => {
       if (ganttTimelineHeader.value && ganttBody.value) {
         requestAnimationFrame(() => {
@@ -1997,6 +2039,7 @@ export default {
       }
     };
 
+    // ガントチャート用日付フォーマット
     const formatDateForGantt = (date) => {
       if (!date) return "";
       const d = new Date(date);
@@ -2006,6 +2049,17 @@ export default {
       return `${month}月${day}日(${dayOfWeek})`;
     };
 
+    // 選択日付の表示フォーマット
+    const formatSelectedDateDisplay = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      const month = d.getMonth() + 1;
+      const day = d.getDate();
+      const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+      return `${month}月${day}日(${dayOfWeek})`;
+    };
+
+    // 祝日データ取得
     const fetchHolidays = async (year) => {
       try {
         const response = await fetch(
@@ -2018,10 +2072,12 @@ export default {
       }
     };
 
+    // 祝日チェック
     const isHoliday = (date) => {
       return holidays.value.includes(date);
     };
 
+    // タイムヘッダースタイル取得
     const getTimeHeaderStyle = () => {
       const hourWidth = 60;
       return {
@@ -2031,6 +2087,7 @@ export default {
       };
     };
 
+    // ガントチャートバースタイル取得
     const getGanttBarStyle = (shift) => {
       if (!shift) return {};
 
@@ -2050,11 +2107,13 @@ export default {
       };
     };
 
+    // 時間を浮動小数点数にパース
     const parseTimeToFloat = (timeStr) => {
       const [hours, minutes] = timeStr.split(":").map(Number);
       return hours + minutes / 60;
     };
 
+    // 時間をコンポーネントにパース
     const parseTimeToComponents = (timeStr) => {
       if (!timeStr) return { hour: "09", minute: "00" };
       const [hour, minute] = timeStr.split(":");
@@ -2064,10 +2123,12 @@ export default {
       };
     };
 
+    // 時間コンポーネントを結合
     const combineTimeComponents = (hour, minute) => {
       return `${hour}:${minute}`;
     };
 
+    // ガントチャートシフトエディタ開く
     const openGanttShiftEditor = (date, staff, event) => {
       if (!isEditMode.value) return;
       if (isStoreClosedOnDate(date)) return;
@@ -2097,6 +2158,7 @@ export default {
       shiftEditorDialog.visible = true;
     };
 
+    // システム設定取得
     const fetchSystemSettings = async () => {
       try {
         const response = await api.get("/shifts/system-settings");
@@ -2106,6 +2168,7 @@ export default {
       }
     };
 
+    // シフト期間取得
     const getShiftPeriod = (year, month, closingDay) => {
       let startDate, endDate;
 
@@ -2138,6 +2201,7 @@ export default {
       return { startDate, endDate };
     };
 
+    // 過去の日付かチェック
     const isPastDate = (date) => {
       const today = new Date();
       const checkDate = new Date(date);
@@ -2146,6 +2210,7 @@ export default {
       return checkDate < today;
     };
 
+    // 編集モード切り替え
     const toggleEditMode = () => {
       isEditMode.value = !isEditMode.value;
 
@@ -2159,6 +2224,7 @@ export default {
       });
     };
 
+    // シフトエディタ開く
     const openShiftEditor = async (day, staff) => {
       if (!isEditMode.value) {
         toast.add({
@@ -2221,10 +2287,12 @@ export default {
       shiftEditorDialog.visible = true;
     };
 
+    // シフトエディタ閉じる
     const closeShiftEditor = () => {
       shiftEditorDialog.visible = false;
     };
 
+    // シフトデータ読み込み
     const loadShiftData = async () => {
       if (!selectedStore.value) {
         return;
@@ -2290,6 +2358,7 @@ export default {
       }
     };
 
+    // 月内日数生成
     const generateDaysInMonth = () => {
       const year = currentYear.value;
       const month = currentMonth.value;
@@ -2340,6 +2409,7 @@ export default {
       daysInMonth.value = days;
     };
 
+    // デフォルト選択日設定
     const setDefaultSelectedDate = () => {
       const today = new Date();
       const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
@@ -2373,6 +2443,7 @@ export default {
       updateDateRanges();
     };
 
+    // デフォルト月表示設定
     const setDefaultMonthView = () => {
       if (!systemSettings.value) return;
 
@@ -2394,6 +2465,7 @@ export default {
       currentMonth.value = month;
     };
 
+    // 前月へ移動
     const previousMonth = async () => {
       if (currentMonth.value === 1) {
         currentYear.value--;
@@ -2406,6 +2478,7 @@ export default {
       setDefaultSelectedDate();
     };
 
+    // 次月へ移動
     const nextMonth = async () => {
       if (currentMonth.value === 12) {
         currentYear.value++;
@@ -2418,6 +2491,7 @@ export default {
       setDefaultSelectedDate();
     };
 
+    // 店舗詳細取得
     const fetchStoreDetails = async (storeId) => {
       try {
         const storeData = await store.dispatch("store/fetchStore", storeId);
@@ -2453,6 +2527,7 @@ export default {
       }
     };
 
+    // 店舗変更
     const changeStore = async () => {
       if (selectedStore.value) {
         await loadShiftData();
@@ -2460,6 +2535,7 @@ export default {
       }
     };
 
+    // AI自動シフト生成
     const generateAutomaticShift = async () => {
       try {
         loading.value = true;
@@ -2583,6 +2659,7 @@ export default {
       }
     };
 
+    // シフト再生成
     const regenerateShift = async () => {
       confirm.require({
         message: `現在のシフトを削除してAIで再生成しますか？
@@ -2602,16 +2679,19 @@ export default {
       });
     };
     
+    // AI生成選択
     const selectAIGeneration = () => {
       selectionDialogVisible.value = false;
       generateAutomaticShift();
     };
     
+    // 手動作成選択
     const selectManualCreation = () => {
       selectionDialogVisible.value = false;
       createEmptyShift();
     };
 
+    // シフト作成
     const createShift = async () => {
       const hasStaffData = staffList.value && staffList.value.length > 0;
 
@@ -2646,6 +2726,7 @@ export default {
       selectionDialogVisible.value = true;
     };
 
+    // 空シフト作成
     const createEmptyShift = async () => {
       try {
         loading.value = true;
@@ -2678,6 +2759,7 @@ export default {
       }
     };
 
+    // シフト印刷
     const printShift = () => {
       if (!hasCurrentShift.value) return;
 
@@ -2701,6 +2783,7 @@ export default {
       printWindow.print();
     };
 
+    // 印刷コンテンツ生成
     const generatePrintContent = () => {
       const storeName = selectedStore.value ? selectedStore.value.name : "";
       const period = `${currentYear.value}年${currentMonth.value}月`;
@@ -2929,6 +3012,7 @@ export default {
       return printHtml;
     };
 
+    // シフト保存
     const saveShift = async () => {
       if (!shiftEditorDialog.date || !shiftEditorDialog.staff) return;
 
@@ -3077,6 +3161,7 @@ export default {
       }
     };
 
+    // シフトクリア
     const clearShift = async () => {
       if (!shiftEditorDialog.hasShift) {
         shiftEditorDialog.visible = false;
@@ -3137,6 +3222,7 @@ export default {
       }
     };
 
+    // スタッフのシフト取得
     const getShiftForStaff = (date, staffId) => {
       const dayShifts = shifts.value.find((s) => s.date === date);
       if (!dayShifts) return null;
@@ -3144,11 +3230,13 @@ export default {
       return dayShifts.assignments.find((a) => a.staff_id === staffId);
     };
 
+    // 時間フォーマット
     const formatTime = (time) => {
       if (!time) return "";
       return time.slice(0, 5);
     };
 
+    // シフト削除
     const deleteShift = async () => {
       confirm.require({
         message: `${currentYear.value}年${currentMonth.value}月のシフトを完全に削除しますか？この操作は取り消せません。`,
@@ -3192,11 +3280,13 @@ export default {
       });
     };
 
+    // 監視
     watch([currentYear, currentMonth], async () => {
       await loadShiftData();
       setDefaultSelectedDate();
     });
 
+    // マウント時処理
     onMounted(async () => {
       try {
         generateTimeOptions();
@@ -3225,6 +3315,7 @@ export default {
     });
 
     return {
+      // 状態
       deleteShift,
       loading,
       saving,
@@ -3255,7 +3346,11 @@ export default {
       storeBusinessHours,
       storeClosedDays,
       allStoreShifts,
+
+      // コンピューテッド
       hasCurrentShift,
+
+      // メソッド
       getDailyShiftStaff,
       isStoreClosedOnDate,
       isHoursOutOfRange,
@@ -3274,6 +3369,7 @@ export default {
       updateDateRanges,
       syncGanttScroll,
       formatDateForGantt,
+      formatSelectedDateDisplay,
       getTimeHeaderStyle,
       getGanttBarStyle,
       parseTimeToFloat,
@@ -3327,7 +3423,6 @@ export default {
 </script>
 
 <style scoped lang="scss">
-// 既存のCSSと同じ（省略）
 .shift-cell.can-work {
   background-color: #f0fdf4;
   position: relative;
@@ -3678,16 +3773,19 @@ export default {
 
 .section-title {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
   color: #1e293b;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .section-title i {
   color: #3b82f6;
+  font-size: 1.75rem;
 }
 
 .gantt-navigation {
@@ -3698,11 +3796,30 @@ export default {
 
 .gantt-date-selector {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  gap: 0.5rem;
+}
+
+.selected-date-display {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+  padding: 0.25rem 0.75rem;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  background-color: #f8fafc;
+  min-width: 140px;
+  text-align: center;
 }
 
 .gantt-date-input {
-  width: 140px;
+  width: 120px;
 }
 
 .gantt-date-input :deep(.p-inputtext) {
@@ -4654,27 +4771,11 @@ export default {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.date-info-header {
+.date-warnings-section {
   background: #f8f9fa;
   border-radius: 8px;
   padding: 1rem;
   flex: 0 0 280px;
-}
-
-.date-navigation-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.75rem;
-}
-
-.date-navigation-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1e293b;
-  flex: 1;
-  text-align: center;
 }
 
 .date-warnings {
@@ -4710,19 +4811,24 @@ export default {
   overflow: hidden;
 }
 
-.section-title {
+.requirements-section .section-title,
+.staff-summary-section .section-title {
   padding: 0.75rem 1rem;
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: #1e293b;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
-.section-title i {
+.requirements-section .section-title i,
+.staff-summary-section .section-title i {
   color: #3b82f6;
+  font-size: 1rem;
 }
 
 .requirements-list {
@@ -5090,7 +5196,7 @@ export default {
     gap: 1rem;
   }
 
-  .date-info-header {
+  .date-warnings-section {
     flex: none;
   }
 
