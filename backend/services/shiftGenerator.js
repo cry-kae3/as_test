@@ -180,7 +180,7 @@ class ShiftGeneratorService {
                     throw new Error('生成されたシフトデータの構造が不正です');
                 }
 
-                const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, period);
+                const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs);
 
                 if (validationResult.isValid) {
                     return this.saveShift(generatedShiftData, storeId, year, month);
@@ -211,15 +211,17 @@ class ShiftGeneratorService {
     buildSimplePrompt(store, staffs, year, month, period) {
         let prompt = `期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
     
-    スタッフ制約:
+    基本ルール:
+    - スタッフをシフトに入れる際は、1日の勤務時間が8時間を超えないように、可能な限り長く割り当ててください。
     `;
 
         staffs.forEach(staff => {
-            prompt += `ID:${staff.id} ${staff.first_name}: 月間${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}h, 1日最大${staff.max_hours_per_day || 8}h\n`;
+            prompt += `- ID:${staff.id} ${staff.first_name} (1日最大 ${staff.max_hours_per_day || 8}h)\n`;
         });
 
         prompt += `
-    シンプルなシフトをJSON形式で出力:
+    上記ルールに従って、シフトをJSON形式で出力してください。
+    重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
     
     {"shifts":[{"date":"YYYY-MM-DD","assignments":[{"staff_id":1,"start_time":"09:00","end_time":"17:00"}]}]}`;
 
@@ -228,8 +230,7 @@ class ShiftGeneratorService {
 
 
     buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, violations) {
-        let prompt = `前回のシフト生成で制約違反が発生しました。今度は絶対に制約を守ってください。
-
+        let prompt = `前回のシフト生成で以下の絶対守るべきルール違反がありました。今度は絶対にルールを守って生成してください。
 ### 前回の違反内容
 ${violations.slice(0, 5).join('\n')}
 
@@ -239,26 +240,32 @@ ${violations.slice(0, 5).join('\n')}
         staffs.forEach(staff => {
             prompt += `
 ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
-- 1日は絶対に${staff.max_hours_per_day || 8}時間以下
-- 月間は絶対に${staff.max_hours_per_month || 160}時間以下`;
+- 1日の勤務時間は絶対に${staff.max_hours_per_day || 8}時間以下にすること。`;
 
             const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
                 ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
             ) || [];
-
             if (unavailableDays.length > 0) {
                 prompt += `
-- ${unavailableDays.join(', ')}曜日は絶対に勤務させない`;
+- ${unavailableDays.join(', ')}曜日は絶対に勤務させないこと。`;
+            }
+            const dayOffDates = staff.dayOffRequests?.filter(req => req.status === 'approved' || req.status === 'pending').map(req => req.date) || [];
+            if (dayOffDates.length > 0) {
+                prompt += `
+- 休み希望日(${dayOffDates.join(',')})には絶対に勤務させないこと。`;
             }
         });
 
         prompt += `
 
+### シフト生成の基本方針
+- スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てる。
+- 月間勤務時間は目安です。
+
 ### 期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
 
-制約を絶対に守って、より保守的なシフトを作成してください。
-勤務時間は6-8時間以内に抑えてください。
-
+前回の違反を修正し、ルールを厳守したシフトをJSON形式で出力してください。
+重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
 \`\`\`json
 {
   "shifts": [
@@ -281,42 +288,38 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 
 
     buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period) {
-        const analysis = this.calculateStaffConstraints(staffs, period);
-
         let prompt = `あなたはシフト管理システムです。以下の条件を厳守してシフトを生成してください。
     
     ## 期間情報
     - 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
-    - 総日数: ${analysis.totalDays}日間
     
     ## スタッフ制約（絶対遵守）
     `;
 
         staffs.forEach(staff => {
-            const staffAnalysis = analysis.staff[staff.id];
             const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p => ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]) || [];
             const dayOffDates = staff.dayOffRequests?.filter(req => req.status === 'approved' || req.status === 'pending').map(req => req.date) || [];
 
             prompt += `
     【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
-    - 月間時間: ${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}時間
-    - 1日最大: ${staff.max_hours_per_day || 8}時間
+    - 月間時間 (目安): ${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}時間
+    - 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間
     - 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
-    - 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}
-    - 推奨1日時間: ${staffAnalysis.recommendedDailyHours}時間`;
+    - 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}`;
         });
 
         prompt += `
     
     ## 重要ルール
-    1. 各スタッフの月間時間は必ず上記範囲内に収める
-    2. 1日の勤務時間は絶対に最大時間を超えない  
-    3. 勤務不可曜日には絶対に割り当てない
-    4. 休み希望日には絶対に割り当てない
-    5. 推奨時間を基準に均等配分する
+    1. スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てること。
+    2. 各日付の人員要件（もしあれば）を満たすことを優先する。
+    3. 月間勤務時間は目安とし、多少の過不足は許容する。最終的な調整は人間が行う。
+    4. 勤務不可曜日と休み希望日には絶対に割り当てない。
+    5. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない。
     
     ## 出力形式
     以下のJSON形式で正確に出力してください。余計な説明は不要です。
+    重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
     
     {
       "shifts": [
@@ -336,91 +339,13 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         return prompt;
     }
 
-    calculateStaffConstraints(staffs, period) {
-        const startDate = period.startDate.toDate();
-        const endDate = period.endDate.toDate();
-        const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-
-        const analysis = {
-            totalDays,
-            staff: {}
-        };
-
-        staffs.forEach(staff => {
-            let workableDays = 0;
-            const availableDayOfWeeks = staff.dayPreferences
-                ?.filter(p => p.available)
-                .map(p => p.day_of_week) || [];
-
-            for (let i = 0; i < totalDays; i++) {
-                const checkDate = new Date(startDate);
-                checkDate.setDate(checkDate.getDate() + i);
-                const dayOfWeek = checkDate.getDay();
-
-                if (availableDayOfWeeks.includes(dayOfWeek)) {
-                    const dateStr = checkDate.toISOString().split('T')[0];
-                    const hasDayOff = staff.dayOffRequests?.some(req =>
-                        req.date === dateStr && (req.status === 'approved' || req.status === 'pending')
-                    );
-
-                    if (!hasDayOff) {
-                        workableDays++;
-                    }
-                }
-            }
-
-            const minHours = staff.min_hours_per_month || 0;
-            const maxHours = staff.max_hours_per_month || 160;
-            const maxDailyHours = staff.max_hours_per_day || 8;
-
-            const targetHours = (minHours + maxHours) / 2;
-            const recommendedDailyHours = Math.min(
-                Math.ceil((targetHours / workableDays) * 4) / 4,
-                maxDailyHours
-            );
-
-            const maxPossibleHours = workableDays * maxDailyHours;
-            const isMinAchievable = minHours <= maxPossibleHours;
-
-            let strategy;
-            if (!isMinAchievable) {
-                strategy = `⚠️ 最小時間${minHours}hは物理的に不可能（最大可能: ${maxPossibleHours}h）`;
-            } else if (recommendedDailyHours * workableDays < minHours) {
-                const extraHoursNeeded = minHours - (recommendedDailyHours * workableDays);
-                const daysNeedingExtra = Math.ceil(extraHoursNeeded / (maxDailyHours - recommendedDailyHours));
-                strategy = `${recommendedDailyHours}h/日を基本とし、${daysNeedingExtra}日間は${maxDailyHours}h勤務`;
-            } else {
-                strategy = `${recommendedDailyHours}h/日で均等配分`;
-            }
-
-            const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-            const availableDaysText = availableDayOfWeeks.map(d => dayNames[d]).join(',') || 'なし';
-            const unavailableDaysText = [0, 1, 2, 3, 4, 5, 6]
-                .filter(d => !availableDayOfWeeks.includes(d))
-                .map(d => dayNames[d]).join(',') || 'なし';
-
-            analysis.staff[staff.id] = {
-                workableDays,
-                recommendedDailyHours,
-                maxPossibleHours,
-                isMinAchievable,
-                strategy,
-                availableDaysText,
-                unavailableDaysText
-            };
-        });
-
-        return analysis;
-    }
-
-    async validateGeneratedShift(shiftData, staffs, period) {
+    async validateGeneratedShift(shiftData, staffs) {
         const violations = [];
+        const warnings = [];
         const staffWorkHours = {};
 
-        const analysis = this.calculateStaffConstraints(staffs, period);
-
         if (!shiftData || !shiftData.shifts) {
-            return { isValid: false, violations: ['シフトデータが不正です'] };
+            return { isValid: false, violations: ['シフトデータが不正です'], warnings: [] };
         }
 
         for (const dayShift of shiftData.shifts) {
@@ -442,6 +367,13 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                 if (!availableDays.includes(dayOfWeek)) {
                     const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
                     violations.push(`${staff.first_name} ${staff.last_name} (${date}): ${dayNames[dayOfWeek]}曜日は勤務不可`);
+                }
+
+                const dayOffRequest = staff.dayOffRequests?.find(req =>
+                    req.date === date && (req.status === 'approved' || req.status === 'pending')
+                );
+                if (dayOffRequest) {
+                    violations.push(`${staff.first_name} ${staff.last_name} (${date}): 休み希望日`);
                 }
 
                 const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
@@ -468,19 +400,19 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 
             if (minHours > 0 && totalHours < minHours) {
                 const shortage = minHours - totalHours;
-                violations.push(`${staff.first_name} ${staff.last_name}: 月間最小勤務時間不足 (${totalHours.toFixed(1)}h < ${minHours}h, 不足${shortage.toFixed(1)}h)`);
+                warnings.push(`${staff.first_name} ${staff.last_name}: 月間最小勤務時間不足 (${totalHours.toFixed(1)}h < ${minHours}h, 不足${shortage.toFixed(1)}h)`);
             }
 
             if (maxHours > 0 && totalHours > maxHours) {
                 const excess = totalHours - maxHours;
-                violations.push(`${staff.first_name} ${staff.last_name}: 月間最大勤務時間超過 (${totalHours.toFixed(1)}h > ${maxHours}h, 超過${excess.toFixed(1)}h)`);
+                warnings.push(`${staff.first_name} ${staff.last_name}: 月間最大勤務時間超過 (${totalHours.toFixed(1)}h > ${maxHours}h, 超過${excess.toFixed(1)}h)`);
             }
         }
 
         return {
             isValid: violations.length === 0,
             violations,
-            analysis
+            warnings
         };
     }
 
@@ -498,7 +430,7 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                 temperature: 0.2,
                 topK: 1,
                 topP: 1,
-                maxOutputTokens: 4096,
+                maxOutputTokens: 65535,
                 responseMimeType: "application/json"
             },
             safetySettings: [
@@ -546,10 +478,21 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         }
 
         if (!response.candidates || !Array.isArray(response.candidates) || response.candidates.length === 0) {
+            if (response.promptFeedback && response.promptFeedback.blockReason) {
+                throw new Error(`リクエストがブロックされました: ${response.promptFeedback.blockReason}`);
+            }
             throw new Error('Gemini APIレスポンスにcandidatesが含まれていません。');
         }
 
         const candidate = response.candidates[0];
+
+        if (candidate.finishReason && candidate.finishReason === 'MAX_TOKENS') {
+            console.warn('AIの応答が最大トークン数に達したため、途中で打ち切られた可能性があります。');
+        }
+        if (candidate.finishReason) {
+            console.log(`AI response finishReason: ${candidate.finishReason}`);
+        }
+
         if (!candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
             throw new Error('Gemini APIレスポンスに有効なcontentが含まれていません。');
         }
@@ -619,8 +562,8 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 
         if (!jsonString.endsWith('}')) {
 
-            const openBraces = (jsonString.match(/\{/g) || []).length;
-            const closeBraces = (jsonString.match(/\}/g) || []).length;
+            const openBraces = (jsonString.match(/{/g) || []).length;
+            const closeBraces = (jsonString.match(/}/g) || []).length;
             const openBrackets = (jsonString.match(/\[/g) || []).length;
             const closeBrackets = (jsonString.match(/\]/g) || []).length;
 
