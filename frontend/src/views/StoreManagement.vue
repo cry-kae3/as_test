@@ -2215,11 +2215,6 @@ export default {
   flex-shrink: 0;
 }
 
-.page-title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
 
 .toolbar {
   display: flex;
@@ -2765,10 +2760,7 @@ export default {
 }
 
 @media (max-width: 480px) {
-  .page-title {
-    font-size: 1.25rem;
-  }
-  
+
   .store-management {
     padding: 0.125rem;
     height: 100vh;

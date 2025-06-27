@@ -238,13 +238,6 @@ export default {
   margin-bottom: 2rem;
 }
 
-.page-title {
-  margin: 0;
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: var(--text-color);
-}
-
 .loading-container {
   display: flex;
   flex-direction: column;
@@ -396,10 +389,6 @@ export default {
 @media (max-width: 768px) {
   .system-settings {
     padding: 0.5rem;
-  }
-  
-  .page-title {
-    font-size: 1.5rem;
   }
   
   .action-buttons {

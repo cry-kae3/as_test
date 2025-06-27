@@ -302,6 +302,14 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+.page-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color:#2c3e50;
+}
+
 .layout-wrapper {
   display: flex;
   flex: 1;
@@ -399,9 +407,9 @@ body {
 }
 .layout-content {
   flex: 1;
-  padding: 0;
   width: calc(100vw - 270px);
   margin: auto;
+  padding:10px;
 }
 .layout-footer {
   padding: 1rem;
@@ -629,6 +637,6 @@ body {
 }
 
 .p-confirm-dialog-message {
-    white-space: pre-line;
-  }
+  white-space: pre-line;
+}
 </style>

@@ -203,9 +203,7 @@ export default {
   padding: 1rem;
 }
 
-.page-title {
-  margin-bottom: 1.5rem;
-}
+
 
 .table-header-container {
   display: flex;

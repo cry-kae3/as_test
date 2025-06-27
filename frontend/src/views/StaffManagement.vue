@@ -1180,11 +1180,6 @@ export default {
   flex-shrink: 0;
 }
 
-.page-title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-}
 
 .toolbar {
   display: flex;
@@ -1504,9 +1499,6 @@ export default {
 }
 
 @media (max-width: 768px) {
-  .staff-management {
-    padding: 0.5rem;
-  }
 
   .toolbar {
     flex-direction: column;
