@@ -1,20 +1,14 @@
-.date-warnings-section .section-title {
-  padding: 0;
-  margin-bottom: 1rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1e293b;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  text-transform: none;
-  letter-spacing: normal;
-}
+承知いたしました。
+「時間別シフト表示」の上に、選択中の日付がより明確にわかる専用のヘッダーを設けるデザインですね。
 
-.date-warnings-section .section-title i {
-  color: #f59e0b;
-  font-size: 1rem;
-}<template>
+前回作成した日次詳細エリアの最上部に、選択中の日付を示すタイトルと日付ナビゲーションをまとめたヘッダーを配置しました。これにより、このエリア全体が特定の日付に関する情報であることが、より直感的に理解できるようになります。
+
+以下に修正後のコードを記載します。
+
+### **cry-kae3/as\_test/as\_test-5f2ab300362b8fdc7c3cdd86d985cb4634399772/frontend/src/views/ShiftManagement.vue**
+
+```vue
+<template>
   <div class="shift-management">
     <div class="header-section">
       <h1 class="page-title">シフト管理</h1>
@@ -137,7 +131,6 @@
         <span>編集モード - セルをクリックして編集</span>
       </div>
 
-      <!-- カレンダー表示 -->
       <div class="calendar-section">
         <div class="section-header calendar-header-style">
           <h2 class="section-title">
@@ -371,379 +364,370 @@
           </div>
         </div>
       </div>
-
-      <!-- ガントチャート表示 -->
-      <div v-if="selectedDate" class="gantt-section">
-        <div class="section-header gantt-header-style">
-          <h2 class="section-title">
-            <i class="pi pi-chart-bar"></i>
-            時間別シフト表示
-          </h2>
-          <div class="gantt-navigation">
-            <Button
-              icon="pi pi-chevron-left"
-              class="nav-button-small"
-              @click="previousDate"
-              :disabled="loading"
-            />
-            <div class="gantt-date-selector">
-              <div class="selected-date-display">
-                {{ formatSelectedDateDisplay(selectedDate) }}
-              </div>
-              <Calendar
-                v-model="selectedDateCalendar"
-                dateFormat="mm/dd"
-                :showIcon="true"
-                iconDisplay="input"
-                placeholder="日付選択"
-                class="gantt-date-input"
-                @date-select="onGanttDateSelect"
-                :minDate="minSelectableDate"
-                :maxDate="maxSelectableDate"
-                :manualInput="false"
-              />
+      
+      <div v-if="selectedDate" class="daily-details-wrapper">
+        <div class="details-header">
+            <div class="details-title">
+                <h3><i class="pi pi-calendar-check"></i>現在選択中の日付: {{ formatSelectedDateDisplay(selectedDate) }}</h3>
             </div>
-            <Button
-              icon="pi pi-chevron-right"
-              class="nav-button-small"
-              @click="nextDate"
-              :disabled="loading"
-            />
+            <div class="details-navigation">
+                <Button icon="pi pi-chevron-left" class="nav-button-small" @click="previousDate" :disabled="loading" />
+                <Calendar
+                  v-model="selectedDateCalendar"
+                  dateFormat="yy/mm/dd"
+                  :showIcon="true"
+                  iconDisplay="input"
+                  placeholder="日付選択"
+                  class="gantt-date-input"
+                  @date-select="onGanttDateSelect"
+                  :minDate="minSelectableDate"
+                  :maxDate="maxSelectableDate"
+                  :manualInput="false"
+                />
+                <Button icon="pi pi-chevron-right" class="nav-button-small" @click="nextDate" :disabled="loading" />
+            </div>
+        </div>
+
+        <div class="gantt-section">
+          <div class="section-header gantt-header-style">
+            <h2 class="section-title">
+              <i class="pi pi-chart-bar"></i>
+              時間別シフト表示
+            </h2>
+          </div>
+
+          <div class="gantt-container">
+            <div class="gantt-header">
+              <div class="gantt-staff-header">
+                <span>勤務スタッフ</span>
+              </div>
+              <div class="gantt-timeline-header" ref="ganttTimelineHeader">
+                <div
+                  v-for="hour in timelineHours"
+                  :key="hour"
+                  class="gantt-hour-cell"
+                  :style="getTimeHeaderStyle()"
+                >
+                  <div class="hour-label">
+                    {{ hour.toString().padStart(2, "0") }}:00
+                  </div>
+                  <div
+                    v-if="hasHourRequirements(selectedDate, hour)"
+                    class="hour-requirements"
+                  >
+                    <div
+                      v-for="req in getHourRequirements(selectedDate, hour)"
+                      :key="`${req.start_time}-${req.end_time}`"
+                      class="hour-requirement-badge"
+                      :class="{
+                        shortage: hasRequirementShortage(selectedDate, req),
+                      }"
+                    >
+                      {{ getAssignedStaffCount(selectedDate, req) }}/{{
+                        req.required_staff_count
+                      }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="gantt-body" ref="ganttBody" @scroll="syncGanttScroll">
+              <div class="gantt-staff-rows">
+                <div
+                  v-for="staff in staffList"
+                  :key="`gantt-${selectedDate}-${staff.id}`"
+                  class="gantt-staff-row"
+                  :class="{
+                    'has-warnings': hasStaffWarningsAllStores(staff.id),
+                    'hours-violation': isHoursOutOfRangeAllStores(staff.id),
+                    'store-closed-day': isStoreClosedOnDate(selectedDate),
+                  }"
+                >
+                  <div
+                    class="gantt-staff-info"
+                    :class="{
+                      'hours-violation': isHoursOutOfRangeAllStores(staff.id),
+                    }"
+                  >
+                    <div class="staff-avatar-small">
+                      {{ staff.first_name.charAt(0) }}
+                    </div>
+                    <div class="gantt-staff-details">
+                      <span class="staff-name-small"
+                        >{{ staff.last_name }} {{ staff.first_name }}</span
+                      >
+                      <span class="staff-role-small">{{
+                        staff.position || "一般"
+                      }}</span>
+                      <div class="staff-hours-small">
+                        <span
+                          class="current-hours"
+                          :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
+                          >{{ formatHours(calculateTotalHours(staff.id)) }}</span
+                        >
+                        <span
+                          v-if="hasTotalHoursFromOtherStores(staff.id)"
+                          class="total-hours-all-stores"
+                          :class="{
+                            'out-of-range': isHoursOutOfRangeAllStores(staff.id),
+                          }"
+                        >
+                          ({{
+                            formatHours(calculateTotalHoursAllStores(staff.id))
+                          }})
+                        </span>
+                        <span class="hours-range">
+                          / {{ formatHours(staff.min_hours_per_month || 0) }} -
+                          {{ formatHours(staff.max_hours_per_month || 0) }}
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      v-if="hasStaffWarningsAllStores(staff.id)"
+                      class="warning-indicator-gantt"
+                      :title="
+                        getStaffWarningsAllStores(staff.id)
+                          .map((w) => w.message)
+                          .join(', ')
+                      "
+                    >
+                      <i class="pi pi-exclamation-triangle"></i>
+                    </div>
+                  </div>
+
+                  <div
+                    class="gantt-timeline"
+                    :class="{
+                      'is-store-closed': isStoreClosedOnDate(selectedDate),
+                    }"
+                    @click="
+                      !isStoreClosedOnDate(selectedDate) &&
+                        openGanttShiftEditor(selectedDate, staff, $event)
+                    "
+                  >
+                    <div class="gantt-grid">
+                      <div
+                        v-for="hour in timelineHours"
+                        :key="`grid-${hour}`"
+                        class="gantt-hour-line"
+                        :style="getTimeHeaderStyle()"
+                      ></div>
+                    </div>
+
+                    <div
+                      v-if="
+                        !getShiftForStaff(selectedDate, staff.id) &&
+                        !isStoreClosedOnDate(selectedDate)
+                      "
+                      class="gantt-availability-indicator"
+                      :style="getGanttAvailabilityStyle(staff, selectedDate)"
+                      :title="getGanttAvailabilityTooltip(staff, selectedDate)"
+                    ></div>
+
+                    <div
+                      v-if="getShiftForStaff(selectedDate, staff.id)"
+                      class="gantt-shift-block"
+                      :style="
+                        getGanttBarStyle(getShiftForStaff(selectedDate, staff.id))
+                      "
+                      :class="{
+                        'is-editable':
+                          isEditMode && !isStoreClosedOnDate(selectedDate),
+                        'is-past-editable':
+                          isEditMode &&
+                          isPastDate(selectedDate) &&
+                          !isStoreClosedOnDate(selectedDate),
+                      }"
+                      @click.stop="
+                        !isStoreClosedOnDate(selectedDate) &&
+                          openShiftEditor({ date: selectedDate }, staff)
+                      "
+                    >
+                       <div
+                          v-if="getShiftForStaff(selectedDate, staff.id).break_start_time"
+                          class="gantt-break-bar"
+                          :style="getGanttBreakBarStyle(getShiftForStaff(selectedDate, staff.id))"
+                        ></div>
+                      <span class="shift-time-text">
+                        {{
+                          formatTime(
+                            getShiftForStaff(selectedDate, staff.id).start_time
+                          )
+                        }}
+                        -
+                        {{
+                          formatTime(
+                            getShiftForStaff(selectedDate, staff.id).end_time
+                          )
+                        }}
+                      </span>
+                      <div
+                        v-if="hasShiftViolation(selectedDate, staff.id)"
+                        class="gantt-violation-icon"
+                      >
+                        <i class="pi pi-exclamation-triangle"></i>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="gantt-container">
-          <div class="gantt-header">
-            <div class="gantt-staff-header">
-              <span>勤務スタッフ</span>
-            </div>
-            <div class="gantt-timeline-header" ref="ganttTimelineHeader">
+        <div class="daily-info-panel">
+          <div v-if="hasDateWarnings(selectedDate)" class="daily-info-section date-warnings-section">
+            <h4 class="section-title">
+              <i class="pi pi-exclamation-triangle"></i>
+              警告・注意事項
+            </h4>
+            <div class="date-warnings">
               <div
-                v-for="hour in timelineHours"
-                :key="hour"
-                class="gantt-hour-cell"
-                :style="getTimeHeaderStyle()"
+                v-for="warning in getDateWarnings(selectedDate)"
+                :key="warning.type"
+                class="warning-item"
+                :class="warning.type"
               >
-                <div class="hour-label">
-                  {{ hour.toString().padStart(2, "0") }}:00
-                </div>
-                <div
-                  v-if="hasHourRequirements(selectedDate, hour)"
-                  class="hour-requirements"
-                >
-                  <div
-                    v-for="req in getHourRequirements(selectedDate, hour)"
-                    :key="`${req.start_time}-${req.end_time}`"
-                    class="hour-requirement-badge"
-                    :class="{
-                      shortage: hasRequirementShortage(selectedDate, req),
-                    }"
-                  >
-                    {{ getAssignedStaffCount(selectedDate, req) }}/{{
-                      req.required_staff_count
-                    }}
-                  </div>
-                </div>
+                <i :class="warning.icon"></i>
+                <span>{{ warning.message }}</span>
               </div>
             </div>
           </div>
 
-          <div class="gantt-body" ref="ganttBody" @scroll="syncGanttScroll">
-            <div class="gantt-staff-rows">
+          <div class="daily-info-section requirements-section">
+            <h4 class="section-title">
+              <i class="pi pi-users"></i>
+              人員要件
+            </h4>
+            <div
+              v-if="getDailyRequirements(selectedDate).length > 0"
+              class="requirements-list"
+            >
               <div
-                v-for="staff in staffList"
-                :key="`gantt-${selectedDate}-${staff.id}`"
-                class="gantt-staff-row"
+                v-for="req in getDailyRequirements(selectedDate)"
+                :key="`req-${req.start_time}-${req.end_time}`"
+                class="requirement-item"
+                :class="{
+                  shortage: hasStaffingShortage(selectedDate, req),
+                }"
+              >
+                <div class="time-range">
+                  {{ formatTime(req.start_time) }} -
+                  {{ formatTime(req.end_time) }}
+                </div>
+                <div class="staff-count">
+                  <span class="assigned-count">{{
+                    getAssignedStaffCount(selectedDate, req)
+                  }}</span>
+                  <span class="separator">/</span>
+                  <span class="required-count">{{
+                    req.required_staff_count
+                  }}</span>
+                  <span class="count-unit">名</span>
+                </div>
+                <div
+                  v-if="hasStaffingShortage(selectedDate, req)"
+                  class="shortage-icon"
+                >
+                  <i class="pi pi-exclamation-triangle"></i>
+                </div>
+              </div>
+            </div>
+            <div v-else class="no-requirements">
+              <i class="pi pi-info-circle"></i>
+              <span>設定なし</span>
+            </div>
+          </div>
+
+          <div class="daily-info-section staff-summary-section">
+            <h4 class="section-title">
+              <i class="pi pi-clock"></i>
+              勤務スタッフ
+            </h4>
+            <div class="staff-summary-grid">
+              <div
+                v-for="staff in getDailyShiftStaff(selectedDate)"
+                :key="`summary-${staff.id}`"
+                class="staff-summary-card"
                 :class="{
                   'has-warnings': hasStaffWarningsAllStores(staff.id),
                   'hours-violation': isHoursOutOfRangeAllStores(staff.id),
-                  'store-closed-day': isStoreClosedOnDate(selectedDate),
                 }"
               >
-                <div
-                  class="gantt-staff-info"
-                  :class="{
-                    'hours-violation': isHoursOutOfRangeAllStores(staff.id),
-                  }"
-                >
-                  <div class="staff-avatar-small">
+                <div class="staff-header">
+                  <div class="staff-avatar-tiny">
                     {{ staff.first_name.charAt(0) }}
                   </div>
-                  <div class="gantt-staff-details">
-                    <span class="staff-name-small"
-                      >{{ staff.last_name }} {{ staff.first_name }}</span
-                    >
-                    <span class="staff-role-small">{{
-                      staff.position || "一般"
-                    }}</span>
-                    <div class="staff-hours-small">
-                      <span
-                        class="current-hours"
-                        :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
-                        >{{ formatHours(calculateTotalHours(staff.id)) }}</span
-                      >
-                      <span
-                        v-if="hasTotalHoursFromOtherStores(staff.id)"
-                        class="total-hours-all-stores"
-                        :class="{
-                          'out-of-range': isHoursOutOfRangeAllStores(staff.id),
-                        }"
-                      >
-                        ({{
-                          formatHours(calculateTotalHoursAllStores(staff.id))
-                        }})
-                      </span>
-                      <span class="hours-range">
-                        / {{ formatHours(staff.min_hours_per_month || 0) }} -
-                        {{ formatHours(staff.max_hours_per_month || 0) }}
-                      </span>
-                    </div>
+                  <div class="staff-name-summary">
+                    {{ staff.last_name }} {{ staff.first_name }}
                   </div>
                   <div
                     v-if="hasStaffWarningsAllStores(staff.id)"
-                    class="warning-indicator-gantt"
-                    :title="
-                      getStaffWarningsAllStores(staff.id)
-                        .map((w) => w.message)
-                        .join(', ')
-                    "
+                    class="warning-indicator-small"
                   >
                     <i class="pi pi-exclamation-triangle"></i>
                   </div>
                 </div>
 
-                <div
-                  class="gantt-timeline"
-                  :class="{
-                    'is-store-closed': isStoreClosedOnDate(selectedDate),
-                  }"
-                  @click="
-                    !isStoreClosedOnDate(selectedDate) &&
-                      openGanttShiftEditor(selectedDate, staff, $event)
-                  "
-                >
-                  <div class="gantt-grid">
-                    <div
-                      v-for="hour in timelineHours"
-                      :key="`grid-${hour}`"
-                      class="gantt-hour-line"
-                      :style="getTimeHeaderStyle()"
-                    ></div>
+                <div class="summary-stats">
+                  <div class="stat-item">
+                    <span
+                      class="stat-value"
+                      :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
+                      >{{ formatHours(calculateTotalHours(staff.id)) }}</span
+                    >
+                    <span
+                      v-if="hasTotalHoursFromOtherStores(staff.id)"
+                      class="total-hours-all-stores"
+                      :class="{
+                        'out-of-range': isHoursOutOfRangeAllStores(staff.id),
+                      }"
+                    >
+                      ({{
+                        formatHours(calculateTotalHoursAllStores(staff.id))
+                      }})
+                    </span>
+                    <span class="stat-range">
+                      / {{ formatHours(staff.min_hours_per_month || 0) }} -
+                      {{ formatHours(staff.max_hours_per_month || 0) }}
+                    </span>
                   </div>
 
-                  <div
-                    v-if="
-                      !getShiftForStaff(selectedDate, staff.id) &&
-                      !isStoreClosedOnDate(selectedDate)
-                    "
-                    class="gantt-availability-indicator"
-                    :style="getGanttAvailabilityStyle(staff, selectedDate)"
-                    :title="getGanttAvailabilityTooltip(staff, selectedDate)"
-                  ></div>
-
-                  <div
-                    v-if="getShiftForStaff(selectedDate, staff.id)"
-                    class="gantt-shift-block"
-                    :style="
-                      getGanttBarStyle(getShiftForStaff(selectedDate, staff.id))
-                    "
-                    :class="{
-                      'is-editable':
-                        isEditMode && !isStoreClosedOnDate(selectedDate),
-                      'is-past-editable':
-                        isEditMode &&
-                        isPastDate(selectedDate) &&
-                        !isStoreClosedOnDate(selectedDate),
-                    }"
-                    @click.stop="
-                      !isStoreClosedOnDate(selectedDate) &&
-                        openShiftEditor({ date: selectedDate }, staff)
-                    "
-                  >
-                     <div
-                        v-if="getShiftForStaff(selectedDate, staff.id).break_start_time"
-                        class="gantt-break-bar"
-                        :style="getGanttBreakBarStyle(getShiftForStaff(selectedDate, staff.id))"
-                      ></div>
-                    <span class="shift-time-text">
+                  <div class="today-shift">
+                    <span class="today-hours">
+                      本日:
                       {{
-                        formatTime(
-                          getShiftForStaff(selectedDate, staff.id).start_time
-                        )
-                      }}
-                      -
-                      {{
-                        formatTime(
-                          getShiftForStaff(selectedDate, staff.id).end_time
+                        formatHours(
+                          calculateDayHours(
+                            getShiftForStaff(selectedDate, staff.id)
+                          )
                         )
                       }}
                     </span>
                     <div
                       v-if="hasShiftViolation(selectedDate, staff.id)"
-                      class="gantt-violation-icon"
+                      class="violations"
                     >
-                      <i class="pi pi-exclamation-triangle"></i>
+                      <div
+                        v-for="violation in getShiftViolations(
+                          selectedDate,
+                          staff.id
+                        )"
+                        :key="violation.type"
+                        class="violation-badge"
+                        :title="violation.message"
+                      >
+                        <i class="pi pi-exclamation-triangle"></i>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 日次情報パネル -->
-      <div v-if="selectedDate" class="daily-info-panel">
-        <div v-if="hasDateWarnings(selectedDate)" class="date-warnings-section">
-          <h4 class="section-title">
-            <i class="pi pi-exclamation-triangle"></i>
-            警告・注意事項
-          </h4>
-          <div class="date-warnings">
-            <div
-              v-for="warning in getDateWarnings(selectedDate)"
-              :key="warning.type"
-              class="warning-item"
-              :class="warning.type"
-            >
-              <i :class="warning.icon"></i>
-              <span>{{ warning.message }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="requirements-section">
-          <h4 class="section-title">
-            <i class="pi pi-users"></i>
-            人員要件
-          </h4>
-          <div
-            v-if="getDailyRequirements(selectedDate).length > 0"
-            class="requirements-list"
-          >
-            <div
-              v-for="req in getDailyRequirements(selectedDate)"
-              :key="`req-${req.start_time}-${req.end_time}`"
-              class="requirement-item"
-              :class="{
-                shortage: hasStaffingShortage(selectedDate, req),
-              }"
-            >
-              <div class="time-range">
-                {{ formatTime(req.start_time) }} -
-                {{ formatTime(req.end_time) }}
+              <div v-if="getDailyShiftStaff(selectedDate).length === 0" class="no-shift-staff">
+                <i class="pi pi-info-circle"></i>
+                <span>シフトに入っているスタッフはいません</span>
               </div>
-              <div class="staff-count">
-                <span class="assigned-count">{{
-                  getAssignedStaffCount(selectedDate, req)
-                }}</span>
-                <span class="separator">/</span>
-                <span class="required-count">{{
-                  req.required_staff_count
-                }}</span>
-                <span class="count-unit">名</span>
-              </div>
-              <div
-                v-if="hasStaffingShortage(selectedDate, req)"
-                class="shortage-icon"
-              >
-                <i class="pi pi-exclamation-triangle"></i>
-              </div>
-            </div>
-          </div>
-          <div v-else class="no-requirements">
-            <i class="pi pi-info-circle"></i>
-            <span>設定なし</span>
-          </div>
-        </div>
-
-        <div class="staff-summary-section">
-          <h4 class="section-title">
-            <i class="pi pi-clock"></i>
-            勤務スタッフ
-          </h4>
-          <div class="staff-summary-grid">
-            <div
-              v-for="staff in getDailyShiftStaff(selectedDate)"
-              :key="`summary-${staff.id}`"
-              class="staff-summary-card"
-              :class="{
-                'has-warnings': hasStaffWarningsAllStores(staff.id),
-                'hours-violation': isHoursOutOfRangeAllStores(staff.id),
-              }"
-            >
-              <div class="staff-header">
-                <div class="staff-avatar-tiny">
-                  {{ staff.first_name.charAt(0) }}
-                </div>
-                <div class="staff-name-summary">
-                  {{ staff.last_name }} {{ staff.first_name }}
-                </div>
-                <div
-                  v-if="hasStaffWarningsAllStores(staff.id)"
-                  class="warning-indicator-small"
-                >
-                  <i class="pi pi-exclamation-triangle"></i>
-                </div>
-              </div>
-
-              <div class="summary-stats">
-                <div class="stat-item">
-                  <span
-                    class="stat-value"
-                    :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
-                    >{{ formatHours(calculateTotalHours(staff.id)) }}</span
-                  >
-                  <span
-                    v-if="hasTotalHoursFromOtherStores(staff.id)"
-                    class="total-hours-all-stores"
-                    :class="{
-                      'out-of-range': isHoursOutOfRangeAllStores(staff.id),
-                    }"
-                  >
-                    ({{
-                      formatHours(calculateTotalHoursAllStores(staff.id))
-                    }})
-                  </span>
-                  <span class="stat-range">
-                    / {{ formatHours(staff.min_hours_per_month || 0) }} -
-                    {{ formatHours(staff.max_hours_per_month || 0) }}
-                  </span>
-                </div>
-
-                <div class="today-shift">
-                  <span class="today-hours">
-                    本日:
-                    {{
-                      formatHours(
-                        calculateDayHours(
-                          getShiftForStaff(selectedDate, staff.id)
-                        )
-                      )
-                    }}
-                  </span>
-                  <div
-                    v-if="hasShiftViolation(selectedDate, staff.id)"
-                    class="violations"
-                  >
-                    <div
-                      v-for="violation in getShiftViolations(
-                        selectedDate,
-                        staff.id
-                      )"
-                      :key="violation.type"
-                      class="violation-badge"
-                      :title="violation.message"
-                    >
-                      <i class="pi pi-exclamation-triangle"></i>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div v-if="getDailyShiftStaff(selectedDate).length === 0" class="no-shift-staff">
-              <i class="pi pi-info-circle"></i>
-              <span>シフトに入っているスタッフはいません</span>
             </div>
           </div>
         </div>
@@ -3774,13 +3758,12 @@ export default {
 .section-title {
   margin: 0;
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 600;
   color: #1e293b;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: normal;
 }
 
 .section-title i {
@@ -3794,49 +3777,86 @@ export default {
   gap: 0.75rem;
 }
 
-.gantt-date-selector {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.selected-date-display {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1e293b;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-  padding: 0.25rem 0.75rem;
-  border-radius: 8px;
-  border: 2px solid #e2e8f0;
-  background-color: #f8fafc;
-  min-width: 140px;
-  text-align: center;
-}
-
 .gantt-date-input {
-  width: 120px;
+  width: 180px;
 }
 
 .gantt-date-input :deep(.p-inputtext) {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #374151;
-  font-weight: 500;
   text-align: center;
+  font-weight: 600;
 }
 
 .calendar-section {
-  margin-bottom: 3rem;
   background: white;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border: 2px solid #e5e7eb;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 1rem;
+}
+
+.daily-details-wrapper {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.details-title h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text-color);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.details-title h3 i {
+  color: var(--primary-color);
+}
+
+.details-navigation {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.gantt-section {
+  margin-bottom: 1.5rem;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.daily-info-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.daily-info-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.daily-info-section .section-title {
+  padding: 0.75rem 1rem;
+  font-size: 1.1rem;
+  background-color: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .calendar-header-style {
@@ -3849,17 +3869,8 @@ export default {
   color: #93c5fd;
 }
 
-.gantt-section {
-  margin-bottom: 3rem;
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border: 2px solid #e5e7eb;
-}
-
 .gantt-header-style {
-
+  padding: 1rem 1.5rem;
 }
 
 .gantt-header-style .section-title {
@@ -3868,11 +3879,6 @@ export default {
 
 .gantt-header-style .section-title i {
   color: #86efac;
-}
-
-.gantt-navigation {
-  display: flex;
-  gap: 0.5rem;
 }
 
 .date-navigation-header {
@@ -4485,14 +4491,6 @@ export default {
   font-size: 1.2rem;
 }
 
-.gantt-section {
-  margin-bottom: 2rem;
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
 .gantt-container {
   display: flex;
   flex-direction: column;
@@ -4580,7 +4578,7 @@ export default {
 
 .gantt-staff-rows {
   min-height: 100%;
-  min-width: calc(240px + 24 * 60px);
+  min-width: calc(24 * 60px);
 }
 
 .gantt-staff-row {
@@ -4697,9 +4695,20 @@ export default {
 }
 
 .gantt-hour-line {
-  border-right: 1px solid #f3f4f6;
+  border-right: 1px solid #e5e7eb;
   height: 100%;
   flex-shrink: 0;
+  position: relative;
+}
+
+.gantt-hour-line::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 0;
+  height: 100%;
+  border-right: 1px dotted #d1d5db;
 }
 
 .gantt-shift-block {
@@ -4761,20 +4770,7 @@ export default {
   pointer-events: none;
 }
 
-.daily-info-panel {
-  background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-top: 2rem;
-  display: flex;
-  gap: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
 .date-warnings-section {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 1rem;
   flex: 0 0 280px;
 }
 
@@ -4801,34 +4797,6 @@ export default {
 .warning-item.staff_violation {
   background: #fee2e2;
   color: #7f1d1d;
-}
-
-.requirements-section,
-.staff-summary-section {
-  flex: 1;
-  background: #f8f9fa;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.requirements-section .section-title,
-.staff-summary-section .section-title {
-  padding: 0.75rem 1rem;
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1e293b;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-.requirements-section .section-title i,
-.staff-summary-section .section-title i {
-  color: #3b82f6;
-  font-size: 1rem;
 }
 
 .requirements-list {
@@ -5192,22 +5160,7 @@ export default {
 
 @media (max-width: 1200px) {
   .daily-info-panel {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .date-warnings-section {
-    flex: none;
-  }
-
-  .requirements-section,
-  .staff-summary-section {
-    max-height: none;
-  }
-
-  .requirements-list,
-  .staff-summary-grid {
-    max-height: none;
+    grid-template-columns: 1fr;
   }
 }
 
@@ -5265,5 +5218,23 @@ export default {
   .gantt-container {
     min-height: 250px;
   }
+}
+
+.date-warnings-section .section-title {
+  padding: 0;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.date-warnings-section .section-title i {
+  color: #f59e0b;
+  font-size: 1rem;
 }
 </style>
