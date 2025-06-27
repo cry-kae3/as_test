@@ -81,6 +81,66 @@ class ShiftGeneratorService {
         }
     }
 
+    // 他店舗のシフト情報を取得する新しいメソッド
+    async getOtherStoreShifts(staffList, currentStoreId, year, month, period) {
+        const otherStoreShifts = {};
+
+        for (const staff of staffList) {
+            otherStoreShifts[staff.id] = [];
+
+            // スタッフが勤務可能な他店舗を取得
+            const otherStoreIds = staff.stores
+                .filter(store => store.id !== currentStoreId)
+                .map(store => store.id);
+
+            if (otherStoreIds.length === 0) continue;
+
+            // 他店舗のシフトを取得
+            const otherShifts = await Shift.findAll({
+                where: {
+                    store_id: { [Op.in]: otherStoreIds },
+                    year: year,
+                    month: month
+                },
+                include: [{
+                    model: ShiftAssignment,
+                    as: 'assignments',
+                    where: {
+                        staff_id: staff.id,
+                        date: {
+                            [Op.between]: [
+                                period.startDate.format('YYYY-MM-DD'),
+                                period.endDate.format('YYYY-MM-DD')
+                            ]
+                        }
+                    },
+                    required: false,
+                    include: [{
+                        model: Store,
+                        attributes: ['id', 'name']
+                    }]
+                }]
+            });
+
+            // シフト情報を整理
+            otherShifts.forEach(shift => {
+                if (shift.assignments) {
+                    shift.assignments.forEach(assignment => {
+                        otherStoreShifts[staff.id].push({
+                            date: assignment.date,
+                            start_time: assignment.start_time,
+                            end_time: assignment.end_time,
+                            store_id: shift.store_id,
+                            store_name: assignment.Store ? assignment.Store.name : `店舗${shift.store_id}`
+                        });
+                    });
+                }
+            });
+        }
+
+        return otherStoreShifts;
+    }
+
     validateStaffConstraints(staff, date, startTime, endTime) {
         const errors = [];
         const warnings = [];
@@ -134,7 +194,7 @@ class ShiftGeneratorService {
                     model: Store,
                     as: 'stores',
                     where: { id: storeId },
-                    attributes: [],
+                    attributes: ['id', 'name'],
                 },
                 { model: StaffDayPreference, as: 'dayPreferences' },
                 {
@@ -148,13 +208,16 @@ class ShiftGeneratorService {
 
         if (staffs.length === 0) throw new Error('この店舗にアクティブなスタッフがいません。');
 
+        // 他店舗のシフト情報を取得
+        const otherStoreShifts = await this.getOtherStoreShifts(staffs, storeId, year, month, period);
+
         const storeClosedDays = await StoreClosedDay.findAll({ where: { store_id: storeId } });
         const storeRequirements = await StoreStaffRequirement.findAll({ where: { store_id: storeId } });
 
         let attempts = 0;
         const maxAttempts = 3;
         let lastError = null;
-        let currentPrompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period);
+        let currentPrompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts);
 
         while (attempts < maxAttempts) {
             attempts++;
@@ -169,7 +232,7 @@ class ShiftGeneratorService {
 
                     if (parseError.message.includes('Unexpected end of JSON input')) {
                         if (attempts < maxAttempts) {
-                            currentPrompt = this.buildSimplePrompt(store, staffs, year, month, period);
+                            currentPrompt = this.buildSimplePrompt(store, staffs, year, month, period, otherStoreShifts);
                             continue;
                         }
                     }
@@ -180,7 +243,7 @@ class ShiftGeneratorService {
                     throw new Error('生成されたシフトデータの構造が不正です');
                 }
 
-                const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs);
+                const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, otherStoreShifts);
 
                 if (validationResult.isValid) {
                     return this.saveShift(generatedShiftData, storeId, year, month);
@@ -188,7 +251,7 @@ class ShiftGeneratorService {
                     lastError = new Error(`制約違反: ${validationResult.violations.slice(0, 3).join(', ')}`);
 
                     if (attempts < maxAttempts) {
-                        currentPrompt = this.buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, validationResult.violations);
+                        currentPrompt = this.buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, validationResult.violations, otherStoreShifts);
                         continue;
                     }
                 }
@@ -208,15 +271,25 @@ class ShiftGeneratorService {
         throw lastError || new Error('制約を満たすシフトを生成できませんでした。スタッフの勤務条件を見直してください。');
     }
 
-    buildSimplePrompt(store, staffs, year, month, period) {
+    buildSimplePrompt(store, staffs, year, month, period, otherStoreShifts) {
         let prompt = `期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
     
     基本ルール:
     - スタッフをシフトに入れる際は、1日の勤務時間が8時間を超えないように、可能な限り長く割り当ててください。
+    - 他店舗で既にシフトが入っている時間帯には絶対に割り当てないでください。
     `;
 
         staffs.forEach(staff => {
-            prompt += `- ID:${staff.id} ${staff.first_name} (1日最大 ${staff.max_hours_per_day || 8}h)\n`;
+            prompt += `- ID:${staff.id} ${staff.first_name} (1日最大 ${staff.max_hours_per_day || 8}h)`;
+
+            const otherShifts = otherStoreShifts[staff.id] || [];
+            if (otherShifts.length > 0) {
+                prompt += '\n  他店舗シフト:';
+                otherShifts.forEach(shift => {
+                    prompt += `\n    ${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`;
+                });
+            }
+            prompt += '\n';
         });
 
         prompt += `
@@ -229,7 +302,7 @@ class ShiftGeneratorService {
     }
 
 
-    buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, violations) {
+    buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, violations, otherStoreShifts) {
         let prompt = `前回のシフト生成で以下の絶対守るべきルール違反がありました。今度は絶対にルールを守って生成してください。
 ### 前回の違反内容
 ${violations.slice(0, 5).join('\n')}
@@ -254,6 +327,16 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                 prompt += `
 - 休み希望日(${dayOffDates.join(',')})には絶対に勤務させないこと。`;
             }
+
+            // 他店舗シフト情報を追加
+            const otherShifts = otherStoreShifts[staff.id] || [];
+            if (otherShifts.length > 0) {
+                prompt += `
+- 以下の日時は他店舗で勤務のため絶対に割り当てないこと:`;
+                otherShifts.forEach(shift => {
+                    prompt += `\n  ${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`;
+                });
+            }
         });
 
         prompt += `
@@ -261,6 +344,7 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 ### シフト生成の基本方針
 - スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てる。
 - 月間勤務時間は目安です。
+- 他店舗で既に勤務がある時間帯には絶対に割り当てない。
 
 ### 期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
 
@@ -287,7 +371,7 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
     }
 
 
-    buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period) {
+    buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts) {
         let prompt = `あなたはシフト管理システムです。以下の条件を厳守してシフトを生成してください。
     
     ## 期間情報
@@ -299,6 +383,7 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         staffs.forEach(staff => {
             const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p => ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]) || [];
             const dayOffDates = staff.dayOffRequests?.filter(req => req.status === 'approved' || req.status === 'pending').map(req => req.date) || [];
+            const otherShifts = otherStoreShifts[staff.id] || [];
 
             prompt += `
     【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
@@ -306,6 +391,14 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
     - 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間
     - 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
     - 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}`;
+
+            if (otherShifts.length > 0) {
+                prompt += `
+    - 他店舗勤務（重複不可）:`;
+                otherShifts.forEach(shift => {
+                    prompt += `\n      ${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`;
+                });
+            }
         });
 
         prompt += `
@@ -316,6 +409,7 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
     3. 月間勤務時間は目安とし、多少の過不足は許容する。最終的な調整は人間が行う。
     4. 勤務不可曜日と休み希望日には絶対に割り当てない。
     5. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない。
+    6. 他店舗で既に勤務がある日時には絶対に割り当てない（同じ時間帯に複数店舗で勤務することはできない）。
     
     ## 出力形式
     以下のJSON形式で正確に出力してください。余計な説明は不要です。
@@ -339,7 +433,7 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         return prompt;
     }
 
-    async validateGeneratedShift(shiftData, staffs) {
+    async validateGeneratedShift(shiftData, staffs, otherStoreShifts) {
         const violations = [];
         const warnings = [];
         const staffWorkHours = {};
@@ -361,6 +455,24 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                 if (!staff) {
                     violations.push(`存在しないスタッフID: ${staffId}`);
                     continue;
+                }
+
+                // 他店舗との時間重複チェック
+                const otherShifts = otherStoreShifts[staffId] || [];
+                const conflictingShift = otherShifts.find(otherShift => {
+                    if (otherShift.date !== date) return false;
+
+                    const assignStart = moment(assignment.start_time, 'HH:mm');
+                    const assignEnd = moment(assignment.end_time, 'HH:mm');
+                    const otherStart = moment(otherShift.start_time, 'HH:mm');
+                    const otherEnd = moment(otherShift.end_time, 'HH:mm');
+
+                    // 時間帯の重複チェック
+                    return assignStart.isBefore(otherEnd) && assignEnd.isAfter(otherStart);
+                });
+
+                if (conflictingShift) {
+                    violations.push(`${staff.first_name} ${staff.last_name} (${date}): 他店舗（${conflictingShift.store_name}）と時間が重複 (${conflictingShift.start_time}-${conflictingShift.end_time})`);
                 }
 
                 const availableDays = staff.dayPreferences?.filter(p => p.available).map(p => p.day_of_week) || [];
