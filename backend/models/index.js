@@ -42,6 +42,20 @@ Store.belongsToMany(Staff, {
     otherKey: 'staff_id'
 });
 
+Staff.belongsToMany(Store, {
+    through: 'staff_ai_generation_stores',
+    as: 'aiGenerationStores',
+    foreignKey: 'staff_id',
+    otherKey: 'store_id'
+});
+
+Store.belongsToMany(Staff, {
+    through: 'staff_ai_generation_stores',
+    as: 'aiGenerationStaff',
+    foreignKey: 'store_id',
+    otherKey: 'staff_id'
+});
+
 Staff.hasMany(StaffDayPreference, { foreignKey: 'staff_id', as: 'dayPreferences' });
 StaffDayPreference.belongsTo(Staff, { foreignKey: 'staff_id' });
 

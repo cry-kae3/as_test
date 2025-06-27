@@ -81,6 +81,13 @@ module.exports = (sequelize, DataTypes) => {
             foreignKey: 'staff_id',
             otherKey: 'store_id'
         });
+
+        Staff.belongsToMany(models.Store, {
+            through: 'staff_ai_generation_stores',
+            as: 'aiGenerationStores',
+            foreignKey: 'staff_id',
+            otherKey: 'store_id'
+        });
     };
 
     return Staff;

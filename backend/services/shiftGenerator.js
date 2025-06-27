@@ -81,21 +81,18 @@ class ShiftGeneratorService {
         }
     }
 
-    // 他店舗のシフト情報を取得する新しいメソッド
     async getOtherStoreShifts(staffList, currentStoreId, year, month, period) {
         const otherStoreShifts = {};
 
         for (const staff of staffList) {
             otherStoreShifts[staff.id] = [];
 
-            // スタッフが勤務可能な他店舗を取得
             const otherStoreIds = staff.stores
                 .filter(store => store.id !== currentStoreId)
                 .map(store => store.id);
 
             if (otherStoreIds.length === 0) continue;
 
-            // 他店舗のシフトを取得
             const otherShifts = await Shift.findAll({
                 where: {
                     store_id: { [Op.in]: otherStoreIds },
@@ -122,7 +119,6 @@ class ShiftGeneratorService {
                 }]
             });
 
-            // シフト情報を整理
             otherShifts.forEach(shift => {
                 if (shift.assignments) {
                     shift.assignments.forEach(assignment => {
@@ -192,9 +188,16 @@ class ShiftGeneratorService {
             include: [
                 {
                     model: Store,
-                    as: 'stores',
+                    as: 'aiGenerationStores',
                     where: { id: storeId },
                     attributes: ['id', 'name'],
+                },
+                {
+                    model: Store,
+                    as: 'stores',
+                    attributes: ['id', 'name'],
+                    through: { attributes: [] },
+                    required: false
                 },
                 { model: StaffDayPreference, as: 'dayPreferences' },
                 {
@@ -206,9 +209,8 @@ class ShiftGeneratorService {
             ]
         });
 
-        if (staffs.length === 0) throw new Error('この店舗にアクティブなスタッフがいません。');
+        if (staffs.length === 0) throw new Error('この店舗にAI生成対象のスタッフがいません。');
 
-        // 他店舗のシフト情報を取得
         const otherStoreShifts = await this.getOtherStoreShifts(staffs, storeId, year, month, period);
 
         const storeClosedDays = await StoreClosedDay.findAll({ where: { store_id: storeId } });
@@ -328,7 +330,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 - 休み希望日(${dayOffDates.join(',')})には絶対に勤務させないこと。`;
             }
 
-            // 他店舗シフト情報を追加
             const otherShifts = otherStoreShifts[staff.id] || [];
             if (otherShifts.length > 0) {
                 prompt += `
@@ -457,7 +458,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                     continue;
                 }
 
-                // 他店舗との時間重複チェック
                 const otherShifts = otherStoreShifts[staffId] || [];
                 const conflictingShift = otherShifts.find(otherShift => {
                     if (otherShift.date !== date) return false;
@@ -467,7 +467,6 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                     const otherStart = moment(otherShift.start_time, 'HH:mm');
                     const otherEnd = moment(otherShift.end_time, 'HH:mm');
 
-                    // 時間帯の重複チェック
                     return assignStart.isBefore(otherEnd) && assignEnd.isAfter(otherStart);
                 });
 

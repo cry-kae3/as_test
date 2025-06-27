@@ -82,14 +82,13 @@ const getAllStaff = async (req, res) => {
         ];
 
         if (store_id) {
-            // store_idが指定されている場合、その店舗に紐づくスタッフのみをフィルタリング
             include.push({
                 model: Store,
-                as: 'stores', // Staffモデルの関連付けエイリアスと一致させる
+                as: 'stores',
                 where: { id: store_id },
-                attributes: [], // フィルタリングのためだけで、データは不要
+                attributes: [],
                 through: { attributes: [] },
-                required: true, // INNER JOINを強制し、紐付かないスタッフを除外
+                required: true,
             });
         }
 
@@ -103,7 +102,6 @@ const getAllStaff = async (req, res) => {
             const ownerStores = await Store.findAll({ where: { owner_id: ownerId }, attributes: ['id'] });
             const ownerStoreIds = ownerStores.map(s => s.id);
 
-            // ログインユーザーが所有する店舗に所属するスタッフのみに絞り込む
             include.push({
                 model: Store,
                 as: 'stores',
@@ -118,7 +116,7 @@ const getAllStaff = async (req, res) => {
             where,
             include,
             order: [['id', 'ASC']],
-            distinct: true, // 関連付けによる重複を排除
+            distinct: true,
         });
 
         res.status(200).json(staff);
@@ -139,6 +137,13 @@ const getStaffById = async (req, res) => {
             {
                 model: Store,
                 as: 'stores',
+                through: { attributes: [] },
+                attributes: ['id', 'name', 'area'],
+                required: false
+            },
+            {
+                model: Store,
+                as: 'aiGenerationStores',
                 through: { attributes: [] },
                 attributes: ['id', 'name', 'area'],
                 required: false
@@ -192,7 +197,8 @@ const getStaffById = async (req, res) => {
         const completeResponse = {
             ...staff.toJSON(),
             dayPreferences: [...staff.dayPreferences, ...additionalPreferences],
-            store_ids: staff.stores ? staff.stores.map(store => store.id) : []
+            store_ids: staff.stores ? staff.stores.map(store => store.id) : [],
+            ai_generation_store_ids: staff.aiGenerationStores ? staff.aiGenerationStores.map(store => store.id) : []
         };
 
         res.status(200).json(completeResponse);
@@ -206,6 +212,7 @@ const createStaff = async (req, res) => {
         const {
             store_id,
             store_ids,
+            ai_generation_store_ids,
             first_name,
             last_name,
             furigana,
@@ -257,14 +264,18 @@ const createStaff = async (req, res) => {
             }, { transaction: t });
 
             let storesToAssign = [];
-
             if (store_ids && Array.isArray(store_ids) && store_ids.length > 0) {
                 storesToAssign = store_ids.includes(store_id) ? store_ids : [...store_ids, store_id];
             } else {
                 storesToAssign = [store_id];
             }
-
             await staff.setStores(storesToAssign, { transaction: t });
+
+            let aiGenerationStoresToAssign = [];
+            if (ai_generation_store_ids && Array.isArray(ai_generation_store_ids) && ai_generation_store_ids.length > 0) {
+                aiGenerationStoresToAssign = ai_generation_store_ids;
+            }
+            await staff.setAiGenerationStores(aiGenerationStoresToAssign, { transaction: t });
 
             if (day_preferences && day_preferences.length > 0) {
                 await StaffDayPreference.bulkCreate(
@@ -313,6 +324,7 @@ const createStaff = async (req, res) => {
         const createdStaff = await Staff.findByPk(result.id, {
             include: [
                 { model: Store, as: 'stores', through: { attributes: [] }, attributes: ['id', 'name', 'area'] },
+                { model: Store, as: 'aiGenerationStores', through: { attributes: [] }, attributes: ['id', 'name', 'area'] },
                 { model: StaffDayPreference, as: 'dayPreferences' },
                 { model: StaffDayOffRequest, as: 'dayOffRequests' },
             ]
@@ -330,6 +342,7 @@ const updateStaff = async (req, res) => {
         const {
             store_id,
             store_ids,
+            ai_generation_store_ids,
             first_name,
             last_name,
             furigana,
@@ -417,6 +430,14 @@ const updateStaff = async (req, res) => {
                 }
 
                 await staff.setStores(storesToAssign, { transaction: t });
+            }
+
+            if (ai_generation_store_ids !== undefined) {
+                let aiGenerationStoresToAssign = [];
+                if (ai_generation_store_ids && Array.isArray(ai_generation_store_ids) && ai_generation_store_ids.length > 0) {
+                    aiGenerationStoresToAssign = ai_generation_store_ids;
+                }
+                await staff.setAiGenerationStores(aiGenerationStoresToAssign, { transaction: t });
             }
 
             if (day_preferences !== undefined) {
@@ -533,6 +554,11 @@ const updateStaff = async (req, res) => {
             previousValuesList.push('変更前の休み希望設定');
             newValuesList.push('変更後の休み希望設定');
         }
+        if (ai_generation_store_ids !== undefined) {
+            fields.push('ai_generation_store_ids');
+            previousValuesList.push('変更前のAI生成対象店舗');
+            newValuesList.push('変更後のAI生成対象店舗');
+        }
 
         if (fields.length > 0) {
             req.logChange = {
@@ -551,6 +577,12 @@ const updateStaff = async (req, res) => {
                 {
                     model: Store,
                     as: 'stores',
+                    through: { attributes: [] },
+                    attributes: ['id', 'name', 'area']
+                },
+                {
+                    model: Store,
+                    as: 'aiGenerationStores',
                     through: { attributes: [] },
                     attributes: ['id', 'name', 'area']
                 },
