@@ -99,20 +99,26 @@ class ShiftGeneratorService {
                     year: year,
                     month: month
                 },
-                include: [{
-                    model: ShiftAssignment,
-                    as: 'assignments',
-                    where: {
-                        staff_id: staff.id,
-                        date: {
-                            [Op.between]: [
-                                period.startDate.format('YYYY-MM-DD'),
-                                period.endDate.format('YYYY-MM-DD')
-                            ]
-                        }
+                include: [
+                    {
+                        model: ShiftAssignment,
+                        as: 'assignments',
+                        where: {
+                            staff_id: staff.id,
+                            date: {
+                                [Op.between]: [
+                                    period.startDate.format('YYYY-MM-DD'),
+                                    period.endDate.format('YYYY-MM-DD')
+                                ]
+                            }
+                        },
+                        required: false
                     },
-                    required: false
-                }]
+                    {
+                        model: Store,
+                        attributes: ['id', 'name']
+                    }
+                ]
             });
 
             otherShifts.forEach(shift => {
@@ -123,7 +129,7 @@ class ShiftGeneratorService {
                             start_time: assignment.start_time,
                             end_time: assignment.end_time,
                             store_id: shift.store_id,
-                            store_name: `店舗${shift.store_id}`
+                            store_name: shift.Store ? shift.Store.name : `店舗${shift.store_id}`
                         });
                     });
                 }

@@ -215,22 +215,35 @@
                         staff.position || "一般"
                       }}</span>
                       <div class="staff-hours-info">
-                        <span
-                          class="current-hours"
-                          :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
-                          >{{ formatHours(calculateTotalHours(staff.id)) }}</span
-                        >
-                        <span
-                          v-if="hasTotalHoursFromOtherStores(staff.id)"
-                          class="total-hours-all-stores"
-                          :class="{
-                            'out-of-range': isHoursOutOfRangeAllStores(staff.id),
-                          }"
-                        >
-                          ({{
-                            formatHours(calculateTotalHoursAllStores(staff.id))
-                          }})
-                        </span>
+                        <div class="hours-display">
+                          <span
+                            class="current-hours"
+                            :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
+                            >当店: {{ formatHours(calculateTotalHours(staff.id)) }}</span
+                          >
+                          <div
+                            v-if="getOtherStoreHoursBreakdown(staff.id).length > 0"
+                            class="other-stores-hours"
+                          >
+                            <div
+                              v-for="breakdown in getOtherStoreHoursBreakdown(staff.id)"
+                              :key="breakdown.storeId"
+                              class="store-breakdown"
+                            >
+                              <span class="store-name">{{ breakdown.storeName }}:</span>
+                              <span class="store-hours">{{ formatHours(breakdown.hours) }}</span>
+                            </div>
+                          </div>
+                          <span
+                            v-if="hasTotalHoursFromOtherStores(staff.id)"
+                            class="total-hours-all-stores"
+                            :class="{
+                              'out-of-range': isHoursOutOfRangeAllStores(staff.id),
+                            }"
+                          >
+                            合計: {{ formatHours(calculateTotalHoursAllStores(staff.id)) }}
+                          </span>
+                        </div>
                         <span class="hours-range">
                           / {{ formatHours(staff.min_hours_per_month || 0) }} -
                           {{ formatHours(staff.max_hours_per_month || 0) }}
@@ -477,28 +490,42 @@
                           staff.position || "一般"
                         }}</span>
                         <div class="staff-hours-small">
-                          <span
-                            class="current-hours"
-                            :class="{
-                              'out-of-range': isHoursOutOfRange(staff.id),
-                            }"
-                            >{{
-                              formatHours(calculateTotalHours(staff.id))
-                            }}</span
-                          >
-                          <span
-                            v-if="hasTotalHoursFromOtherStores(staff.id)"
-                            class="total-hours-all-stores"
-                            :class="{
-                              'out-of-range': isHoursOutOfRangeAllStores(
-                                staff.id
-                              ),
-                            }"
-                          >
-                            ({{
-                              formatHours(calculateTotalHoursAllStores(staff.id))
-                            }})
-                          </span>
+                          <div class="hours-display">
+                            <span
+                              class="current-hours"
+                              :class="{
+                                'out-of-range': isHoursOutOfRange(staff.id),
+                              }"
+                              >当店: {{
+                                formatHours(calculateTotalHours(staff.id))
+                              }}</span
+                            >
+                            <div
+                              v-if="getOtherStoreHoursBreakdown(staff.id).length > 0"
+                              class="other-stores-hours-small"
+                            >
+                              <div
+                                v-for="breakdown in getOtherStoreHoursBreakdown(staff.id)"
+                                :key="breakdown.storeId"
+                                class="store-breakdown-small"
+                              >
+                                {{ breakdown.storeName }}: {{ formatHours(breakdown.hours) }}
+                              </div>
+                            </div>
+                            <span
+                              v-if="hasTotalHoursFromOtherStores(staff.id)"
+                              class="total-hours-all-stores"
+                              :class="{
+                                'out-of-range': isHoursOutOfRangeAllStores(
+                                  staff.id
+                                ),
+                              }"
+                            >
+                              合計: {{
+                                formatHours(calculateTotalHoursAllStores(staff.id))
+                              }}
+                            </span>
+                          </div>
                           <span class="hours-range">
                             / {{ formatHours(staff.min_hours_per_month || 0) }} -
                             {{ formatHours(staff.max_hours_per_month || 0) }}
@@ -706,22 +733,34 @@
 
                   <div class="summary-stats">
                     <div class="stat-item">
-                      <span
-                        class="stat-value"
-                        :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
-                        >{{ formatHours(calculateTotalHours(staff.id)) }}</span
-                      >
-                      <span
-                        v-if="hasTotalHoursFromOtherStores(staff.id)"
-                        class="total-hours-all-stores"
-                        :class="{
-                          'out-of-range': isHoursOutOfRangeAllStores(staff.id),
-                        }"
-                      >
-                        ({{
-                          formatHours(calculateTotalHoursAllStores(staff.id))
-                        }})
-                      </span>
+                      <div class="hours-display">
+                        <span
+                          class="stat-value"
+                          :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
+                          >当店: {{ formatHours(calculateTotalHours(staff.id)) }}</span
+                        >
+                        <div
+                          v-if="getOtherStoreHoursBreakdown(staff.id).length > 0"
+                          class="other-stores-hours-tiny"
+                        >
+                          <div
+                            v-for="breakdown in getOtherStoreHoursBreakdown(staff.id)"
+                            :key="breakdown.storeId"
+                            class="store-breakdown-tiny"
+                          >
+                            {{ breakdown.storeName }}: {{ formatHours(breakdown.hours) }}
+                          </div>
+                        </div>
+                        <span
+                          v-if="hasTotalHoursFromOtherStores(staff.id)"
+                          class="total-hours-all-stores"
+                          :class="{
+                            'out-of-range': isHoursOutOfRangeAllStores(staff.id),
+                          }"
+                        >
+                          合計: {{ formatHours(calculateTotalHoursAllStores(staff.id)) }}
+                        </span>
+                      </div>
                       <span class="stat-range">
                         / {{ formatHours(staff.min_hours_per_month || 0) }} -
                         {{ formatHours(staff.max_hours_per_month || 0) }}
@@ -769,6 +808,95 @@
             </div>
           </div>
         </div>
+
+        <!-- 全スタッフのシフト状況エリア追加 -->
+        <div class="all-staff-shift-summary">
+          <div class="summary-header">
+            <h3>
+              <i class="pi pi-chart-bar"></i>
+              全スタッフのシフト状況 ({{ currentYear }}年{{ currentMonth }}月)
+            </h3>
+          </div>
+          <div class="all-staff-summary-grid">
+            <div
+              v-for="staff in staffList"
+              :key="`all-summary-${staff.id}`"
+              class="all-staff-summary-card"
+              :class="{
+                'has-warnings': hasStaffWarningsAllStores(staff.id),
+                'hours-violation': isHoursOutOfRangeAllStores(staff.id),
+              }"
+            >
+              <div class="all-staff-header">
+                <div class="all-staff-avatar">
+                  {{ staff.first_name.charAt(0) }}
+                </div>
+                <div class="all-staff-name">
+                  {{ staff.last_name }} {{ staff.first_name }}
+                </div>
+                <div
+                  v-if="hasStaffWarningsAllStores(staff.id)"
+                  class="warning-indicator-all"
+                  :title="
+                    getStaffWarningsAllStores(staff.id)
+                      .map((w) => w.message)
+                      .join(', ')
+                  "
+                >
+                  <i class="pi pi-exclamation-triangle"></i>
+                </div>
+              </div>
+
+              <div class="all-staff-hours-breakdown">
+                <!-- 当店舗の時間 -->
+                <div class="current-store-hours">
+                  <span class="store-label">{{ selectedStore.name }}:</span>
+                  <span 
+                    class="store-hours-value"
+                    :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
+                  >
+                    {{ formatHours(calculateTotalHours(staff.id)) }}
+                  </span>
+                </div>
+
+                <!-- 他店舗の時間 -->
+                <div
+                  v-for="breakdown in getOtherStoreHoursBreakdown(staff.id)"
+                  :key="breakdown.storeId"
+                  class="other-store-hours"
+                >
+                  <span class="store-label">{{ breakdown.storeName }}:</span>
+                  <span class="store-hours-value">
+                    {{ formatHours(breakdown.hours) }}
+                  </span>
+                </div>
+
+                <!-- 合計時間 -->
+                <div class="total-hours-summary" v-if="hasTotalHoursFromOtherStores(staff.id)">
+                  <span class="total-label">合計:</span>
+                  <span 
+                    class="total-hours-value"
+                    :class="{
+                      'out-of-range': isHoursOutOfRangeAllStores(staff.id),
+                    }"
+                  >
+                    {{ formatHours(calculateTotalHoursAllStores(staff.id)) }}
+                  </span>
+                </div>
+
+                <!-- 目標範囲 -->
+                <div class="target-range">
+                  <span class="range-label">目標:</span>
+                  <span class="range-value">
+                    {{ formatHours(staff.min_hours_per_month || 0) }} - 
+                    {{ formatHours(staff.max_hours_per_month || 0) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </div>
@@ -1213,6 +1341,73 @@ export default {
       } catch (error) {
         allStoreShifts.value = {};
       }
+    };
+
+    // 他店舗時間の詳細取得
+    const getOtherStoreHoursBreakdown = (staffId) => {
+      const breakdown = [];
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return breakdown;
+
+      let staffStoreIds = [];
+      if (staff.store_ids && Array.isArray(staff.store_ids)) {
+        staffStoreIds = staff.store_ids;
+      } else if (staff.stores && Array.isArray(staff.stores)) {
+        staffStoreIds = staff.stores.map((s) => s.id);
+      }
+
+      Object.entries(allStoreShifts.value).forEach(([storeId, storeShifts]) => {
+        const storeIdNum = parseInt(storeId);
+        if (
+          storeIdNum === selectedStore.value?.id ||
+          !staffStoreIds.includes(storeIdNum)
+        ) {
+          return;
+        }
+
+        let totalMinutes = 0;
+
+        if (storeShifts && Array.isArray(storeShifts)) {
+          storeShifts.forEach((dayShift) => {
+            if (dayShift.assignments && Array.isArray(dayShift.assignments)) {
+              const assignment = dayShift.assignments.find(
+                (a) => a.staff_id === staffId
+              );
+              if (assignment) {
+                const startTime = new Date(
+                  `2000-01-01T${assignment.start_time}`
+                );
+                const endTime = new Date(`2000-01-01T${assignment.end_time}`);
+                let minutes = (endTime - startTime) / (1000 * 60);
+
+                if (assignment.break_start_time && assignment.break_end_time) {
+                  const breakStart = new Date(
+                    `2000-01-01T${assignment.break_start_time}`
+                  );
+                  const breakEnd = new Date(
+                    `2000-01-01T${assignment.break_end_time}`
+                  );
+                  const breakMinutes = (breakEnd - breakStart) / (1000 * 60);
+                  minutes -= breakMinutes;
+                }
+
+                totalMinutes += minutes;
+              }
+            }
+          });
+        }
+
+        if (totalMinutes > 0) {
+          const storeInfo = stores.value.find((s) => s.id === storeIdNum);
+          breakdown.push({
+            storeId: storeIdNum,
+            storeName: storeInfo ? storeInfo.name : `店舗${storeIdNum}`,
+            hours: Math.round((totalMinutes / 60) * 10) / 10,
+          });
+        }
+      });
+
+      return breakdown.sort((a, b) => a.storeName.localeCompare(b.storeName));
     };
 
     // 当店舗の総勤務時間計算
@@ -3401,6 +3596,7 @@ export default {
       isHoursOutOfRangeAllStores,
       hasTotalHoursFromOtherStores,
       calculateTotalHoursAllStores,
+      getOtherStoreHoursBreakdown,
       hasStaffWarnings,
       hasStaffWarningsAllStores,
       getStaffWarnings,
@@ -3484,11 +3680,9 @@ export default {
   }
 }
 
-
 .header-section {
   margin-bottom: 0.5rem;
 }
-
 
 .control-panel {
   background: white;
@@ -4159,9 +4353,15 @@ export default {
 
 .staff-hours-info {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
   gap: 0.25rem;
   margin-top: 0.25rem;
+}
+
+.hours-display {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .current-hours {
@@ -4173,6 +4373,29 @@ export default {
 .current-hours.out-of-range {
   color: #dc2626 !important;
   font-weight: 700;
+}
+
+.other-stores-hours {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.store-breakdown {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+}
+
+.store-name {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.store-hours {
+  color: #059669;
+  font-weight: 600;
 }
 
 .total-hours-all-stores {
@@ -4195,6 +4418,30 @@ export default {
   color: #f59e0b;
   font-size: 0.8rem;
   cursor: help;
+}
+
+.other-stores-hours-small {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-top: 0.25rem;
+}
+
+.store-breakdown-small {
+  font-size: 0.65rem;
+  color: #6b7280;
+}
+
+.other-stores-hours-tiny {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-top: 0.25rem;
+}
+
+.store-breakdown-tiny {
+  font-size: 0.6rem;
+  color: #6b7280;
 }
 
 .shift-cell {
@@ -4626,7 +4873,7 @@ export default {
 
 .staff-hours-small {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
   gap: 0.25rem;
   font-size: 0.75rem;
 }
@@ -4940,7 +5187,7 @@ export default {
 
 .stat-item {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
   gap: 0.25rem;
 }
 
@@ -5003,6 +5250,189 @@ export default {
   font-size: 0.85rem;
   padding: 2rem;
   text-align: center;
+}
+
+// 全スタッフのシフト状況エリア
+.all-staff-shift-summary {
+  background: white;
+  border-radius: 6px;
+  margin-top: 2rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.summary-header {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  color: white;
+}
+
+.summary-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.summary-header h3 i {
+  color: #93c5fd;
+  font-size: 1.5rem;
+}
+
+.all-staff-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: #f8f9fa;
+}
+
+.all-staff-summary-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.all-staff-summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.all-staff-summary-card.has-warnings {
+  background: #fef3c7;
+  border-color: #fbbf24;
+}
+
+.all-staff-summary-card.hours-violation {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.all-staff-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.all-staff-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.all-staff-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 1rem;
+  flex: 1;
+}
+
+.warning-indicator-all {
+  color: #f59e0b;
+  font-size: 1rem;
+  cursor: help;
+}
+
+.all-staff-hours-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.current-store-hours {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #dbeafe;
+  border-radius: 6px;
+}
+
+.other-store-hours {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #f3f4f6;
+  border-radius: 6px;
+}
+
+.total-hours-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #10b981;
+  color: white;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.target-range {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.store-label {
+  font-weight: 500;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.store-hours-value {
+  font-weight: 600;
+  color: #059669;
+  font-size: 0.9rem;
+}
+
+.store-hours-value.out-of-range {
+  color: #dc2626 !important;
+}
+
+.total-label {
+  font-weight: 600;
+  color: white;
+}
+
+.total-hours-value {
+  font-weight: 700;
+  color: white;
+}
+
+.total-hours-value.out-of-range {
+  color: #fee2e2 !important;
+}
+
+.range-label {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.range-value {
+  font-weight: 500;
+  color: #475569;
 }
 
 .shift-editor-dialog .p-dialog-content {
@@ -5173,6 +5603,10 @@ export default {
       min-height: auto;
     }
   }
+
+  .all-staff-summary-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
@@ -5228,6 +5662,10 @@ export default {
 
   .gantt-container {
     min-height: 250px;
+  }
+
+  .all-staff-summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 
