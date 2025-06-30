@@ -128,53 +128,51 @@ async function seedStaff() {
         const staff = await Staff.findByPk(data.staffId);
         if (staff) {
             await staff.setStores(data.storeIds);
+            console.log(`スタッフ${data.staffId}に店舗${data.storeIds.join(',')}を設定しました。`);
         }
     }
     console.log('スタッフの勤務可能店舗の設定が完了しました。');
 
-    // AI生成対象店舗（staff_ai_generation_stores）のランダム設定
-    console.log('AI生成対象店舗をランダムに設定します...');
+    // AI生成対象店舗（staff_ai_generation_stores）の設定 - 各スタッフ1店舗のみ
+    console.log('AI生成対象店舗を設定します（各スタッフ1店舗）...');
 
-    const allStores = [1, 2, 3, 4, 5, 6, 7, 8];
     const aiGenerationAssignments = [];
 
     for (const data of staffWorkableStores) {
         const staff = await Staff.findByPk(data.staffId);
         if (!staff) continue;
 
-        // そのスタッフが勤務可能な店舗から、ランダムにAI生成対象店舗を選択
+        // そのスタッフが勤務可能な店舗から、1つだけAI生成対象店舗を選択
         const availableStores = data.storeIds;
+        let selectedStore;
 
-        // 正社員・店長は多くの店舗でAI生成対象、アルバイト・パートは少なめ
-        let targetCount;
         if (staff.employment_type === '正社員' || staff.position === '店長') {
-            // 正社員・店長：勤務可能店舗の70-100%
-            targetCount = Math.max(1, Math.ceil(availableStores.length * (0.7 + Math.random() * 0.3)));
-        } else if (staff.employment_type === 'パート') {
-            // パート：勤務可能店舗の50-80%
-            targetCount = Math.max(1, Math.ceil(availableStores.length * (0.5 + Math.random() * 0.3)));
+            // 正社員・店長：主要店舗（store_id）を優先的に選択
+            selectedStore = availableStores.includes(staff.store_id) ? staff.store_id : availableStores[0];
         } else {
-            // アルバイト：勤務可能店舗の30-60%
-            targetCount = Math.max(1, Math.ceil(availableStores.length * (0.3 + Math.random() * 0.3)));
+            // パート・アルバイト：ランダムに1店舗を選択
+            const randomIndex = Math.floor(Math.random() * availableStores.length);
+            selectedStore = availableStores[randomIndex];
         }
 
-        const aiGenerationStores = getRandomElements(availableStores, targetCount);
+        const aiGenerationStores = [selectedStore];
 
         await staff.setAiGenerationStores(aiGenerationStores);
+        console.log(`スタッフ${data.staffId}にAI生成対象店舗${selectedStore}を設定しました。`);
 
         aiGenerationAssignments.push({
             staffId: data.staffId,
             staffName: `${staff.last_name} ${staff.first_name}`,
             employmentType: staff.employment_type,
             workableStores: availableStores,
-            aiGenerationStores: aiGenerationStores
+            aiGenerationStore: selectedStore
         });
     }
 
     console.log('AI生成対象店舗の設定が完了しました。');
     console.log('設定内容:');
     aiGenerationAssignments.forEach(assignment => {
-        console.log(`  ${assignment.staffName} (${assignment.employmentType}): 勤務可能[${assignment.workableStores.join(',')}] → AI生成[${assignment.aiGenerationStores.join(',')}]`);
+        console.log(`  ${assignment.staffName} (${assignment.employmentType}): 勤務可能[${assignment.workableStores.join(',')}] → AI生成[${assignment.aiGenerationStore}]`);
     });
 
     // 希望シフトの設定

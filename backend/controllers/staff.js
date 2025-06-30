@@ -79,6 +79,13 @@ const getAllStaff = async (req, res) => {
                 attributes: ['id', 'name', 'area'],
                 required: false,
             },
+            {
+                model: Store,
+                as: 'aiGenerationStores',
+                through: { attributes: [] },
+                attributes: ['id', 'name', 'area'],
+                required: false,
+            }
         ];
 
         if (store_id) {
@@ -89,6 +96,7 @@ const getAllStaff = async (req, res) => {
                 attributes: [],
                 through: { attributes: [] },
                 required: true,
+                duplicating: false
             });
         }
 
@@ -108,7 +116,8 @@ const getAllStaff = async (req, res) => {
                 where: { id: { [Op.in]: ownerStoreIds } },
                 attributes: [],
                 through: { attributes: [] },
-                required: true
+                required: true,
+                duplicating: false
             });
         }
 
@@ -119,7 +128,15 @@ const getAllStaff = async (req, res) => {
             distinct: true,
         });
 
-        res.status(200).json(staff);
+        // 各スタッフのstore_idsとai_generation_store_idsを追加
+        const formattedStaff = staff.map(s => {
+            const staffData = s.toJSON();
+            staffData.store_ids = staffData.stores ? staffData.stores.map(store => store.id) : [];
+            staffData.ai_generation_store_ids = staffData.aiGenerationStores ? staffData.aiGenerationStores.map(store => store.id) : [];
+            return staffData;
+        });
+
+        res.status(200).json(formattedStaff);
     } catch (error) {
         res.status(500).json({
             message: 'スタッフ一覧の取得中にエラーが発生しました',
@@ -330,7 +347,14 @@ const createStaff = async (req, res) => {
             ]
         });
 
-        res.status(201).json(createdStaff);
+        // レスポンスにstore_idsとai_generation_store_idsを追加
+        const response = {
+            ...createdStaff.toJSON(),
+            store_ids: createdStaff.stores ? createdStaff.stores.map(store => store.id) : [],
+            ai_generation_store_ids: createdStaff.aiGenerationStores ? createdStaff.aiGenerationStores.map(store => store.id) : []
+        };
+
+        res.status(201).json(response);
     } catch (error) {
         res.status(500).json({ message: 'スタッフの作成中にエラーが発生しました', error: error.message });
     }
@@ -363,6 +387,12 @@ const updateStaff = async (req, res) => {
             {
                 model: Store,
                 as: 'stores',
+                attributes: ['id', 'name'],
+                through: { attributes: [] }
+            },
+            {
+                model: Store,
+                as: 'aiGenerationStores',
                 attributes: ['id', 'name'],
                 through: { attributes: [] }
             }
@@ -591,7 +621,14 @@ const updateStaff = async (req, res) => {
             ]
         });
 
-        res.status(200).json(updatedStaff);
+        // レスポンスにstore_idsとai_generation_store_idsを追加
+        const response = {
+            ...updatedStaff.toJSON(),
+            store_ids: updatedStaff.stores ? updatedStaff.stores.map(store => store.id) : [],
+            ai_generation_store_ids: updatedStaff.aiGenerationStores ? updatedStaff.aiGenerationStores.map(store => store.id) : []
+        };
+
+        res.status(200).json(response);
     } catch (error) {
         res.status(500).json({ message: 'スタッフ情報の更新中にエラーが発生しました', error: error.message });
     }

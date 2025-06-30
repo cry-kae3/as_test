@@ -111,11 +111,7 @@ class ShiftGeneratorService {
                             ]
                         }
                     },
-                    required: false,
-                    include: [{
-                        model: Store,
-                        attributes: ['id', 'name']
-                    }]
+                    required: false
                 }]
             });
 
@@ -127,7 +123,7 @@ class ShiftGeneratorService {
                             start_time: assignment.start_time,
                             end_time: assignment.end_time,
                             store_id: shift.store_id,
-                            store_name: assignment.Store ? assignment.Store.name : `店舗${shift.store_id}`
+                            store_name: `店舗${shift.store_id}`
                         });
                     });
                 }
