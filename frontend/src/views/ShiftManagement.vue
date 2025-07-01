@@ -216,11 +216,7 @@
                       }}</span>
                       <div class="staff-hours-info">
                         <div class="hours-display">
-                          <span
-                            class="current-hours"
-                            :class="{
-                              'out-of-range': isHoursOutOfRange(staff.id),
-                            }"
+                          <span class="current-hours current-store-hours"
                             >{{ selectedStore.name }}:
                             {{
                               formatHours(calculateTotalHours(staff.id))
@@ -248,12 +244,12 @@
                             </div>
                           </div>
                           <span
-                            v-if="hasTotalHoursFromOtherStores(staff.id)"
                             class="total-hours-all-stores"
                             :class="{
                               'out-of-range': isHoursOutOfRangeAllStores(
                                 staff.id
                               ),
+                              'in-range': !isHoursOutOfRangeAllStores(staff.id),
                             }"
                           >
                             合計:
@@ -515,10 +511,7 @@
                         <div class="staff-hours-small">
                           <div class="hours-display">
                             <span
-                              class="current-hours"
-                              :class="{
-                                'out-of-range': isHoursOutOfRange(staff.id),
-                              }"
+                              class="current-hours current-store-hours"
                               >{{ selectedStore.name }}:
                               {{
                                 formatHours(calculateTotalHours(staff.id))
@@ -542,10 +535,12 @@
                               </div>
                             </div>
                             <span
-                              v-if="hasTotalHoursFromOtherStores(staff.id)"
                               class="total-hours-all-stores"
                               :class="{
                                 'out-of-range': isHoursOutOfRangeAllStores(
+                                  staff.id
+                                ),
+                                'in-range': !isHoursOutOfRangeAllStores(
                                   staff.id
                                 ),
                               }"
@@ -771,10 +766,7 @@
                     <div class="stat-item">
                       <div class="hours-display">
                         <span
-                          class="stat-value"
-                          :class="{
-                            'out-of-range': isHoursOutOfRange(staff.id),
-                          }"
+                          class="stat-value current-store-hours"
                           >{{ selectedStore.name }}:
                           {{ formatHours(calculateTotalHours(staff.id)) }}</span
                         >
@@ -796,10 +788,12 @@
                           </div>
                         </div>
                         <span
-                          v-if="hasTotalHoursFromOtherStores(staff.id)"
                           class="total-hours-all-stores"
                           :class="{
                             'out-of-range': isHoursOutOfRangeAllStores(
+                              staff.id
+                            ),
+                            'in-range': !isHoursOutOfRangeAllStores(
                               staff.id
                             ),
                           }"
