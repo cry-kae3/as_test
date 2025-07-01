@@ -859,6 +859,8 @@
         </div>
 
         <!-- 全スタッフのシフト状況エリア追加 -->
+
+        <!-- 全スタッフのシフト状況エリアを以下で置き換え -->
         <div class="all-staff-shift-summary">
           <div class="summary-header">
             <h3>
@@ -866,20 +868,106 @@
               全スタッフのシフト状況 ({{ currentYear }}年{{ currentMonth }}月)
             </h3>
           </div>
+
+          <!-- フィルター・検索パネル -->
+          <div class="table-controls-panel">
+            <div class="search-filters">
+              <div class="search-group">
+                <label class="search-label">スタッフ名検索</label>
+                <InputText
+                  v-model="allStaffTableFilters.searchName"
+                  placeholder="名前を入力..."
+                  class="search-input"
+                />
+              </div>
+
+              <div class="search-group">
+                <label class="search-label">店舗名検索</label>
+                <InputText
+                  v-model="allStaffTableFilters.searchStore"
+                  placeholder="店舗名を入力..."
+                  class="search-input"
+                />
+              </div>
+
+              <div class="filter-group">
+                <label class="search-label">ステータス</label>
+                <Dropdown
+                  v-model="allStaffTableFilters.statusFilter"
+                  :options="statusFilterOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  class="status-filter"
+                />
+              </div>
+
+              <div class="filter-group">
+                <label class="search-label">並び順</label>
+                <Dropdown
+                  v-model="allStaffTableFilters.sortBy"
+                  :options="sortOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  class="sort-filter"
+                />
+              </div>
+
+              <div class="filter-actions">
+                <Button
+                  icon="pi pi-refresh"
+                  label="リセット"
+                  class="p-button-outlined p-button-sm"
+                  @click="resetAllStaffFilters"
+                />
+              </div>
+            </div>
+
+            <div class="table-summary">
+              <span class="summary-text">
+                {{ filteredAndSortedAllStaff.length }} /
+                {{ allSystemStaff.length }} 名のスタッフを表示
+              </span>
+            </div>
+          </div>
+
           <div class="all-staff-table-container">
             <table class="all-staff-table">
               <thead>
                 <tr>
-                  <th class="staff-name-col">スタッフ名</th>
+                  <th
+                    class="staff-name-col sortable-header"
+                    @click="toggleSort('name')"
+                  >
+                    <div class="header-content">
+                      <span>スタッフ名</span>
+                      <i :class="getSortIcon('name')"></i>
+                    </div>
+                  </th>
                   <th class="store-hours-col">各店舗勤務時間</th>
-                  <th class="total-hours-col">合計時間</th>
+                  <th
+                    class="total-hours-col sortable-header"
+                    @click="toggleSort('totalHours')"
+                  >
+                    <div class="header-content">
+                      <span>合計時間</span>
+                      <i :class="getSortIcon('totalHours')"></i>
+                    </div>
+                  </th>
                   <th class="target-range-col">目標範囲</th>
-                  <th class="status-col">状態</th>
+                  <th
+                    class="status-col sortable-header"
+                    @click="toggleSort('status')"
+                  >
+                    <div class="header-content">
+                      <span>状態</span>
+                      <i :class="getSortIcon('status')"></i>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 <tr
-                  v-for="staff in allSystemStaff"
+                  v-for="staff in filteredAndSortedAllStaff"
                   :key="`all-summary-${staff.id}`"
                   class="all-staff-row"
                   :class="{
@@ -955,26 +1043,38 @@
                       {{ formatHours(staff.max_hours_per_month || 0) }}
                     </span>
                   </td>
-
-                  <!-- 状態 -->
                   <td class="status-cell">
                     <div class="status-indicators">
                       <div
-                        v-if="hasStaffWarningsForAllSystemStaff(staff.id)"
-                        class="warning-indicator-table"
-                        :title="
-                          getStaffWarningsForAllSystemStaff(staff.id)
-                            .map((w) => w.message)
-                            .join('\n')
-                        "
+                        :class="[
+                          'status-indicator',
+                          getStaffStatusInfo(staff.id).class,
+                        ]"
+                        :title="getStaffStatusInfo(staff.id).title"
                       >
-                        <i class="pi pi-exclamation-triangle"></i>
-                        <span class="warning-text">要確認</span>
+                        <i :class="getStaffStatusInfo(staff.id).icon"></i>
+                        <span class="status-text">{{
+                          getStaffStatusInfo(staff.id).text
+                        }}</span>
                       </div>
-                      <div v-else class="status-ok">
-                        <i class="pi pi-check-circle"></i>
-                        <span class="status-ok-text">正常</span>
-                      </div>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- データがない場合の表示 -->
+                <tr
+                  v-if="filteredAndSortedAllStaff.length === 0"
+                  class="no-data-row"
+                >
+                  <td colspan="5" class="no-data-cell">
+                    <div class="no-data-content">
+                      <i class="pi pi-info-circle"></i>
+                      <span v-if="allSystemStaff.length === 0">
+                        データがありません
+                      </span>
+                      <span v-else>
+                        検索条件に一致するスタッフが見つかりません
+                      </span>
                     </div>
                   </td>
                 </tr>
@@ -1215,6 +1315,7 @@ import Button from "primevue/button";
 import Dropdown from "primevue/dropdown";
 import Divider from "primevue/divider";
 import api from "@/services/api";
+import InputText from "primevue/inputtext";
 
 export default {
   name: "ShiftManagement",
@@ -1232,7 +1333,9 @@ export default {
     Button,
     Dropdown,
     Divider,
+    InputText, // 追加
   },
+
   setup() {
     const store = useStore();
     const toast = useToast();
@@ -3808,6 +3911,240 @@ export default {
       });
     };
 
+    // 全スタッフテーブルのフィルタリング・ソート機能
+    const allStaffTableFilters = reactive({
+      searchName: "",
+      searchStore: "",
+      statusFilter: "all", // all, normal, warning, violation
+      sortBy: "name", // name, totalHours, storeCount, status
+      sortOrder: "asc", // asc, desc
+    });
+
+    const statusFilterOptions = [
+      { label: "すべて", value: "all" },
+      { label: "正常", value: "normal" },
+      { label: "要確認", value: "warning" },
+      { label: "違反あり", value: "violation" },
+    ];
+
+    const sortOptions = [
+      { label: "スタッフ名", value: "name" },
+      { label: "合計時間", value: "totalHours" },
+      { label: "勤務店舗数", value: "storeCount" },
+      { label: "ステータス", value: "status" },
+    ];
+
+    // フィルタリング・ソート処理を修正
+    const filteredAndSortedAllStaff = computed(() => {
+      let filtered = [...allSystemStaff.value];
+
+      // 名前検索
+      if (allStaffTableFilters.searchName.trim()) {
+        const searchTerm = allStaffTableFilters.searchName.toLowerCase();
+        filtered = filtered.filter((staff) =>
+          `${staff.last_name} ${staff.first_name}`
+            .toLowerCase()
+            .includes(searchTerm)
+        );
+      }
+
+      // 店舗検索
+      if (allStaffTableFilters.searchStore.trim()) {
+        const searchTerm = allStaffTableFilters.searchStore.toLowerCase();
+        filtered = filtered.filter((staff) => {
+          const storeNames = getAllStoreHoursBreakdownForAllStaff(staff.id).map(
+            (breakdown) => breakdown.storeName.toLowerCase()
+          );
+          return storeNames.some((name) => name.includes(searchTerm));
+        });
+      }
+
+      // ステータス絞込み - 修正版
+      if (allStaffTableFilters.statusFilter !== "all") {
+        filtered = filtered.filter((staff) => {
+          const status = getStaffStatus(staff.id);
+          return status === allStaffTableFilters.statusFilter;
+        });
+      }
+
+      // ソート処理
+      filtered.sort((a, b) => {
+        let aValue, bValue;
+
+        switch (allStaffTableFilters.sortBy) {
+          case "name":
+            aValue = `${a.last_name} ${a.first_name}`;
+            bValue = `${b.last_name} ${b.first_name}`;
+            break;
+          case "totalHours":
+            aValue = calculateTotalHoursForAllSystemStaff(a.id);
+            bValue = calculateTotalHoursForAllSystemStaff(b.id);
+            break;
+          case "storeCount":
+            aValue = getAllStoreHoursBreakdownForAllStaff(a.id).length;
+            bValue = getAllStoreHoursBreakdownForAllStaff(b.id).length;
+            break;
+          case "status":
+            aValue = getStaffStatusPriority(a.id);
+            bValue = getStaffStatusPriority(b.id);
+            break;
+          default:
+            return 0;
+        }
+
+        if (typeof aValue === "string") {
+          const result = aValue.localeCompare(bValue);
+          return allStaffTableFilters.sortOrder === "asc" ? result : -result;
+        } else {
+          const result = aValue - bValue;
+          return allStaffTableFilters.sortOrder === "asc" ? result : -result;
+        }
+      });
+
+      return filtered;
+    });
+
+    // スタッフのステータス判定を修正
+    const getStaffStatus = (staffId) => {
+      const totalHours = calculateTotalHoursForAllSystemStaff(staffId);
+      const staff = allSystemStaff.value.find((s) => s.id === staffId);
+
+      if (!staff) return "normal";
+
+      const minHours = staff.min_hours_per_month || 0;
+      const maxHours = staff.max_hours_per_month || 0;
+
+      // 時間範囲外の場合は違反
+      if (
+        (maxHours > 0 && totalHours > maxHours) ||
+        (minHours > 0 && totalHours < minHours)
+      ) {
+        return "violation";
+      }
+
+      // その他の警告条件をチェック
+      const hasOtherWarnings = checkStaffOtherWarnings(staffId);
+      if (hasOtherWarnings) {
+        return "warning";
+      }
+
+      return "normal";
+    };
+
+    // その他の警告条件チェック
+    const checkStaffOtherWarnings = (staffId) => {
+      const staff = allSystemStaff.value.find((s) => s.id === staffId);
+      if (!staff) return false;
+
+      // ここで他の警告条件をチェック（例：連続勤務日数、1日の最大勤務時間など）
+      // 現在のシフトデータから各店舗のシフトをチェック
+      let hasViolations = false;
+
+      Object.values(allSystemStoreShifts.value).forEach((storeData) => {
+        if (storeData.shifts) {
+          storeData.shifts.forEach((dayShift) => {
+            if (dayShift.assignments) {
+              const assignment = dayShift.assignments.find(
+                (a) => a.staff_id === staffId
+              );
+              if (assignment) {
+                // 1日の勤務時間チェック
+                const dayHours = calculateDayHours(assignment);
+                const maxDayHours = staff.max_hours_per_day || 8;
+                if (dayHours > maxDayHours) {
+                  hasViolations = true;
+                }
+              }
+            }
+          });
+        }
+      });
+
+      return hasViolations;
+    };
+
+    // ステータス優先度取得（ソート用）- 修正版
+    const getStaffStatusPriority = (staffId) => {
+      const status = getStaffStatus(staffId);
+
+      switch (status) {
+        case "violation":
+          return 3; // 違反（最優先）
+        case "warning":
+          return 2; // 警告
+        case "normal":
+          return 1; // 正常
+        default:
+          return 1;
+      }
+    };
+
+    // ソート切り替え
+    const toggleSort = (sortBy) => {
+      if (allStaffTableFilters.sortBy === sortBy) {
+        allStaffTableFilters.sortOrder =
+          allStaffTableFilters.sortOrder === "asc" ? "desc" : "asc";
+      } else {
+        allStaffTableFilters.sortBy = sortBy;
+        allStaffTableFilters.sortOrder = "asc";
+      }
+    };
+
+    // フィルタリセット - 修正版
+    const resetAllStaffFilters = () => {
+      // リアクティブオブジェクトの各プロパティを個別に更新
+      allStaffTableFilters.searchName = "";
+      allStaffTableFilters.searchStore = "";
+      allStaffTableFilters.statusFilter = "all";
+      allStaffTableFilters.sortBy = "name";
+      allStaffTableFilters.sortOrder = "asc";
+
+      // nextTickで確実に更新されるようにする
+      nextTick(() => {
+        console.log("フィルターがリセットされました:", allStaffTableFilters);
+      });
+    };
+
+    // ソートアイコン取得
+    const getSortIcon = (column) => {
+      if (allStaffTableFilters.sortBy !== column) {
+        return "pi pi-sort";
+      }
+      return allStaffTableFilters.sortOrder === "asc"
+        ? "pi pi-sort-up"
+        : "pi pi-sort-down";
+    };
+
+    // ステータス表示用の関数を追加
+    const getStaffStatusInfo = (staffId) => {
+      const status = getStaffStatus(staffId);
+      const warnings = getStaffWarningsForAllSystemStaff(staffId);
+
+      switch (status) {
+        case "violation":
+          return {
+            icon: "pi pi-times-circle",
+            text: "違反あり",
+            class: "status-violation",
+            title: warnings.map((w) => w.message).join("\n"),
+          };
+        case "warning":
+          return {
+            icon: "pi pi-exclamation-triangle",
+            text: "要確認",
+            class: "status-warning",
+            title: warnings.map((w) => w.message).join("\n"),
+          };
+        default:
+          return {
+            icon: "pi pi-check-circle",
+            text: "正常",
+            class: "status-ok",
+            title: "正常な状態です",
+          };
+      }
+    };
+
     // 監視
     watch([currentYear, currentMonth], async () => {
       await loadShiftData();
@@ -3955,10 +4292,25 @@ export default {
       isHoursOutOfRangeForAllSystemStaff,
       hasStaffWarningsForAllSystemStaff,
       getStaffWarningsForAllSystemStaff,
+
+      // 新しく追加/修正
+      allStaffTableFilters,
+      statusFilterOptions,
+      sortOptions,
+      filteredAndSortedAllStaff,
+      toggleSort,
+      resetAllStaffFilters,
+      getSortIcon,
+      getStaffStatusPriority,
+      getStaffStatus,
+      getStaffStatusInfo,
+      checkStaffOtherWarnings,
     };
   },
 };
 </script>
+
+
 
 
 <style scoped lang="scss">
@@ -4300,9 +4652,8 @@ export default {
 
 .gantt-section {
   margin-bottom: 1.5rem;
-  border-radius:6px 6px 0 0;
+  border-radius: 6px 6px 0 0;
   overflow: hidden;
-
 }
 
 .daily-info-panel {
@@ -4333,12 +4684,6 @@ export default {
   align-items: center;
   gap: 0.5rem;
   box-sizing: border-box;
-}
-
-.calendar-header-style {
-}
-
-.calendar-header-style .section-title {
 }
 
 .calendar-header-style .section-title i {
@@ -5585,158 +5930,177 @@ export default {
   font-size: 1.5rem;
 }
 
-.all-staff-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-  padding: 1.5rem;
+.all-staff-table-container {
+  overflow-x: auto;
   background: #f8f9fa;
 }
 
-.all-staff-summary-card {
+.all-staff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
   background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1rem;
-  transition: all 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.all-staff-summary-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+.all-staff-table thead {
+  background: #f1f5f9;
+  border-bottom: 2px solid #e2e8f0;
 }
 
-.all-staff-summary-card.has-warnings {
-  background: #fef3c7;
-  border-color: #fbbf24;
+.all-staff-table th {
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #1e293b;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
 }
 
-.all-staff-summary-card.hours-violation {
-  background: #fee2e2;
-  border-color: #ef4444;
+.staff-name-col {
+  width: 180px;
+  min-width: 180px;
 }
 
-.all-staff-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
+.store-hours-col {
+  width: 280px;
+  min-width: 280px;
+}
+
+.total-hours-col {
+  width: 120px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.target-range-col {
+  width: 140px;
+  min-width: 140px;
+  text-align: center;
+}
+
+.status-col {
+  width: 100px;
+  min-width: 100px;
+  text-align: center;
+}
+
+.all-staff-row {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s;
+}
+
+.all-staff-row:hover {
+  background-color: #f9fafb;
+}
+
+.all-staff-table td {
+  padding: 0.75rem;
+  vertical-align: top;
   border-bottom: 1px solid #e5e7eb;
 }
 
-.all-staff-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+.staff-name-cell {
+  position: sticky;
+  left: 0;
+  background: inherit;
+  z-index: 2;
+}
+
+.staff-info-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.staff-avatar-table {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
   background: #3b82f6;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  flex-shrink: 0;
 }
 
-.all-staff-name {
+.staff-name-text {
   font-weight: 600;
   color: #1e293b;
-  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.store-hours-cell {
+  max-width: 280px;
+}
+
+.store-hours-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.store-hours-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  background: #f3f4f6;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.store-name-table {
+  color: #475569;
+  font-weight: 500;
   flex: 1;
 }
 
-.warning-indicator-all {
-  color: #f59e0b;
-  font-size: 1rem;
-  cursor: help;
-}
-
-.all-staff-hours-breakdown {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.current-store-hours {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: #dbeafe;
-  border-radius: 6px;
-}
-
-.other-store-hours {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: #f3f4f6;
-  border-radius: 6px;
-}
-
-.total-hours-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: #10b981;
-  color: white;
-  border-radius: 6px;
-  font-weight: 600;
-}
-
-.target-range {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: #f8f9fa;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.store-label {
-  font-weight: 500;
-  color: #475569;
-  font-size: 0.85rem;
-}
-
-.store-hours-value {
-  font-weight: 600;
+.store-hours-table {
   color: #059669;
-  font-size: 0.9rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
 }
 
-.store-hours-value.out-of-range {
+.no-hours {
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.no-hours-text {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
+.total-hours-cell {
+  text-align: center;
+}
+
+.total-hours-value-table {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #10b981;
+}
+
+.total-hours-value-table.out-of-range {
   color: #dc2626 !important;
 }
 
-.total-label {
-  font-weight: 600;
-  color: white;
+.target-range-cell {
+  text-align: center;
 }
 
-.total-hours-value {
-  font-weight: 700;
-  color: white;
-}
-
-.total-hours-value.out-of-range {
-  color: #fee2e2 !important;
-}
-
-.range-label {
-  font-weight: 500;
+.target-range-text {
   color: #6b7280;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
-.range-value {
-  font-weight: 500;
-  color: #475569;
+.status-cell {
+  text-align: center;
 }
 
 .shift-editor-dialog .p-dialog-content {
@@ -5893,86 +6257,6 @@ export default {
   border-color: #059669;
 }
 
-@media (max-width: 1200px) {
-  .daily-info-panel {
-    grid-template-columns: 1fr;
-
-    .daily-info-section {
-      height: auto;
-    }
-
-    .date-warnings,
-    .requirements-list,
-    .staff-summary-grid {
-      min-height: auto;
-    }
-  }
-
-  .all-staff-summary-grid {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  }
-}
-
-@media (max-width: 768px) {
-  .shift-management {
-    padding: 1rem;
-    min-width: 768px;
-    margin-left: 0;
-    margin-right: 0;
-    width: 100vw;
-    box-sizing: border-box;
-  }
-
-  .control-panel {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 1rem;
-  }
-
-  .period-controls,
-  .action-controls {
-    width: 100%;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  .action-controls {
-    gap: 0.5rem;
-  }
-
-  .action-button {
-    flex: 1;
-    min-width: 140px;
-  }
-
-  .calendar-container {
-    min-height: 350px;
-    max-height: 55vh;
-  }
-
-  .staff-column-header,
-  .staff-info,
-  .gantt-staff-header,
-  .gantt-staff-info {
-    min-width: 200px;
-    width: 200px;
-  }
-
-  .date-cell-wrapper,
-  .shift-cell {
-    min-width: 70px;
-    width: 70px;
-  }
-
-  .gantt-container {
-    min-height: 250px;
-  }
-
-  .all-staff-summary-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 .date-warnings-section .section-title {
   padding: 0.75rem 1rem;
   margin-bottom: 0;
@@ -5994,6 +6278,7 @@ export default {
   color: #f59e0b;
   font-size: 1rem;
 }
+
 .shift-cell.can-work {
   background-color: #f0fdf4;
   position: relative;
@@ -6066,224 +6351,229 @@ export default {
   text-align: left;
 }
 
-// 全スタッフのシフト状況テーブル
-.all-staff-shift-summary {
-  background: white;
-  border-radius: 6px;
-  margin-top: 2rem;
-  overflow: hidden;
-  border: 1px solid #e5e7eb;
-}
-
-.summary-header {
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #1e40af, #3b82f6);
-  color: white;
-}
-
-.summary-header h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.summary-header h3 i {
-  color: #93c5fd;
-  font-size: 1.5rem;
-}
-
-.all-staff-table-container {
-  overflow-x: auto;
+// テーブルコントロールパネルの統一スタイル
+.table-controls-panel {
   background: #f8f9fa;
-}
-
-.all-staff-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-  background: white;
-}
-
-.all-staff-table thead {
-  background: #f1f5f9;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.all-staff-table th {
-  padding: 1rem 0.75rem;
-  text-align: left;
-  font-weight: 600;
-  color: #1e293b;
-  border-bottom: 1px solid #e2e8f0;
-  white-space: nowrap;
-}
-
-.staff-name-col {
-  width: 180px;
-  min-width: 180px;
-}
-
-.store-hours-col {
-  width: 280px;
-  min-width: 280px;
-}
-
-.total-hours-col {
-  width: 120px;
-  min-width: 120px;
-  text-align: center;
-}
-
-.target-range-col {
-  width: 140px;
-  min-width: 140px;
-  text-align: center;
-}
-
-.status-col {
-  width: 100px;
-  min-width: 100px;
-  text-align: center;
-}
-
-.all-staff-row {
+  padding: 1.5rem;
   border-bottom: 1px solid #e5e7eb;
-  transition: background-color 0.2s;
-}
-
-.all-staff-row:hover {
-  background-color: #f9fafb;
-}
-
-.all-staff-row.has-warnings {
-  background-color: #fef3c7;
-}
-
-.all-staff-row.has-warnings:hover {
-  background-color: #fde68a;
-}
-
-.all-staff-row.hours-violation {
-  background-color: #fee2e2;
-}
-
-.all-staff-row.hours-violation:hover {
-  background-color: #fecaca;
-}
-
-.all-staff-table td {
-  padding: 0.75rem;
-  vertical-align: top;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.staff-name-cell {
-  position: sticky;
-  left: 0;
-  background: inherit;
-  z-index: 2;
-}
-
-.staff-info-inline {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.staff-avatar-table {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: #3b82f6;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 0.8rem;
-  flex-shrink: 0;
-}
-
-.staff-name-text {
-  font-weight: 600;
-  color: #1e293b;
-  white-space: nowrap;
-}
-
-.store-hours-cell {
-  max-width: 280px;
-}
-
-.store-hours-list {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 1rem;
 }
 
-.store-hours-item {
+.search-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr 150px 150px auto;
+  gap: 1rem;
+  align-items: end;
+}
+
+.search-group,
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+// ラベルの統一
+.search-label {
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+  height: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  margin-bottom: 0 !important;
+}
+
+// 全入力要素の高さを強制的に統一
+.search-input {
+  width: 100% !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  padding: 0.5rem 0.75rem !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  font-size: 0.875rem !important;
+  line-height: 1.4 !important;
+  transition: border-color 0.2s !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  background: white !important;
+}
+
+// PrimeVue Dropdownの強制スタイル統一
+:deep(.status-filter),
+:deep(.sort-filter) {
+  width: 100% !important;
+  height: 42px !important;
+}
+
+:deep(.status-filter .p-dropdown),
+:deep(.sort-filter .p-dropdown) {
+  width: 100% !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  font-size: 0.875rem !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  padding: 0 !important;
+  background: white !important;
+}
+
+:deep(.status-filter .p-dropdown .p-dropdown-label),
+:deep(.sort-filter .p-dropdown .p-dropdown-label) {
+  padding: 0.5rem 0.75rem !important;
+  line-height: 1.4 !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 !important;
+  font-size: 0.875rem !important;
+  border: none !important;
+  background: transparent !important;
+  margin: 0 !important;
+  min-height: auto !important;
+  max-height: none !important;
+  box-sizing: border-box !important;
+}
+
+:deep(.status-filter .p-dropdown .p-dropdown-trigger),
+:deep(.sort-filter .p-dropdown .p-dropdown-trigger) {
+  width: 32px !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: none !important;
+  background: transparent !important;
+  border-left: 1px solid #e5e7eb !important;
+  border-radius: 0 6px 6px 0 !important;
+}
+
+:deep(.status-filter .p-dropdown .p-dropdown-trigger .p-dropdown-trigger-icon),
+:deep(.sort-filter .p-dropdown .p-dropdown-trigger .p-dropdown-trigger-icon) {
+  font-size: 0.875rem !important;
+  color: #6b7280 !important;
+}
+
+// フォーカス状態の統一
+.search-input:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+:deep(.status-filter .p-dropdown:focus),
+:deep(.status-filter .p-dropdown.p-focus),
+:deep(.sort-filter .p-dropdown:focus),
+:deep(.sort-filter .p-dropdown.p-focus) {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+// ホバー状態の統一
+.search-input:hover,
+:deep(.status-filter .p-dropdown:hover),
+:deep(.sort-filter .p-dropdown:hover) {
+  border-color: #9ca3af !important;
+}
+
+// リセットボタンの調整
+.filter-actions {
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 0.5rem !important;
+}
+
+:deep(.filter-actions .p-button) {
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  padding: 0.5rem 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  white-space: nowrap !important;
+  font-size: 0.875rem !important;
+  box-sizing: border-box !important;
+  border-radius: 6px !important;
+}
+
+:deep(.filter-actions .p-button .pi) {
+  font-size: 0.875rem !important;
+}
+
+// プレースホルダーのスタイル
+.search-input::placeholder {
+  color: #9ca3af !important;
+  font-size: 0.875rem !important;
+}
+
+:deep(.status-filter .p-dropdown .p-dropdown-label.p-placeholder),
+:deep(.sort-filter .p-dropdown .p-dropdown-label.p-placeholder) {
+  color: #9ca3af !important;
+  font-size: 0.875rem !important;
+}
+
+// テーブルサマリー
+.table-summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.25rem 0.5rem;
-  background: #f3f4f6;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid #e5e7eb;
 }
 
-.store-name-table {
-  color: #475569;
-  font-weight: 500;
-  flex: 1;
-}
-
-.store-hours-table {
-  color: #059669;
-  font-weight: 600;
-  margin-left: 0.5rem;
-}
-
-.no-hours {
-  padding: 0.5rem;
-  text-align: center;
-}
-
-.no-hours-text {
-  color: #9ca3af;
-  font-style: italic;
-  font-size: 0.8rem;
-}
-
-.total-hours-cell {
-  text-align: center;
-}
-
-.total-hours-value-table {
-  font-weight: 700;
-  font-size: 1rem;
-  color: #10b981;
-}
-
-.total-hours-value-table.out-of-range {
-  color: #dc2626 !important;
-}
-
-.target-range-cell {
-  text-align: center;
-}
-
-.target-range-text {
+.summary-text {
+  font-size: 0.875rem;
   color: #6b7280;
-  font-size: 0.85rem;
   font-weight: 500;
 }
 
-.status-cell {
-  text-align: center;
+.filter-status {
+  font-size: 0.8rem;
+  color: #3b82f6;
+  font-weight: 500;
 }
 
+// ソート可能なヘッダー
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.sortable-header:hover {
+  background-color: #e5e7eb !important;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.header-content i {
+  font-size: 0.8rem;
+  color: #6b7280;
+  transition: color 0.2s;
+}
+
+.sortable-header:hover .header-content i {
+  color: #374151;
+}
+
+// ステータス表示の統一
 .status-indicators {
   display: flex;
   align-items: center;
@@ -6291,40 +6581,121 @@ export default {
   gap: 0.5rem;
 }
 
-.warning-indicator-table {
+.status-indicator {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  color: #f59e0b;
+  font-size: 0.8rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  font-weight: 500;
   cursor: help;
-  font-size: 0.8rem;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
 
-.warning-indicator-table i {
+.status-indicator.status-ok {
+  background-color: #d1fae5;
+  color: #10b981;
+  border: 1px solid #a7f3d0;
+}
+
+.status-indicator.status-warning {
+  background-color: #fef3c7;
+  color: #f59e0b;
+  border: 1px solid #fde68a;
+}
+
+.status-indicator.status-violation {
+  background-color: #fee2e2;
+  color: #ef4444;
+  border: 1px solid #fecaca;
+}
+
+.status-indicator:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.status-indicator i {
   font-size: 0.9rem;
 }
 
-.warning-text {
+.status-text {
   font-weight: 500;
 }
 
-.status-ok {
+// データなしの状態
+.no-data-row {
+  background: #f9fafb;
+}
+
+.no-data-cell {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.no-data-content {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  color: #10b981;
-  font-size: 0.8rem;
+  justify-content: center;
+  gap: 0.75rem;
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 
-.status-ok i {
-  font-size: 0.9rem;
+.no-data-content i {
+  font-size: 1.25rem;
+  color: #9ca3af;
 }
 
-.status-ok-text {
-  font-weight: 500;
+// 行のスタイル修正（重複解消）
+.all-staff-row.has-warnings {
+  background-color: #fef3c7 !important;
 }
 
+.all-staff-row.has-warnings:hover {
+  background-color: #fde68a !important;
+}
+
+.all-staff-row.hours-violation {
+  background-color: #fee2e2 !important;
+}
+
+.all-staff-row.hours-violation:hover {
+  background-color: #fecaca !important;
+}
+
+// レスポンシブ対応
 @media (max-width: 1200px) {
+  .daily-info-panel {
+    grid-template-columns: 1fr;
+
+    .daily-info-section {
+      height: auto;
+    }
+
+    .date-warnings,
+    .requirements-list,
+    .staff-summary-grid {
+      min-height: auto;
+    }
+  }
+
+  .search-filters {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .filter-group,
+  .filter-actions {
+    grid-column: span 2;
+  }
+
+  .filter-actions {
+    justify-content: flex-start;
+  }
+
   .all-staff-table-container {
     max-height: 500px;
     overflow-y: auto;
@@ -6342,6 +6713,108 @@ export default {
 }
 
 @media (max-width: 768px) {
+  .shift-management {
+    padding: 1rem;
+    min-width: 768px;
+    margin-left: 0;
+    margin-right: 0;
+    width: 100vw;
+    box-sizing: border-box;
+  }
+
+  .control-panel {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .period-controls,
+  .action-controls {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .action-controls {
+    gap: 0.5rem;
+  }
+
+  .action-button {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .calendar-container {
+    min-height: 350px;
+    max-height: 55vh;
+  }
+
+  .staff-column-header,
+  .staff-info,
+  .gantt-staff-header,
+  .gantt-staff-info {
+    min-width: 200px;
+    width: 200px;
+  }
+
+  .date-cell-wrapper,
+  .shift-cell {
+    min-width: 70px;
+    width: 70px;
+  }
+
+  .gantt-container {
+    min-height: 250px;
+  }
+
+  .search-filters {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .filter-group,
+  .filter-actions {
+    grid-column: span 1;
+  }
+
+  .table-controls-panel {
+    padding: 1rem;
+  }
+
+  .table-summary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  // モバイルでも高さを統一
+  .search-input,
+  :deep(.filter-actions .p-button),
+  :deep(.status-filter .p-dropdown),
+  :deep(.sort-filter .p-dropdown) {
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+  }
+
+  :deep(.status-filter .p-dropdown .p-dropdown-label),
+  :deep(.sort-filter .p-dropdown .p-dropdown-label) {
+    padding: 0.4rem 0.6rem !important;
+  }
+
+  .status-indicator {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .status-text {
+    display: none; // モバイルではアイコンのみ表示
+  }
+
+  .status-indicator i {
+    font-size: 1rem;
+  }
+
   .all-staff-table {
     font-size: 0.8rem;
   }
