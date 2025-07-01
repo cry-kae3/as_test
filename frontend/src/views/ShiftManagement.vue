@@ -89,7 +89,6 @@
     </div>
 
     <div class="shift-content">
-
       <div v-if="loading" class="loading-state">
         <ProgressSpinner />
         <span class="loading-text">データを読み込み中...</span>
@@ -109,7 +108,9 @@
         </div>
         <h3>シフトがありません</h3>
         <p>
-          {{ currentYear }}年{{ currentMonth }}月のシフトはまだ作成されていません
+          {{ currentYear }}年{{
+            currentMonth
+          }}月のシフトはまだ作成されていません
         </p>
         <Button
           label="シフトを作成"
@@ -126,7 +127,6 @@
         </div>
 
         <div class="calendar-section">
-
           <div class="calendar-view">
             <div class="calendar-container">
               <div class="calendar-header">
@@ -218,30 +218,50 @@
                         <div class="hours-display">
                           <span
                             class="current-hours"
-                            :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
-                            >{{ selectedStore.name }}: {{ formatHours(calculateTotalHours(staff.id)) }}</span
+                            :class="{
+                              'out-of-range': isHoursOutOfRange(staff.id),
+                            }"
+                            >{{ selectedStore.name }}:
+                            {{
+                              formatHours(calculateTotalHours(staff.id))
+                            }}</span
                           >
                           <div
-                            v-if="getOtherStoreHoursBreakdown(staff.id).length > 0"
+                            v-if="
+                              getOtherStoreHoursBreakdown(staff.id).length > 0
+                            "
                             class="other-stores-hours"
                           >
                             <div
-                              v-for="breakdown in getOtherStoreHoursBreakdown(staff.id)"
+                              v-for="breakdown in getOtherStoreHoursBreakdown(
+                                staff.id
+                              )"
                               :key="breakdown.storeId"
                               class="store-breakdown"
                             >
-                              <span class="store-name">{{ breakdown.storeName }}:</span>
-                              <span class="store-hours">{{ formatHours(breakdown.hours) }}</span>
+                              <span class="store-name"
+                                >{{ breakdown.storeName }}:</span
+                              >
+                              <span class="store-hours">{{
+                                formatHours(breakdown.hours)
+                              }}</span>
                             </div>
                           </div>
                           <span
                             v-if="hasTotalHoursFromOtherStores(staff.id)"
                             class="total-hours-all-stores"
                             :class="{
-                              'out-of-range': isHoursOutOfRangeAllStores(staff.id),
+                              'out-of-range': isHoursOutOfRangeAllStores(
+                                staff.id
+                              ),
                             }"
                           >
-                            合計: {{ formatHours(calculateTotalHoursAllStores(staff.id)) }}
+                            合計:
+                            {{
+                              formatHours(
+                                calculateTotalHoursAllStores(staff.id)
+                              )
+                            }}
                           </span>
                         </div>
                         <span class="hours-range">
@@ -297,7 +317,9 @@
                         icon="pi pi-times"
                         class="p-button-rounded p-button-danger p-button-text quick-delete-btn"
                         @click.stop="
-                          confirmQuickDelete(getShiftForStaff(day.date, staff.id))
+                          confirmQuickDelete(
+                            getShiftForStaff(day.date, staff.id)
+                          )
                         "
                         title="シフトを削除"
                         size="small"
@@ -334,7 +356,8 @@
                           -
                           {{
                             formatTime(
-                              getShiftForStaff(day.date, staff.id).break_end_time
+                              getShiftForStaff(day.date, staff.id)
+                                .break_end_time
                             )
                           }}
                         </span>
@@ -496,20 +519,26 @@
                               :class="{
                                 'out-of-range': isHoursOutOfRange(staff.id),
                               }"
-                              >{{ selectedStore.name }}: {{
+                              >{{ selectedStore.name }}:
+                              {{
                                 formatHours(calculateTotalHours(staff.id))
                               }}</span
                             >
                             <div
-                              v-if="getOtherStoreHoursBreakdown(staff.id).length > 0"
+                              v-if="
+                                getOtherStoreHoursBreakdown(staff.id).length > 0
+                              "
                               class="other-stores-hours-small"
                             >
                               <div
-                                v-for="breakdown in getOtherStoreHoursBreakdown(staff.id)"
+                                v-for="breakdown in getOtherStoreHoursBreakdown(
+                                  staff.id
+                                )"
                                 :key="breakdown.storeId"
                                 class="store-breakdown-small"
                               >
-                                {{ breakdown.storeName }}: {{ formatHours(breakdown.hours) }}
+                                {{ breakdown.storeName }}:
+                                {{ formatHours(breakdown.hours) }}
                               </div>
                             </div>
                             <span
@@ -521,13 +550,17 @@
                                 ),
                               }"
                             >
-                              合計: {{
-                                formatHours(calculateTotalHoursAllStores(staff.id))
+                              合計:
+                              {{
+                                formatHours(
+                                  calculateTotalHoursAllStores(staff.id)
+                                )
                               }}
                             </span>
                           </div>
                           <span class="hours-range">
-                            / {{ formatHours(staff.min_hours_per_month || 0) }} -
+                            /
+                            {{ formatHours(staff.min_hours_per_month || 0) }} -
                             {{ formatHours(staff.max_hours_per_month || 0) }}
                           </span>
                         </div>
@@ -571,7 +604,9 @@
                         "
                         class="gantt-availability-indicator"
                         :style="getGanttAvailabilityStyle(staff, selectedDate)"
-                        :title="getGanttAvailabilityTooltip(staff, selectedDate)"
+                        :title="
+                          getGanttAvailabilityTooltip(staff, selectedDate)
+                        "
                       ></div>
 
                       <div
@@ -610,7 +645,8 @@
                         <span class="shift-time-text">
                           {{
                             formatTime(
-                              getShiftForStaff(selectedDate, staff.id).start_time
+                              getShiftForStaff(selectedDate, staff.id)
+                                .start_time
                             )
                           }}
                           -
@@ -736,29 +772,42 @@
                       <div class="hours-display">
                         <span
                           class="stat-value"
-                          :class="{ 'out-of-range': isHoursOutOfRange(staff.id) }"
-                          >{{ selectedStore.name }}: {{ formatHours(calculateTotalHours(staff.id)) }}</span
+                          :class="{
+                            'out-of-range': isHoursOutOfRange(staff.id),
+                          }"
+                          >{{ selectedStore.name }}:
+                          {{ formatHours(calculateTotalHours(staff.id)) }}</span
                         >
                         <div
-                          v-if="getOtherStoreHoursBreakdown(staff.id).length > 0"
+                          v-if="
+                            getOtherStoreHoursBreakdown(staff.id).length > 0
+                          "
                           class="other-stores-hours-tiny"
                         >
                           <div
-                            v-for="breakdown in getOtherStoreHoursBreakdown(staff.id)"
+                            v-for="breakdown in getOtherStoreHoursBreakdown(
+                              staff.id
+                            )"
                             :key="breakdown.storeId"
                             class="store-breakdown-tiny"
                           >
-                            {{ breakdown.storeName }}: {{ formatHours(breakdown.hours) }}
+                            {{ breakdown.storeName }}:
+                            {{ formatHours(breakdown.hours) }}
                           </div>
                         </div>
                         <span
                           v-if="hasTotalHoursFromOtherStores(staff.id)"
                           class="total-hours-all-stores"
                           :class="{
-                            'out-of-range': isHoursOutOfRangeAllStores(staff.id),
+                            'out-of-range': isHoursOutOfRangeAllStores(
+                              staff.id
+                            ),
                           }"
                         >
-                          合計: {{ formatHours(calculateTotalHoursAllStores(staff.id)) }}
+                          合計:
+                          {{
+                            formatHours(calculateTotalHoursAllStores(staff.id))
+                          }}
                         </span>
                       </div>
                       <span class="stat-range">
@@ -817,77 +866,123 @@
               全スタッフのシフト状況 ({{ currentYear }}年{{ currentMonth }}月)
             </h3>
           </div>
-          <div class="all-staff-summary-grid">
-            <div
-              v-for="staff in allSystemStaff"
-              :key="`all-summary-${staff.id}`"
-              class="all-staff-summary-card"
-              :class="{
-                'has-warnings': hasStaffWarningsForAllSystemStaff(staff.id),
-                'hours-violation': isHoursOutOfRangeForAllSystemStaff(staff.id),
-              }"
-            >
-              <div class="all-staff-header">
-                <div class="all-staff-avatar">
-                  {{ staff.first_name.charAt(0) }}
-                </div>
-                <div class="all-staff-name">
-                  {{ staff.last_name }} {{ staff.first_name }}
-                </div>
-                <div
-                  v-if="hasStaffWarningsForAllSystemStaff(staff.id)"
-                  class="warning-indicator-all"
-                  :title="
-                    getStaffWarningsForAllSystemStaff(staff.id)
-                      .map((w) => w.message)
-                      .join(', ')
-                  "
+          <div class="all-staff-table-container">
+            <table class="all-staff-table">
+              <thead>
+                <tr>
+                  <th class="staff-name-col">スタッフ名</th>
+                  <th class="store-hours-col">各店舗勤務時間</th>
+                  <th class="total-hours-col">合計時間</th>
+                  <th class="target-range-col">目標範囲</th>
+                  <th class="status-col">状態</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="staff in allSystemStaff"
+                  :key="`all-summary-${staff.id}`"
+                  class="all-staff-row"
+                  :class="{
+                    'has-warnings': hasStaffWarningsForAllSystemStaff(staff.id),
+                    'hours-violation': isHoursOutOfRangeForAllSystemStaff(
+                      staff.id
+                    ),
+                  }"
                 >
-                  <i class="pi pi-exclamation-triangle"></i>
-                </div>
-              </div>
+                  <!-- スタッフ名 -->
+                  <td class="staff-name-cell">
+                    <div class="staff-info-inline">
+                      <div class="staff-avatar-table">
+                        {{ staff.first_name.charAt(0) }}
+                      </div>
+                      <span class="staff-name-text">
+                        {{ staff.last_name }} {{ staff.first_name }}
+                      </span>
+                    </div>
+                  </td>
 
-              <div class="all-staff-hours-breakdown">
-                <!-- 各店舗の時間 -->
-                <div
-                  v-for="breakdown in getAllStoreHoursBreakdownForAllStaff(staff.id)"
-                  :key="breakdown.storeId"
-                  class="other-store-hours"
-                >
-                  <span class="store-label">{{ breakdown.storeName }}:</span>
-                  <span class="store-hours-value">
-                    {{ formatHours(breakdown.hours) }}
-                  </span>
-                </div>
+                  <!-- 各店舗勤務時間 -->
+                  <td class="store-hours-cell">
+                    <div class="store-hours-list">
+                      <div
+                        v-for="breakdown in getAllStoreHoursBreakdownForAllStaff(
+                          staff.id
+                        )"
+                        :key="breakdown.storeId"
+                        class="store-hours-item"
+                      >
+                        <span class="store-name-table"
+                          >{{ breakdown.storeName }}:</span
+                        >
+                        <span class="store-hours-table">{{
+                          formatHours(breakdown.hours)
+                        }}</span>
+                      </div>
+                      <div
+                        v-if="
+                          getAllStoreHoursBreakdownForAllStaff(staff.id)
+                            .length === 0
+                        "
+                        class="no-hours"
+                      >
+                        <span class="no-hours-text">勤務なし</span>
+                      </div>
+                    </div>
+                  </td>
 
-                <!-- 合計時間 -->
-                <div class="total-hours-summary" v-if="calculateTotalHoursForAllSystemStaff(staff.id) > 0">
-                  <span class="total-label">合計:</span>
-                  <span 
-                    class="total-hours-value"
-                    :class="{
-                      'out-of-range': isHoursOutOfRangeForAllSystemStaff(staff.id),
-                    }"
-                  >
-                    {{ formatHours(calculateTotalHoursForAllSystemStaff(staff.id)) }}
-                  </span>
-                </div>
+                  <!-- 合計時間 -->
+                  <td class="total-hours-cell">
+                    <span
+                      class="total-hours-value-table"
+                      :class="{
+                        'out-of-range': isHoursOutOfRangeForAllSystemStaff(
+                          staff.id
+                        ),
+                      }"
+                    >
+                      {{
+                        formatHours(
+                          calculateTotalHoursForAllSystemStaff(staff.id)
+                        )
+                      }}
+                    </span>
+                  </td>
 
-                <!-- 目標範囲 -->
-                <div class="target-range">
-                  <span class="range-label">目標:</span>
-                  <span class="range-value">
-                    {{ formatHours(staff.min_hours_per_month || 0) }} - 
-                    {{ formatHours(staff.max_hours_per_month || 0) }}
-                  </span>
-                </div>
-              </div>
-            </div>
+                  <!-- 目標範囲 -->
+                  <td class="target-range-cell">
+                    <span class="target-range-text">
+                      {{ formatHours(staff.min_hours_per_month || 0) }} -
+                      {{ formatHours(staff.max_hours_per_month || 0) }}
+                    </span>
+                  </td>
+
+                  <!-- 状態 -->
+                  <td class="status-cell">
+                    <div class="status-indicators">
+                      <div
+                        v-if="hasStaffWarningsForAllSystemStaff(staff.id)"
+                        class="warning-indicator-table"
+                        :title="
+                          getStaffWarningsForAllSystemStaff(staff.id)
+                            .map((w) => w.message)
+                            .join('\n')
+                        "
+                      >
+                        <i class="pi pi-exclamation-triangle"></i>
+                        <span class="warning-text">要確認</span>
+                      </div>
+                      <div v-else class="status-ok">
+                        <i class="pi pi-check-circle"></i>
+                        <span class="status-ok-text">正常</span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-
       </div>
-
     </div>
 
     <Dialog
@@ -1069,7 +1164,7 @@
       :breakpoints="{ '960px': '75vw', '640px': '90vw' }"
     >
       <div class="grid">
-        <div class="col-12 md:col-6 p-2">
+        <div class="col-12 md:col-6 p-3">
           <div class="selection-card" @click="selectAIGeneration">
             <div class="card-header">
               <i class="pi pi-sparkles"></i>
@@ -1081,7 +1176,7 @@
             <Button label="AIで作成" class="p-button-primary mt-auto" />
           </div>
         </div>
-        <div class="col-12 md:col-6 p-2">
+        <div class="col-12 md:col-6 p-3">
           <div class="selection-card" @click="selectManualCreation">
             <div class="card-header">
               <i class="pi pi-pencil"></i>
@@ -1339,15 +1434,15 @@ export default {
       try {
         // 全店舗データを取得
         const allStores = await store.dispatch("store/fetchStores");
-        
+
         // 全スタッフデータを取得
         const allStaffPromises = allStores.map(async (store) => {
           try {
             const staffData = await api.get(`/staff?store_id=${store.id}`);
-            return staffData.data.map(staff => ({
+            return staffData.data.map((staff) => ({
               ...staff,
               storeName: store.name,
-              mainStoreId: store.id
+              mainStoreId: store.id,
             }));
           } catch (error) {
             return [];
@@ -1359,7 +1454,7 @@ export default {
 
         // 重複を除去（同じスタッフが複数店舗に所属している場合）
         const uniqueStaffMap = new Map();
-        allStaffFlat.forEach(staff => {
+        allStaffFlat.forEach((staff) => {
           if (!uniqueStaffMap.has(staff.id)) {
             uniqueStaffMap.set(staff.id, staff);
           }
@@ -1369,31 +1464,32 @@ export default {
         // 全店舗のシフトデータを取得
         const allShiftsPromises = allStores.map(async (store) => {
           try {
-            const response = await api.get(`/shifts/${currentYear.value}/${currentMonth.value}?store_id=${store.id}`);
+            const response = await api.get(
+              `/shifts/${currentYear.value}/${currentMonth.value}?store_id=${store.id}`
+            );
             return {
               storeId: store.id,
               storeName: store.name,
-              shifts: response.data?.shifts || []
+              shifts: response.data?.shifts || [],
             };
           } catch (error) {
             return {
               storeId: store.id,
               storeName: store.name,
-              shifts: []
+              shifts: [],
             };
           }
         });
 
         const allShiftsResults = await Promise.all(allShiftsPromises);
-        
+
         allSystemStoreShifts.value = {};
         allShiftsResults.forEach(({ storeId, storeName, shifts }) => {
           allSystemStoreShifts.value[storeId] = {
             storeName,
-            shifts
+            shifts,
           };
         });
-
       } catch (error) {
         console.error("全システムデータ取得エラー:", error);
         allSystemStaff.value = [];
@@ -1441,16 +1537,21 @@ export default {
     const getAllStoreHoursBreakdownForAllStaff = (staffId) => {
       const breakdown = [];
 
-      Object.entries(allSystemStoreShifts.value).forEach(([storeId, storeData]) => {
-        const hours = calculateStoreHoursForAllStaff(staffId, parseInt(storeId));
-        if (hours > 0) {
-          breakdown.push({
-            storeId: parseInt(storeId),
-            storeName: storeData.storeName,
-            hours
-          });
+      Object.entries(allSystemStoreShifts.value).forEach(
+        ([storeId, storeData]) => {
+          const hours = calculateStoreHoursForAllStaff(
+            staffId,
+            parseInt(storeId)
+          );
+          if (hours > 0) {
+            breakdown.push({
+              storeId: parseInt(storeId),
+              storeName: storeData.storeName,
+              hours,
+            });
+          }
         }
-      });
+      );
 
       return breakdown.sort((a, b) => a.storeName.localeCompare(b.storeName));
     };
@@ -1458,9 +1559,12 @@ export default {
     // 全システムスタッフの合計勤務時間計算
     const calculateTotalHoursForAllSystemStaff = (staffId) => {
       let totalHours = 0;
-      
-      Object.keys(allSystemStoreShifts.value).forEach(storeId => {
-        totalHours += calculateStoreHoursForAllStaff(staffId, parseInt(storeId));
+
+      Object.keys(allSystemStoreShifts.value).forEach((storeId) => {
+        totalHours += calculateStoreHoursForAllStaff(
+          staffId,
+          parseInt(storeId)
+        );
       });
 
       return totalHours;
@@ -1653,1559 +1757,1559 @@ export default {
       });
 
       const staff = staffList.value.find((s) => s.id === staffId);
-      if (!staff) return Math.round((totalMinutes/ 60) * 10) / 10;
+      if (!staff) return Math.round((totalMinutes / 60) * 10) / 10;
 
-let staffStoreIds = [];
-if (staff.store_ids && Array.isArray(staff.store_ids)) {
-  staffStoreIds = staff.store_ids;
-} else if (staff.stores && Array.isArray(staff.stores)) {
-  staffStoreIds = staff.stores.map((s) => s.id);
-}
+      let staffStoreIds = [];
+      if (staff.store_ids && Array.isArray(staff.store_ids)) {
+        staffStoreIds = staff.store_ids;
+      } else if (staff.stores && Array.isArray(staff.stores)) {
+        staffStoreIds = staff.stores.map((s) => s.id);
+      }
 
-// 他店舗の勤務時間を加算
-Object.entries(allStoreShifts.value).forEach(([storeId, storeShifts]) => {
-  const storeIdNum = parseInt(storeId);
-  if (
-    storeIdNum === selectedStore.value?.id ||
-    !staffStoreIds.includes(storeIdNum)
-  ) {
-    return;
-  }
+      // 他店舗の勤務時間を加算
+      Object.entries(allStoreShifts.value).forEach(([storeId, storeShifts]) => {
+        const storeIdNum = parseInt(storeId);
+        if (
+          storeIdNum === selectedStore.value?.id ||
+          !staffStoreIds.includes(storeIdNum)
+        ) {
+          return;
+        }
 
-  if (storeShifts && Array.isArray(storeShifts)) {
-    storeShifts.forEach((dayShift) => {
-      if (dayShift.assignments && Array.isArray(dayShift.assignments)) {
+        if (storeShifts && Array.isArray(storeShifts)) {
+          storeShifts.forEach((dayShift) => {
+            if (dayShift.assignments && Array.isArray(dayShift.assignments)) {
+              const assignment = dayShift.assignments.find(
+                (a) => a.staff_id === staffId
+              );
+              if (assignment) {
+                const startTime = new Date(
+                  `2000-01-01T${assignment.start_time}`
+                );
+                const endTime = new Date(`2000-01-01T${assignment.end_time}`);
+                let minutes = (endTime - startTime) / (1000 * 60);
+
+                if (assignment.break_start_time && assignment.break_end_time) {
+                  const breakStart = new Date(
+                    `2000-01-01T${assignment.break_start_time}`
+                  );
+                  const breakEnd = new Date(
+                    `2000-01-01T${assignment.break_end_time}`
+                  );
+                  const breakMinutes = (breakEnd - breakStart) / (1000 * 60);
+                  minutes -= breakMinutes;
+                }
+
+                totalMinutes += minutes;
+              }
+            }
+          });
+        }
+      });
+
+      return Math.round((totalMinutes / 60) * 10) / 10;
+    };
+
+    // 他店舗での勤務があるかチェック
+    const hasTotalHoursFromOtherStores = (staffId) => {
+      const currentStoreHours = calculateTotalHours(staffId);
+      const allStoreHours = calculateTotalHoursAllStores(staffId);
+      return allStoreHours > currentStoreHours;
+    };
+
+    // 当店舗の勤務時間が範囲外かチェック
+    const isHoursOutOfRange = (staffId) => {
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return false;
+
+      const totalHours = calculateTotalHours(staffId);
+      const minHours = staff.min_hours_per_month || 0;
+      const maxHours = staff.max_hours_per_month || 0;
+
+      if (minHours === 0 && maxHours === 0) return false;
+
+      return totalHours < minHours || totalHours > maxHours;
+    };
+
+    // 全店舗の勤務時間が範囲外かチェック
+    const isHoursOutOfRangeAllStores = (staffId) => {
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return false;
+
+      const totalHours = calculateTotalHoursAllStores(staffId);
+      const minHours = staff.min_hours_per_month || 0;
+      const maxHours = staff.max_hours_per_month || 0;
+
+      if (minHours === 0 && maxHours === 0) return false;
+
+      return totalHours < minHours || totalHours > maxHours;
+    };
+
+    // スタッフ警告（当店舗のみ）
+    const hasStaffWarnings = (staffId) => {
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return false;
+
+      const totalHours = calculateTotalHours(staffId);
+      const maxMonthHours = staff.max_hours_per_month || 0;
+      const minMonthHours = staff.min_hours_per_month || 0;
+
+      return totalHours > maxMonthHours || totalHours < minMonthHours;
+    };
+
+    // スタッフ警告取得（当店舗のみ）
+    const getStaffWarnings = (staffId) => {
+      const warnings = [];
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return warnings;
+
+      const totalHours = calculateTotalHours(staffId);
+      const maxMonthHours = staff.max_hours_per_month || 0;
+      const minMonthHours = staff.min_hours_per_month || 0;
+
+      if (totalHours > maxMonthHours) {
+        warnings.push({
+          type: "over_hours",
+          icon: "pi pi-exclamation-triangle",
+          message: `月間勤務時間が上限を超過 (${formatHours(
+            totalHours
+          )} > ${formatHours(maxMonthHours)})`,
+        });
+      }
+
+      if (totalHours < minMonthHours) {
+        warnings.push({
+          type: "under_hours",
+          icon: "pi pi-exclamation-triangle",
+          message: `月間勤務時間が下限を下回り (${formatHours(
+            totalHours
+          )} < ${formatHours(minMonthHours)})`,
+        });
+      }
+
+      return warnings;
+    };
+
+    // 前の日付へ移動
+    const previousDate = () => {
+      if (!selectedDate.value || daysInMonth.value.length === 0) return;
+
+      const currentIndex = daysInMonth.value.findIndex(
+        (day) => day.date === selectedDate.value
+      );
+      if (currentIndex > 0) {
+        selectedDate.value = daysInMonth.value[currentIndex - 1].date;
+      }
+    };
+
+    // 次の日付へ移動
+    const nextDate = () => {
+      if (!selectedDate.value || daysInMonth.value.length === 0) return;
+
+      const currentIndex = daysInMonth.value.findIndex(
+        (day) => day.date === selectedDate.value
+      );
+      if (currentIndex < daysInMonth.value.length - 1) {
+        selectedDate.value = daysInMonth.value[currentIndex + 1].date;
+      }
+    };
+
+    // 日次要件取得
+    const getDailyRequirements = (date) => {
+      if (!storeRequirements.value || storeRequirements.value.length === 0) {
+        return [];
+      }
+
+      const dayOfWeek = new Date(date).getDay();
+
+      const specificRequirements = storeRequirements.value.filter(
+        (req) => req.specific_date && req.specific_date === date
+      );
+
+      if (specificRequirements.length > 0) {
+        return specificRequirements;
+      }
+
+      return storeRequirements.value.filter(
+        (req) => req.day_of_week === dayOfWeek && !req.specific_date
+      );
+    };
+
+    // 時間要件があるかチェック
+    const hasHourRequirements = (date, hour) => {
+      const requirements = getDailyRequirements(date);
+      return requirements.some((req) => {
+        const reqStartHour = parseTimeToFloat(req.start_time);
+        const reqEndHour = parseTimeToFloat(req.end_time);
+        return hour >= reqStartHour && hour < reqEndHour;
+      });
+    };
+
+    // 時間不足があるかチェック
+    const hasHourShortage = (date, hour) => {
+      const requirements = getHourRequirements(date, hour);
+      return requirements.some((req) => hasRequirementShortage(date, req));
+    };
+
+    // 時間要件取得
+    const getHourRequirements = (date, hour) => {
+      const requirements = getDailyRequirements(date);
+      return requirements.filter((req) => {
+        const reqStartHour = parseTimeToFloat(req.start_time);
+        const reqEndHour = parseTimeToFloat(req.end_time);
+        return hour >= reqStartHour && hour < reqEndHour;
+      });
+    };
+
+    // 時間フォーマット
+    const formatHours = (hours) => {
+      if (typeof hours !== "number" || isNaN(hours) || hours < 0) {
+        hours = 0;
+      }
+
+      const totalMinutes = Math.round(hours * 60);
+      const displayHours = Math.floor(totalMinutes / 60);
+      const displayMinutes = totalMinutes % 60;
+
+      if (displayMinutes === 0) {
+        return `${displayHours}時間`;
+      } else {
+        return `${displayHours}時間${displayMinutes}分`;
+      }
+    };
+
+    // シフト時間変更処理
+    const handleShiftTimeChange = () => {
+      if (!shiftEditorDialog.hasBreak) {
+        shiftEditorDialog.breakStartTimeHour = "";
+        shiftEditorDialog.breakStartTimeMinute = "";
+        shiftEditorDialog.breakEndTimeHour = "";
+        shiftEditorDialog.breakEndTimeMinute = "";
+      }
+    };
+
+    // クイック削除確認
+    const confirmQuickDelete = (shift) => {
+      if (!shift) return;
+
+      confirm.require({
+        message: "このシフトを削除しますか？",
+        header: "シフト削除の確認",
+        icon: "pi pi-exclamation-triangle",
+        acceptClass: "p-button-danger",
+        acceptLabel: "削除",
+        rejectLabel: "キャンセル",
+        accept: async () => {
+          try {
+            await store.dispatch("shift/deleteShiftAssignment", {
+              year: currentYear.value,
+              month: currentMonth.value,
+              assignmentId: shift.id,
+            });
+
+            await loadShiftData();
+
+            toast.add({
+              severity: "success",
+              summary: "削除完了",
+              detail: "シフトを削除しました",
+              life: 3000,
+            });
+          } catch (error) {
+            toast.add({
+              severity: "error",
+              summary: "エラー",
+              detail: "シフトの削除に失敗しました",
+              life: 3000,
+            });
+          }
+        },
+      });
+    };
+
+    // ガントチャート休憩バースタイル
+    const getGanttBreakBarStyle = (shift) => {
+      if (!shift || !shift.break_start_time || !shift.break_end_time) {
+        return { display: "none" };
+      }
+
+      const breakStartFloat = parseTimeToFloat(shift.break_start_time);
+      const breakEndFloat = parseTimeToFloat(shift.break_end_time);
+      const shiftStartFloat = parseTimeToFloat(shift.start_time);
+
+      const hourWidth = 60;
+      const breakStartOffset = (breakStartFloat - shiftStartFloat) * hourWidth;
+      const breakWidth = (breakEndFloat - breakStartFloat) * hourWidth;
+
+      return {
+        left: `${breakStartOffset}px`,
+        width: `${breakWidth}px`,
+        display: "block",
+      };
+    };
+
+    // スタッフが特定日に勤務可能かチェック
+    const canStaffWorkOnDate = (staff, date) => {
+      const hasDayOffRequest =
+        staff.dayOffRequests &&
+        staff.dayOffRequests.some(
+          (request) =>
+            request.date === date &&
+            (request.status === "approved" || request.status === "pending")
+        );
+
+      if (hasDayOffRequest) {
+        return false;
+      }
+
+      const dayOfWeek = new Date(date).getDay();
+      const dayPreference =
+        staff.dayPreferences &&
+        staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
+
+      if (dayPreference && !dayPreference.available) {
+        return false;
+      }
+
+      return true;
+    };
+
+    // 勤務可能性ツールチップ取得
+    const getWorkAvailabilityTooltip = (staff, date) => {
+      const dayOfWeek = new Date(date).getDay();
+      const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+      const dayPreference =
+        staff.dayPreferences &&
+        staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
+
+      let tooltip = `${dayNames[dayOfWeek]}曜日：勤務可能`;
+
+      if (
+        dayPreference &&
+        dayPreference.preferred_start_time &&
+        dayPreference.preferred_end_time
+      ) {
+        tooltip += `\n希望時間：${formatTime(
+          dayPreference.preferred_start_time
+        )}-${formatTime(dayPreference.preferred_end_time)}`;
+      }
+
+      return tooltip;
+    };
+
+    // 勤務不可理由取得
+    const getWorkUnavailabilityReason = (staff, date) => {
+      const dayOffRequest =
+        staff.dayOffRequests &&
+        staff.dayOffRequests.find(
+          (request) =>
+            request.date === date &&
+            (request.status === "approved" || request.status === "pending")
+        );
+
+      if (dayOffRequest) {
+        return `休み希望：${dayOffRequest.reason || "お休み"}`;
+      }
+
+      const dayOfWeek = new Date(date).getDay();
+      const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+      const dayPreference =
+        staff.dayPreferences &&
+        staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
+
+      if (dayPreference && !dayPreference.available) {
+        return `${dayNames[dayOfWeek]}曜日：勤務不可`;
+      }
+
+      return "勤務不可";
+    };
+
+    // ガントチャート可用性スタイル
+    const getGanttAvailabilityStyle = (staff, date) => {
+      if (!canStaffWorkOnDate(staff, date)) {
+        return { display: "none" };
+      }
+
+      const dayOfWeek = new Date(date).getDay();
+      const dayPreference =
+        staff.dayPreferences &&
+        staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
+
+      if (
+        !dayPreference ||
+        !dayPreference.preferred_start_time ||
+        !dayPreference.preferred_end_time
+      ) {
+        return { display: "none" };
+      }
+
+      const startHourFloat = parseTimeToFloat(
+        dayPreference.preferred_start_time
+      );
+      const endHourFloat = parseTimeToFloat(dayPreference.preferred_end_time);
+
+      const hourWidth = 60;
+      const left = startHourFloat * hourWidth;
+      const width = (endHourFloat - startHourFloat) * hourWidth;
+
+      return {
+        left: `${left}px`,
+        width: `${width}px`,
+        display: "block",
+      };
+    };
+
+    // ガントチャート可用性ツールチップ
+    const getGanttAvailabilityTooltip = (staff, date) => {
+      const dayOfWeek = new Date(date).getDay();
+      const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+      const dayPreference =
+        staff.dayPreferences &&
+        staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
+
+      if (
+        !dayPreference ||
+        !dayPreference.preferred_start_time ||
+        !dayPreference.preferred_end_time
+      ) {
+        return "";
+      }
+
+      return `${staff.last_name} ${staff.first_name}\n${
+        dayNames[dayOfWeek]
+      }曜日 希望時間：${formatTime(
+        dayPreference.preferred_start_time
+      )}-${formatTime(dayPreference.preferred_end_time)}`;
+    };
+
+    // 要件不足があるかチェック
+    const hasRequirementShortage = (date, requirement) => {
+      const assignedCount = getAssignedStaffCount(date, requirement);
+      return assignedCount < requirement.required_staff_count;
+    };
+
+    // 日勤務時間計算
+    const calculateDayHours = (shift) => {
+      if (!shift) return 0;
+
+      const startTime = new Date(`2000-01-01T${shift.start_time}`);
+      const endTime = new Date(`2000-01-01T${shift.end_time}`);
+      let workMillis = endTime - startTime;
+
+      if (shift.break_start_time && shift.break_end_time) {
+        const breakStart = new Date(`2000-01-01T${shift.break_start_time}`);
+        const breakEnd = new Date(`2000-01-01T${shift.break_end_time}`);
+        const breakMillis = breakEnd - breakStart;
+        workMillis -= breakMillis;
+      }
+
+      return Math.round((workMillis / (1000 * 60 * 60)) * 100) / 100;
+    };
+
+    // 人員不足があるかチェック
+    const hasStaffingShortage = (date, requirement) => {
+      const assignedCount = getAssignedStaffCount(date, requirement);
+      return assignedCount < requirement.required_staff_count;
+    };
+
+    // 割り当てられたスタッフ数取得
+    const getAssignedStaffCount = (date, requirement) => {
+      const dayShifts = shifts.value.find((shift) => shift.date === date);
+      if (!dayShifts) return 0;
+
+      const reqStartTime = parseTimeToFloat(requirement.start_time);
+      const reqEndTime = parseTimeToFloat(requirement.end_time);
+
+      return dayShifts.assignments.filter((assignment) => {
+        const shiftStartTime = parseTimeToFloat(assignment.start_time);
+        const shiftEndTime = parseTimeToFloat(assignment.end_time);
+
+        return shiftStartTime < reqEndTime && shiftEndTime > reqStartTime;
+      }).length;
+    };
+
+    // スタッフ警告（全店舗）があるかチェック
+    const hasStaffWarningsAllStores = (staffId) => {
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return false;
+
+      const totalHours = calculateTotalHoursAllStores(staffId);
+      const maxMonthHours = staff.max_hours_per_month || 0;
+      const minMonthHours = staff.min_hours_per_month || 0;
+      const maxDayHours = staff.max_hours_per_day || 8;
+
+      let hasViolation = false;
+
+      if (
+        maxMonthHours > 0 &&
+        (totalHours > maxMonthHours || totalHours < minMonthHours)
+      ) {
+        hasViolation = true;
+      }
+
+      shifts.value.forEach((dayShift) => {
         const assignment = dayShift.assignments.find(
           (a) => a.staff_id === staffId
         );
         if (assignment) {
-          const startTime = new Date(
-            `2000-01-01T${assignment.start_time}`
-          );
-          const endTime = new Date(`2000-01-01T${assignment.end_time}`);
-          let minutes = (endTime - startTime) / (1000 * 60);
-
-          if (assignment.break_start_time && assignment.break_end_time) {
-            const breakStart = new Date(
-              `2000-01-01T${assignment.break_start_time}`
-            );
-            const breakEnd = new Date(
-              `2000-01-01T${assignment.break_end_time}`
-            );
-            const breakMinutes = (breakEnd - breakStart) / (1000 * 60);
-            minutes -= breakMinutes;
+          const dayHours = calculateDayHours(assignment);
+          if (dayHours > maxDayHours) {
+            hasViolation = true;
           }
 
-          totalMinutes += minutes;
+          const dayOfWeek = new Date(dayShift.date).getDay();
+          const dayPreference = staff.dayPreferences?.find(
+            (pref) => pref.day_of_week === dayOfWeek
+          );
+          if (dayPreference && !dayPreference.available) {
+            hasViolation = true;
+          }
+
+          const dayOffRequest = staff.dayOffRequests?.find(
+            (req) =>
+              req.date === dayShift.date &&
+              (req.status === "approved" || req.status === "pending")
+          );
+          if (dayOffRequest) {
+            hasViolation = true;
+          }
+        }
+      });
+
+      return hasViolation;
+    };
+
+    // スタッフ警告（全店舗）取得
+    const getStaffWarningsAllStores = (staffId) => {
+      const warnings = [];
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return warnings;
+
+      const totalHours = calculateTotalHoursAllStores(staffId);
+      const maxMonthHours = staff.max_hours_per_month || 0;
+      const minMonthHours = staff.min_hours_per_month || 0;
+      const maxDayHours = staff.max_hours_per_day || 8;
+
+      if (maxMonthHours > 0 && totalHours > maxMonthHours) {
+        warnings.push({
+          type: "over_hours",
+          icon: "pi pi-exclamation-triangle",
+          message: `月間勤務時間が上限を超過 (全店舗合計: ${formatHours(
+            totalHours
+          )} > ${formatHours(maxMonthHours)})`,
+          severity: "error",
+        });
+      }
+
+      if (minMonthHours > 0 && totalHours < minMonthHours) {
+        warnings.push({
+          type: "under_hours",
+          icon: "pi pi-exclamation-triangle",
+          message: `月間勤務時間が下限を下回り (全店舗合計: ${formatHours(
+            totalHours
+          )} < ${formatHours(minMonthHours)})`,
+          severity: "warn",
+        });
+      }
+
+      const violationDays = [];
+      shifts.value.forEach((dayShift) => {
+        const assignment = dayShift.assignments.find(
+          (a) => a.staff_id === staffId
+        );
+        if (assignment) {
+          const dayHours = calculateDayHours(assignment);
+          if (dayHours > maxDayHours) {
+            violationDays.push({
+              date: dayShift.date,
+              type: "day_hours_exceeded",
+              message: `${dayShift.date}: 1日勤務時間超過 (${formatHours(
+                dayHours
+              )} > ${formatHours(maxDayHours)})`,
+            });
+          }
+
+          const dayOfWeek = new Date(dayShift.date).getDay();
+          const dayPreference = staff.dayPreferences?.find(
+            (pref) => pref.day_of_week === dayOfWeek
+          );
+          if (dayPreference && !dayPreference.available) {
+            violationDays.push({
+              date: dayShift.date,
+              type: "unavailable_day",
+              message: `${dayShift.date}: 勤務不可曜日に割り当て (${
+                ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek]
+              }曜日)`,
+            });
+          }
+
+          const dayOffRequest = staff.dayOffRequests?.find(
+            (req) =>
+              req.date === dayShift.date &&
+              (req.status === "approved" || req.status === "pending")
+          );
+          if (dayOffRequest) {
+            violationDays.push({
+              date: dayShift.date,
+              type: "day_off_violation",
+              message: `${dayShift.date}: 休み希望日に割り当て (${
+                dayOffRequest.reason || "お休み"
+              })`,
+            });
+          }
+        }
+      });
+
+      if (violationDays.length > 0) {
+        warnings.push({
+          type: "schedule_violations",
+          icon: "pi pi-ban",
+          message: `スケジュール違反 ${violationDays.length}件`,
+          severity: "error",
+          details: violationDays,
+        });
+      }
+
+      return warnings;
+    };
+
+    // シフト違反があるかチェック
+    const hasShiftViolation = (date, staffId) => {
+      const shift = getShiftForStaff(date, staffId);
+      if (!shift) return false;
+
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return false;
+
+      const dayHours = calculateDayHours(shift);
+      const maxDayHours = staff.max_hours_per_day || 8;
+
+      if (dayHours > maxDayHours) {
+        return true;
+      }
+
+      const dayOfWeek = new Date(date).getDay();
+      const dayPreference = staff.dayPreferences?.find(
+        (pref) => pref.day_of_week === dayOfWeek
+      );
+      if (dayPreference && !dayPreference.available) {
+        return true;
+      }
+
+      const dayOffRequest = staff.dayOffRequests?.find(
+        (req) =>
+          req.date === date &&
+          (req.status === "approved" || req.status === "pending")
+      );
+      if (dayOffRequest) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // シフト違反内容取得
+    const getShiftViolations = (date, staffId) => {
+      const violations = [];
+      const shift = getShiftForStaff(date, staffId);
+      if (!shift) return violations;
+
+      const staff = staffList.value.find((s) => s.id === staffId);
+      if (!staff) return violations;
+
+      const dayHours = calculateDayHours(shift);
+      const maxDayHours = staff.max_hours_per_day || 8;
+
+      if (dayHours > maxDayHours) {
+        violations.push({
+          type: "day_hours",
+          icon: "pi pi-clock",
+          message: `1日の勤務時間が上限を超過 (${formatHours(
+            dayHours
+          )} > ${formatHours(maxDayHours)})`,
+          severity: "error",
+        });
+      }
+
+      const dayOfWeek = new Date(date).getDay();
+      const dayPreference = staff.dayPreferences?.find(
+        (pref) => pref.day_of_week === dayOfWeek
+      );
+      if (dayPreference && !dayPreference.available) {
+        violations.push({
+          type: "unavailable_day",
+          icon: "pi pi-ban",
+          message: `${
+            ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek]
+          }曜日は勤務不可設定です`,
+          severity: "error",
+        });
+      }
+
+      const dayOffRequest = staff.dayOffRequests?.find(
+        (req) =>
+          req.date === date &&
+          (req.status === "approved" || req.status === "pending")
+      );
+      if (dayOffRequest) {
+        violations.push({
+          type: "day_off_violation",
+          icon: "pi pi-ban",
+          message: `休み希望日です (${dayOffRequest.reason || "お休み"})`,
+          severity: "error",
+        });
+      }
+
+      return violations;
+    };
+
+    // 日付警告があるかチェック
+    const hasDateWarnings = (date) => {
+      const requirements = getDailyRequirements(date);
+      return (
+        requirements.some((req) => hasStaffingShortage(date, req)) ||
+        staffList.value.some((staff) => hasShiftViolation(date, staff.id))
+      );
+    };
+
+    // 日付警告取得
+    const getDateWarnings = (date) => {
+      const warnings = [];
+      const requirements = getDailyRequirements(date);
+
+      requirements.forEach((req) => {
+        if (hasStaffingShortage(date, req)) {
+          const assigned = getAssignedStaffCount(date, req);
+          warnings.push({
+            type: "staffing_shortage",
+            icon: "pi pi-users",
+            message: `${formatTime(req.start_time)}-${formatTime(
+              req.end_time
+            )}: 人員不足 (${assigned}/${req.required_staff_count}名)`,
+          });
+        }
+      });
+
+      staffList.value.forEach((staff) => {
+        if (hasShiftViolation(date, staff.id)) {
+          warnings.push({
+            type: "staff_violation",
+            icon: "pi pi-exclamation-triangle",
+            message: `${staff.last_name} ${staff.first_name}: 勤務条件違反`,
+          });
+        }
+      });
+
+      return warnings;
+    };
+
+    // 日付選択
+    const selectDate = (date) => {
+      selectedDate.value = date;
+      updateSelectedDateCalendar();
+      nextTick(() => {
+        if (ganttBody.value) {
+          ganttBody.value.scrollLeft = 0;
+        }
+      });
+    };
+
+    // 選択日付カレンダー更新
+    const updateSelectedDateCalendar = () => {
+      if (selectedDate.value) {
+        selectedDateCalendar.value = new Date(selectedDate.value);
+      }
+    };
+
+    // 日付範囲更新
+    const updateDateRanges = () => {
+      if (daysInMonth.value.length > 0) {
+        minSelectableDate.value = new Date(daysInMonth.value[0].date);
+        maxSelectableDate.value = new Date(
+          daysInMonth.value[daysInMonth.value.length - 1].date
+        );
+      }
+    };
+
+    // 日付選択イベント
+    const onDateSelect = (event) => {
+      if (event.value) {
+        const selectedDateStr = formatDateToString(event.value);
+        if (daysInMonth.value.some((day) => day.date === selectedDateStr)) {
+          selectedDate.value = selectedDateStr;
         }
       }
-    });
-  }
-});
-
-return Math.round((totalMinutes / 60) * 10) / 10;
-};
-
-// 他店舗での勤務があるかチェック
-const hasTotalHoursFromOtherStores = (staffId) => {
-const currentStoreHours = calculateTotalHours(staffId);
-const allStoreHours = calculateTotalHoursAllStores(staffId);
-return allStoreHours > currentStoreHours;
-};
-
-// 当店舗の勤務時間が範囲外かチェック
-const isHoursOutOfRange = (staffId) => {
-const staff = staffList.value.find((s) => s.id === staffId);
-if (!staff) return false;
-
-const totalHours = calculateTotalHours(staffId);
-const minHours = staff.min_hours_per_month || 0;
-const maxHours = staff.max_hours_per_month || 0;
-
-if (minHours === 0 && maxHours === 0) return false;
-
-return totalHours < minHours || totalHours > maxHours;
-};
-
-// 全店舗の勤務時間が範囲外かチェック
-const isHoursOutOfRangeAllStores = (staffId) => {
-const staff = staffList.value.find((s) => s.id === staffId);
-if (!staff) return false;
-
-const totalHours = calculateTotalHoursAllStores(staffId);
-const minHours = staff.min_hours_per_month || 0;
-const maxHours = staff.max_hours_per_month || 0;
-
-if (minHours === 0 && maxHours === 0) return false;
-
-return totalHours < minHours || totalHours > maxHours;
-};
-
-// スタッフ警告（当店舗のみ）
-const hasStaffWarnings = (staffId) => {
-const staff = staffList.value.find((s) => s.id === staffId);
-if (!staff) return false;
-
-const totalHours = calculateTotalHours(staffId);
-const maxMonthHours = staff.max_hours_per_month || 0;
-const minMonthHours = staff.min_hours_per_month || 0;
-
-return totalHours > maxMonthHours || totalHours < minMonthHours;
-};
-
-// スタッフ警告取得（当店舗のみ）
-const getStaffWarnings = (staffId) => {
-const warnings = [];
-const staff = staffList.value.find((s) => s.id === staffId);
-if (!staff) return warnings;
-
-const totalHours = calculateTotalHours(staffId);
-const maxMonthHours = staff.max_hours_per_month || 0;
-const minMonthHours = staff.min_hours_per_month || 0;
-
-if (totalHours > maxMonthHours) {
-  warnings.push({
-    type: "over_hours",
-    icon: "pi pi-exclamation-triangle",
-    message: `月間勤務時間が上限を超過 (${formatHours(
-      totalHours
-    )} > ${formatHours(maxMonthHours)})`,
-  });
-}
-
-if (totalHours < minMonthHours) {
-  warnings.push({
-    type: "under_hours",
-    icon: "pi pi-exclamation-triangle",
-    message: `月間勤務時間が下限を下回り (${formatHours(
-      totalHours
-    )} < ${formatHours(minMonthHours)})`,
-  });
-}
-
-return warnings;
-};
-
-// 前の日付へ移動
-const previousDate = () => {
-if (!selectedDate.value || daysInMonth.value.length === 0) return;
-
-const currentIndex = daysInMonth.value.findIndex(
-  (day) => day.date === selectedDate.value
-);
-if (currentIndex > 0) {
-  selectedDate.value = daysInMonth.value[currentIndex - 1].date;
-}
-};
-
-// 次の日付へ移動
-const nextDate = () => {
-if (!selectedDate.value || daysInMonth.value.length === 0) return;
-
-const currentIndex = daysInMonth.value.findIndex(
-  (day) => day.date === selectedDate.value
-);
-if (currentIndex < daysInMonth.value.length - 1) {
-  selectedDate.value = daysInMonth.value[currentIndex + 1].date;
-}
-};
-
-// 日次要件取得
-const getDailyRequirements = (date) => {
-if (!storeRequirements.value || storeRequirements.value.length === 0) {
-  return [];
-}
-
-const dayOfWeek = new Date(date).getDay();
-
-const specificRequirements = storeRequirements.value.filter(
-  (req) => req.specific_date && req.specific_date === date
-);
-
-if (specificRequirements.length > 0) {
-  return specificRequirements;
-}
-
-return storeRequirements.value.filter(
-  (req) => req.day_of_week === dayOfWeek && !req.specific_date
-);
-};
-
-// 時間要件があるかチェック
-const hasHourRequirements = (date, hour) => {
-const requirements = getDailyRequirements(date);
-return requirements.some((req) => {
-  const reqStartHour = parseTimeToFloat(req.start_time);
-  const reqEndHour = parseTimeToFloat(req.end_time);
-  return hour >= reqStartHour && hour < reqEndHour;
-});
-};
-
-// 時間不足があるかチェック
-const hasHourShortage = (date, hour) => {
-const requirements = getHourRequirements(date, hour);
-return requirements.some((req) => hasRequirementShortage(date, req));
-};
-
-// 時間要件取得
-const getHourRequirements = (date, hour) => {
-const requirements = getDailyRequirements(date);
-return requirements.filter((req) => {
-  const reqStartHour = parseTimeToFloat(req.start_time);
-  const reqEndHour = parseTimeToFloat(req.end_time);
-  return hour >= reqStartHour && hour < reqEndHour;
-});
-};
-
-// 時間フォーマット
-const formatHours = (hours) => {
-if (typeof hours !== "number" || isNaN(hours) || hours < 0) {
-  hours = 0;
-}
-
-const totalMinutes = Math.round(hours * 60);
-const displayHours = Math.floor(totalMinutes / 60);
-const displayMinutes = totalMinutes % 60;
-
-if (displayMinutes === 0) {
-  return `${displayHours}時間`;
-} else {
-  return `${displayHours}時間${displayMinutes}分`;
-}
-};
-
-// シフト時間変更処理
-const handleShiftTimeChange = () => {
-if (!shiftEditorDialog.hasBreak) {
-  shiftEditorDialog.breakStartTimeHour = "";
-  shiftEditorDialog.breakStartTimeMinute = "";
-  shiftEditorDialog.breakEndTimeHour = "";
-  shiftEditorDialog.breakEndTimeMinute = "";
-}
-};
-
-// クイック削除確認
-const confirmQuickDelete = (shift) => {
-if (!shift) return;
-
-confirm.require({
-  message: "このシフトを削除しますか？",
-  header: "シフト削除の確認",
-  icon: "pi pi-exclamation-triangle",
-  acceptClass: "p-button-danger",
-  acceptLabel: "削除",
-  rejectLabel: "キャンセル",
-  accept: async () => {
-    try {
-      await store.dispatch("shift/deleteShiftAssignment", {
-        year: currentYear.value,
-        month: currentMonth.value,
-        assignmentId: shift.id,
-      });
-
-      await loadShiftData();
-
-      toast.add({
-        severity: "success",
-        summary: "削除完了",
-        detail: "シフトを削除しました",
-        life: 3000,
-      });
-    } catch (error) {
-      toast.add({
-        severity: "error",
-        summary: "エラー",
-        detail: "シフトの削除に失敗しました",
-        life: 3000,
-      });
-    }
-  },
-});
-};
-
-// ガントチャート休憩バースタイル
-const getGanttBreakBarStyle = (shift) => {
-if (!shift || !shift.break_start_time || !shift.break_end_time) {
-  return { display: "none" };
-}
-
-const breakStartFloat = parseTimeToFloat(shift.break_start_time);
-const breakEndFloat = parseTimeToFloat(shift.break_end_time);
-const shiftStartFloat = parseTimeToFloat(shift.start_time);
-
-const hourWidth = 60;
-const breakStartOffset = (breakStartFloat - shiftStartFloat) * hourWidth;
-const breakWidth = (breakEndFloat - breakStartFloat) * hourWidth;
-
-return {
-  left: `${breakStartOffset}px`,
-  width: `${breakWidth}px`,
-  display: "block",
-};
-};
-
-// スタッフが特定日に勤務可能かチェック
-const canStaffWorkOnDate = (staff, date) => {
-const hasDayOffRequest =
-  staff.dayOffRequests &&
-  staff.dayOffRequests.some(
-    (request) =>
-      request.date === date &&
-      (request.status === "approved" || request.status === "pending")
-  );
-
-if (hasDayOffRequest) {
-  return false;
-}
-
-const dayOfWeek = new Date(date).getDay();
-const dayPreference =
-  staff.dayPreferences &&
-  staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
-
-if (dayPreference && !dayPreference.available) {
-  return false;
-}
-
-return true;
-};
-
-// 勤務可能性ツールチップ取得
-const getWorkAvailabilityTooltip = (staff, date) => {
-const dayOfWeek = new Date(date).getDay();
-const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
-const dayPreference =
-  staff.dayPreferences &&
-  staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
-
-let tooltip = `${dayNames[dayOfWeek]}曜日：勤務可能`;
-
-if (
-  dayPreference &&
-  dayPreference.preferred_start_time &&
-  dayPreference.preferred_end_time
-) {
-  tooltip += `\n希望時間：${formatTime(
-    dayPreference.preferred_start_time
-  )}-${formatTime(dayPreference.preferred_end_time)}`;
-}
-
-return tooltip;
-};
-
-// 勤務不可理由取得
-const getWorkUnavailabilityReason = (staff, date) => {
-const dayOffRequest =
-  staff.dayOffRequests &&
-  staff.dayOffRequests.find(
-    (request) =>
-      request.date === date &&
-      (request.status === "approved" || request.status === "pending")
-  );
-
-if (dayOffRequest) {
-  return `休み希望：${dayOffRequest.reason || "お休み"}`;
-}
-
-const dayOfWeek = new Date(date).getDay();
-const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
-const dayPreference =
-  staff.dayPreferences &&
-  staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
-
-if (dayPreference && !dayPreference.available) {
-  return `${dayNames[dayOfWeek]}曜日：勤務不可`;
-}
-
-return "勤務不可";
-};
-
-// ガントチャート可用性スタイル
-const getGanttAvailabilityStyle = (staff, date) => {
-if (!canStaffWorkOnDate(staff, date)) {
-  return { display: "none" };
-}
-
-const dayOfWeek = new Date(date).getDay();
-const dayPreference =
-  staff.dayPreferences &&
-  staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
-
-if (
-  !dayPreference ||
-  !dayPreference.preferred_start_time ||
-  !dayPreference.preferred_end_time
-) {
-  return { display: "none" };
-}
-
-const startHourFloat = parseTimeToFloat(
-  dayPreference.preferred_start_time
-);
-const endHourFloat = parseTimeToFloat(dayPreference.preferred_end_time);
-
-const hourWidth = 60;
-const left = startHourFloat * hourWidth;
-const width = (endHourFloat - startHourFloat) * hourWidth;
-
-return {
-  left: `${left}px`,
-  width: `${width}px`,
-  display: "block",
-};
-};
-
-// ガントチャート可用性ツールチップ
-const getGanttAvailabilityTooltip = (staff, date) => {
-const dayOfWeek = new Date(date).getDay();
-const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
-const dayPreference =
-  staff.dayPreferences &&
-  staff.dayPreferences.find((pref) => pref.day_of_week === dayOfWeek);
-
-if (
-  !dayPreference ||
-  !dayPreference.preferred_start_time ||
-  !dayPreference.preferred_end_time
-) {
-  return "";
-}
-
-return `${staff.last_name} ${staff.first_name}\n${
-  dayNames[dayOfWeek]
-}曜日 希望時間：${formatTime(
-  dayPreference.preferred_start_time
-)}-${formatTime(dayPreference.preferred_end_time)}`;
-};
-
-// 要件不足があるかチェック
-const hasRequirementShortage = (date, requirement) => {
-const assignedCount = getAssignedStaffCount(date, requirement);
-return assignedCount < requirement.required_staff_count;
-};
-
-// 日勤務時間計算
-const calculateDayHours = (shift) => {
-if (!shift) return 0;
-
-const startTime = new Date(`2000-01-01T${shift.start_time}`);
-const endTime = new Date(`2000-01-01T${shift.end_time}`);
-let workMillis = endTime - startTime;
-
-if (shift.break_start_time && shift.break_end_time) {
-  const breakStart = new Date(`2000-01-01T${shift.break_start_time}`);
-  const breakEnd = new Date(`2000-01-01T${shift.break_end_time}`);
-  const breakMillis = breakEnd - breakStart;
-  workMillis -= breakMillis;
-}
-
-return Math.round((workMillis / (1000 * 60 * 60)) * 100) / 100;
-};
-
-// 人員不足があるかチェック
-const hasStaffingShortage = (date, requirement) => {
-const assignedCount = getAssignedStaffCount(date, requirement);
-return assignedCount < requirement.required_staff_count;
-};
-
-// 割り当てられたスタッフ数取得
-const getAssignedStaffCount = (date, requirement) => {
-const dayShifts = shifts.value.find((shift) => shift.date === date);
-if (!dayShifts) return 0;
-
-const reqStartTime = parseTimeToFloat(requirement.start_time);
-const reqEndTime = parseTimeToFloat(requirement.end_time);
-
-return dayShifts.assignments.filter((assignment) => {
-  const shiftStartTime = parseTimeToFloat(assignment.start_time);
-  const shiftEndTime = parseTimeToFloat(assignment.end_time);
-
-  return shiftStartTime < reqEndTime && shiftEndTime > reqStartTime;
-}).length;
-};
-
-// スタッフ警告（全店舗）があるかチェック
-const hasStaffWarningsAllStores = (staffId) => {
-const staff = staffList.value.find((s) => s.id === staffId);
-if (!staff) return false;
-
-const totalHours = calculateTotalHoursAllStores(staffId);
-const maxMonthHours = staff.max_hours_per_month || 0;
-const minMonthHours = staff.min_hours_per_month || 0;
-const maxDayHours = staff.max_hours_per_day || 8;
-
-let hasViolation = false;
-
-if (
-  maxMonthHours > 0 &&
-  (totalHours > maxMonthHours || totalHours < minMonthHours)
-) {
-  hasViolation = true;
-}
-
-shifts.value.forEach((dayShift) => {
-  const assignment = dayShift.assignments.find(
-    (a) => a.staff_id === staffId
-  );
-  if (assignment) {
-    const dayHours = calculateDayHours(assignment);
-    if (dayHours > maxDayHours) {
-      hasViolation = true;
-    }
-
-    const dayOfWeek = new Date(dayShift.date).getDay();
-    const dayPreference = staff.dayPreferences?.find(
-      (pref) => pref.day_of_week === dayOfWeek
-    );
-    if (dayPreference && !dayPreference.available) {
-      hasViolation = true;
-    }
-
-    const dayOffRequest = staff.dayOffRequests?.find(
-      (req) =>
-        req.date === dayShift.date &&
-        (req.status === "approved" || req.status === "pending")
-    );
-    if (dayOffRequest) {
-      hasViolation = true;
-    }
-  }
-});
-
-return hasViolation;
-};
-
-// スタッフ警告（全店舗）取得
-const getStaffWarningsAllStores = (staffId) => {
-const warnings = [];
-const staff = staffList.value.find((s) => s.id === staffId);
-if (!staff) return warnings;
-
-const totalHours = calculateTotalHoursAllStores(staffId);
-const maxMonthHours = staff.max_hours_per_month || 0;
-const minMonthHours = staff.min_hours_per_month || 0;
-const maxDayHours = staff.max_hours_per_day || 8;
-
-if (maxMonthHours > 0 && totalHours > maxMonthHours) {
-  warnings.push({
-    type: "over_hours",
-    icon: "pi pi-exclamation-triangle",
-    message: `月間勤務時間が上限を超過 (全店舗合計: ${formatHours(
-      totalHours
-    )} > ${formatHours(maxMonthHours)})`,
-    severity: "error",
-  });
-}
-
-if (minMonthHours > 0 && totalHours < minMonthHours) {
-  warnings.push({
-    type: "under_hours",
-    icon: "pi pi-exclamation-triangle",
-    message: `月間勤務時間が下限を下回り (全店舗合計: ${formatHours(
-      totalHours
-    )} < ${formatHours(minMonthHours)})`,
-    severity: "warn",
-  });
-}
-
-const violationDays = [];
-shifts.value.forEach((dayShift) => {
-  const assignment = dayShift.assignments.find(
-    (a) => a.staff_id === staffId
-  );
-  if (assignment) {
-    const dayHours = calculateDayHours(assignment);
-    if (dayHours > maxDayHours) {
-      violationDays.push({
-        date: dayShift.date,
-        type: "day_hours_exceeded",
-        message: `${dayShift.date}: 1日勤務時間超過 (${formatHours(
-          dayHours
-        )} > ${formatHours(maxDayHours)})`,
-      });
-    }
-
-    const dayOfWeek = new Date(dayShift.date).getDay();
-    const dayPreference = staff.dayPreferences?.find(
-      (pref) => pref.day_of_week === dayOfWeek
-    );
-    if (dayPreference && !dayPreference.available) {
-      violationDays.push({
-        date: dayShift.date,
-        type: "unavailable_day",
-        message: `${dayShift.date}: 勤務不可曜日に割り当て (${
-          ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek]
-        }曜日)`,
-      });
-    }
-
-    const dayOffRequest = staff.dayOffRequests?.find(
-      (req) =>
-        req.date === dayShift.date &&
-        (req.status === "approved" || req.status === "pending")
-    );
-    if (dayOffRequest) {
-      violationDays.push({
-        date: dayShift.date,
-        type: "day_off_violation",
-        message: `${dayShift.date}: 休み希望日に割り当て (${
-          dayOffRequest.reason || "お休み"
-        })`,
-      });
-    }
-  }
-});
-
-if (violationDays.length > 0) {
-  warnings.push({
-    type: "schedule_violations",
-    icon: "pi pi-ban",
-    message: `スケジュール違反 ${violationDays.length}件`,
-    severity: "error",
-    details: violationDays,
-  });
-}
-
-return warnings;
-};
-
-// シフト違反があるかチェック
-const hasShiftViolation = (date, staffId) => {
-const shift = getShiftForStaff(date, staffId);
-if (!shift) return false;
-
-const staff = staffList.value.find((s) => s.id === staffId);
-if (!staff) return false;
-
-const dayHours = calculateDayHours(shift);
-const maxDayHours = staff.max_hours_per_day || 8;
-
-if (dayHours > maxDayHours) {
-  return true;
-}
-
-const dayOfWeek = new Date(date).getDay();
-const dayPreference = staff.dayPreferences?.find(
-  (pref) => pref.day_of_week === dayOfWeek
-);
-if (dayPreference && !dayPreference.available) {
-  return true;
-}
-
-const dayOffRequest = staff.dayOffRequests?.find(
-  (req) =>
-    req.date === date &&
-    (req.status === "approved" || req.status === "pending")
-);
-if (dayOffRequest) {
-  return true;
-}
-
-return false;
-};
-
-// シフト違反内容取得
-const getShiftViolations = (date, staffId) => {
-const violations = [];
-const shift = getShiftForStaff(date, staffId);
-if (!shift) return violations;
-
-const staff = staffList.value.find((s) => s.id === staffId);
-if (!staff) return violations;
-
-const dayHours = calculateDayHours(shift);
-const maxDayHours = staff.max_hours_per_day || 8;
-
-if (dayHours > maxDayHours) {
-  violations.push({
-    type: "day_hours",
-    icon: "pi pi-clock",
-    message: `1日の勤務時間が上限を超過 (${formatHours(
-      dayHours
-    )} > ${formatHours(maxDayHours)})`,
-    severity: "error",
-  });
-}
-
-const dayOfWeek = new Date(date).getDay();
-const dayPreference = staff.dayPreferences?.find(
-  (pref) => pref.day_of_week === dayOfWeek
-);
-if (dayPreference && !dayPreference.available) {
-  violations.push({
-    type: "unavailable_day",
-    icon: "pi pi-ban",
-    message: `${
-      ["日", "月", "火", "水", "木", "金", "土"][dayOfWeek]
-    }曜日は勤務不可設定です`,
-    severity: "error",
-  });
-}
-
-const dayOffRequest = staff.dayOffRequests?.find(
-  (req) =>
-    req.date === date &&
-    (req.status === "approved" || req.status === "pending")
-);
-if (dayOffRequest) {
-  violations.push({
-    type: "day_off_violation",
-    icon: "pi pi-ban",
-    message: `休み希望日です (${dayOffRequest.reason || "お休み"})`,
-    severity: "error",
-  });
-}
-
-return violations;
-};
-
-// 日付警告があるかチェック
-const hasDateWarnings = (date) => {
-const requirements = getDailyRequirements(date);
-return (
-  requirements.some((req) => hasStaffingShortage(date, req)) ||
-  staffList.value.some((staff) => hasShiftViolation(date, staff.id))
-);
-};
-
-// 日付警告取得
-const getDateWarnings = (date) => {
-const warnings = [];
-const requirements = getDailyRequirements(date);
-
-requirements.forEach((req) => {
-  if (hasStaffingShortage(date, req)) {
-    const assigned = getAssignedStaffCount(date, req);
-    warnings.push({
-      type: "staffing_shortage",
-      icon: "pi pi-users",
-      message: `${formatTime(req.start_time)}-${formatTime(
-        req.end_time
-      )}: 人員不足 (${assigned}/${req.required_staff_count}名)`,
-    });
-  }
-});
-
-staffList.value.forEach((staff) => {
-  if (hasShiftViolation(date, staff.id)) {
-    warnings.push({
-      type: "staff_violation",
-      icon: "pi pi-exclamation-triangle",
-      message: `${staff.last_name} ${staff.first_name}: 勤務条件違反`,
-    });
-  }
-});
-
-return warnings;
-};
-
-// 日付選択
-const selectDate = (date) => {
-selectedDate.value = date;
-updateSelectedDateCalendar();
-nextTick(() => {
-  if (ganttBody.value) {
-    ganttBody.value.scrollLeft = 0;
-  }
-});
-};
-
-// 選択日付カレンダー更新
-const updateSelectedDateCalendar = () => {
-if (selectedDate.value) {
-  selectedDateCalendar.value = new Date(selectedDate.value);
-}
-};
-
-// 日付範囲更新
-const updateDateRanges = () => {
-if (daysInMonth.value.length > 0) {
-  minSelectableDate.value = new Date(daysInMonth.value[0].date);
-  maxSelectableDate.value = new Date(
-    daysInMonth.value[daysInMonth.value.length - 1].date
-  );
-}
-};
-
-// 日付選択イベント
-const onDateSelect = (event) => {
-if (event.value) {
-  const selectedDateStr = formatDateToString(event.value);
-  if (daysInMonth.value.some((day) => day.date === selectedDateStr)) {
-    selectedDate.value = selectedDateStr;
-  }
-}
-};
-
-// ガントチャート日付選択イベント
-const onGanttDateSelect = (event) => {
-onDateSelect(event);
-};
-
-// 日付を文字列にフォーマット
-const formatDateToString = (date) => {
-const year = date.getFullYear();
-const month = (date.getMonth() + 1).toString().padStart(2, "0");
-const day = date.getDate().toString().padStart(2, "0");
-return `${year}-${month}-${day}`;
-};
-
-// ガントチャートスクロール同期
-const syncGanttScroll = () => {
-if (ganttTimelineHeader.value && ganttBody.value) {
-  requestAnimationFrame(() => {
-    ganttTimelineHeader.value.scrollLeft = ganttBody.value.scrollLeft;
-  });
-}
-};
-
-// ガントチャート用日付フォーマット
-const formatDateForGantt = (date) => {
-if (!date) return "";
-const d = new Date(date);
-const month = d.getMonth() + 1;
-const day = d.getDate();
-const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
-return `${month}月${day}日(${dayOfWeek})`;
-};
-
-// 選択日付の表示フォーマット
-const formatSelectedDateDisplay = (date) => {
-if (!date) return "";
-const d = new Date(date);
-const month = d.getMonth() + 1;
-const day = d.getDate();
-const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
-return `${month}月${day}日(${dayOfWeek})`;
-};
-
-// 祝日データ取得
-const fetchHolidays = async (year) => {
-try {
-  const response = await fetch(
-    `https://holidays-jp.github.io/api/v1/${year}/date.json`
-  );
-  const data = await response.json();
-  holidays.value = Object.keys(data);
-} catch (error) {
-  holidays.value = [];
-}
-};
-
-// 祝日チェック
-const isHoliday = (date) => {
-return holidays.value.includes(date);
-};
-
-// タイムヘッダースタイル取得
-const getTimeHeaderStyle = () => {
-const hourWidth = 60;
-return {
-  width: `${hourWidth}px`,
-  minWidth: `${hourWidth}px`,
-  flexShrink: 0,
-};
-};
-
-// ガントチャートバースタイル取得
-const getGanttBarStyle = (shift) => {
-if (!shift) return {};
-
-const shiftStartTime = shift.start_time;
-const shiftEndTime = shift.end_time;
-
-const startHourFloat = parseTimeToFloat(shiftStartTime);
-const endHourFloat = parseTimeToFloat(shiftEndTime);
-
-const hourWidth = 60;
-const left = startHourFloat * hourWidth;
-const width = (endHourFloat - startHourFloat) * hourWidth;
-
-return {
-  left: `${left}px`,
-  width: `${width}px`,
-};
-};
-
-// 時間を浮動小数点数にパース
-const parseTimeToFloat = (timeStr) => {
-const [hours, minutes] = timeStr.split(":").map(Number);
-return hours + minutes / 60;
-};
-
-// 時間をコンポーネントにパース
-const parseTimeToComponents = (timeStr) => {
-if (!timeStr) return { hour: "09", minute: "00" };
-const [hour, minute] = timeStr.split(":");
-return {
-  hour: hour.padStart(2, "0"),
-  minute: minute.padStart(2, "0"),
-};
-};
-
-// 時間コンポーネントを結合
-const combineTimeComponents = (hour, minute) => {
-return `${hour}:${minute}`;
-};
-
-// ガントチャートシフトエディタ開く
-const openGanttShiftEditor = (date, staff, event) => {
-if (!isEditMode.value) return;
-if (isStoreClosedOnDate(date)) return;
-
-const existingShift = getShiftForStaff(date, staff.id);
-if (existingShift) return;
-
-const rect = event.currentTarget.getBoundingClientRect();
-const clickX = event.clientX - rect.left;
-const hourWidth = 60;
-
-const clickedHour = Math.floor(clickX / hourWidth);
-const startHour = clickedHour.toString().padStart(2, "0");
-const endHour = (clickedHour + 8).toString().padStart(2, "0");
-
-shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${date}`;
-shiftEditorDialog.date = date;
-shiftEditorDialog.staff = staff;
-shiftEditorDialog.startTimeHour = startHour;
-shiftEditorDialog.startTimeMinute = "00";
-shiftEditorDialog.endTimeHour = endHour;
-shiftEditorDialog.endTimeMinute = "00";
-shiftEditorDialog.isRestDay = false;
-shiftEditorDialog.isPast = isPastDate(date);
-shiftEditorDialog.hasShift = false;
-shiftEditorDialog.changeReason = "";
-shiftEditorDialog.visible = true;
-};
-
-// システム設定取得
-const fetchSystemSettings = async () => {
-try {
-  const response = await api.get("/shifts/system-settings");
-  systemSettings.value = response.data;
-} catch (error) {
-  systemSettings.value = { closing_day: 25 };
-}
-};
-
-// シフト期間取得
-const getShiftPeriod = (year, month, closingDay) => {
-let startDate, endDate;
-
-if (month === 1) {
-  startDate = new Date(year - 1, 11, closingDay + 1);
-  endDate = new Date(year, 0, closingDay);
-} else {
-  startDate = new Date(year, month - 2, closingDay + 1);
-  endDate = new Date(year, month - 1, closingDay);
-}
-
-const daysInPrevMonth = new Date(
-  startDate.getFullYear(),
-  startDate.getMonth() + 1,
-  0
-).getDate();
-if (startDate.getDate() > daysInPrevMonth) {
-  startDate.setDate(daysInPrevMonth);
-}
-
-const daysInCurrentMonth = new Date(
-  endDate.getFullYear(),
-  endDate.getMonth() + 1,
-  0
-).getDate();
-if (endDate.getDate() > daysInCurrentMonth) {
-  endDate.setDate(daysInCurrentMonth);
-}
-
-return { startDate, endDate };
-};
-
-// 過去の日付かチェック
-const isPastDate = (date) => {
-const today = new Date();
-const checkDate = new Date(date);
-today.setHours(0, 0, 0, 0);
-checkDate.setHours(0, 0, 0, 0);
-return checkDate < today;
-};
-
-// 編集モード切り替え
-const toggleEditMode = () => {
-isEditMode.value = !isEditMode.value;
-
-toast.add({
-  severity: "info",
-  summary: isEditMode.value ? "編集モード開始" : "編集モード終了",
-  detail: isEditMode.value
-    ? "シフトセルをクリックして編集できます"
-    : "編集モードを終了しました",
-  life: 3000,
-});
-};
-
-// シフトエディタ開く
-const openShiftEditor = async (day, staff) => {
-if (!isEditMode.value) {
-  toast.add({
-    severity: "info",
-    summary: "編集不可",
-    detail: "「シフト編集」ボタンを押して編集モードにしてください",
-    life: 2000,
-  });
-  return;
-}
-
-const shift = getShiftForStaff(day.date, staff.id);
-
-shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${day.date}`;
-shiftEditorDialog.date = day.date;
-shiftEditorDialog.staff = staff;
-shiftEditorDialog.isPast = isPastDate(day.date);
-shiftEditorDialog.changeReason = "";
-
-if (shift) {
-  const startTime = parseTimeToComponents(shift.start_time);
-  const endTime = parseTimeToComponents(shift.end_time);
-
-  shiftEditorDialog.startTimeHour = startTime.hour;
-  shiftEditorDialog.startTimeMinute = startTime.minute;
-  shiftEditorDialog.endTimeHour = endTime.hour;
-  shiftEditorDialog.endTimeMinute = endTime.minute;
-  shiftEditorDialog.isRestDay = shift.is_day_off;
-  shiftEditorDialog.hasShift = true;
-
-  if (shift.break_start_time && shift.break_end_time) {
-    shiftEditorDialog.hasBreak = true;
-    const breakStart = parseTimeToComponents(shift.break_start_time);
-    const breakEnd = parseTimeToComponents(shift.break_end_time);
-    shiftEditorDialog.breakStartTimeHour = breakStart.hour;
-    shiftEditorDialog.breakStartTimeMinute = breakStart.minute;
-    shiftEditorDialog.breakEndTimeHour = breakEnd.hour;
-    shiftEditorDialog.breakEndTimeMinute = breakEnd.minute;
-  } else {
-    shiftEditorDialog.hasBreak = false;
-    shiftEditorDialog.breakStartTimeHour = "";
-    shiftEditorDialog.breakStartTimeMinute = "";
-    shiftEditorDialog.breakEndTimeHour = "";
-    shiftEditorDialog.breakEndTimeMinute = "";
-  }
-} else {
-  shiftEditorDialog.startTimeHour = "09";
-  shiftEditorDialog.startTimeMinute = "00";
-  shiftEditorDialog.endTimeHour = "18";
-  shiftEditorDialog.endTimeMinute = "00";
-  shiftEditorDialog.isRestDay = false;
-  shiftEditorDialog.hasShift = false;
-  shiftEditorDialog.hasBreak = false;
-  shiftEditorDialog.breakStartTimeHour = "";
-  shiftEditorDialog.breakStartTimeMinute = "";
-  shiftEditorDialog.breakEndTimeHour = "";
-  shiftEditorDialog.breakEndTimeMinute = "";
-}
-
-shiftEditorDialog.visible = true;
-};
-
-// シフトエディタ閉じる
-const closeShiftEditor = () => {
-shiftEditorDialog.visible = false;
-};
-
-// シフトデータ読み込み
-const loadShiftData = async () => {
-if (!selectedStore.value) {
-  return;
-}
-
-loading.value = true;
-
-try {
-  await fetchStoreDetails(selectedStore.value.id);
-
-  const staffData = await store.dispatch(
-    "staff/fetchStaff",
-    selectedStore.value.id
-  );
-  staffList.value = staffData;
-
-  try {
-    const shiftData = await store.dispatch(
-      "shift/fetchShiftByYearMonth",
-      {
-        year: currentYear.value,
-        month: currentMonth.value,
-        storeId: selectedStore.value.id,
+    };
+
+    // ガントチャート日付選択イベント
+    const onGanttDateSelect = (event) => {
+      onDateSelect(event);
+    };
+
+    // 日付を文字列にフォーマット
+    const formatDateToString = (date) => {
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const day = date.getDate().toString().padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    // ガントチャートスクロール同期
+    const syncGanttScroll = () => {
+      if (ganttTimelineHeader.value && ganttBody.value) {
+        requestAnimationFrame(() => {
+          ganttTimelineHeader.value.scrollLeft = ganttBody.value.scrollLeft;
+        });
       }
-    );
+    };
 
-    if (shiftData) {
-      currentShift.value = {
-        id: shiftData.id,
-        store_id: shiftData.store_id,
-        year: shiftData.year,
-        month: shiftData.month,
-        status: shiftData.status,
+    // ガントチャート用日付フォーマット
+    const formatDateForGantt = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      const month = d.getMonth() + 1;
+      const day = d.getDate();
+      const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+      return `${month}月${day}日(${dayOfWeek})`;
+    };
+
+    // 選択日付の表示フォーマット
+    const formatSelectedDateDisplay = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      const month = d.getMonth() + 1;
+      const day = d.getDate();
+      const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+      return `${month}月${day}日(${dayOfWeek})`;
+    };
+
+    // 祝日データ取得
+    const fetchHolidays = async (year) => {
+      try {
+        const response = await fetch(
+          `https://holidays-jp.github.io/api/v1/${year}/date.json`
+        );
+        const data = await response.json();
+        holidays.value = Object.keys(data);
+      } catch (error) {
+        holidays.value = [];
+      }
+    };
+
+    // 祝日チェック
+    const isHoliday = (date) => {
+      return holidays.value.includes(date);
+    };
+
+    // タイムヘッダースタイル取得
+    const getTimeHeaderStyle = () => {
+      const hourWidth = 60;
+      return {
+        width: `${hourWidth}px`,
+        minWidth: `${hourWidth}px`,
+        flexShrink: 0,
       };
-      shifts.value = shiftData.shifts || [];
-    } else {
-      currentShift.value = null;
-      shifts.value = [];
-    }
-  } catch (error) {
-    if (error.response && error.response.status === 404) {
-      currentShift.value = null;
-      shifts.value = [];
-    } else {
-      throw error;
-    }
-  }
+    };
 
-  if (staffList.value && staffList.value.length > 0) {
-    await fetchAllStoreShifts();
-  }
+    // ガントチャートバースタイル取得
+    const getGanttBarStyle = (shift) => {
+      if (!shift) return {};
 
-  generateDaysInMonth();
-} catch (error) {
-  toast.add({
-    severity: "error",
-    summary: "エラー",
-    detail: "シフトデータの取得に失敗しました",
-    life: 3000,
-  });
-} finally {
-  loading.value = false;
-}
-};
+      const shiftStartTime = shift.start_time;
+      const shiftEndTime = shift.end_time;
 
-// 月内日数生成
-const generateDaysInMonth = () => {
-const year = currentYear.value;
-const month = currentMonth.value;
-const closingDay = systemSettings.value.closing_day || 25;
+      const startHourFloat = parseTimeToFloat(shiftStartTime);
+      const endHourFloat = parseTimeToFloat(shiftEndTime);
 
-const { startDate, endDate } = getShiftPeriod(year, month, closingDay);
-const today = new Date();
-const days = [];
+      const hourWidth = 60;
+      const left = startHourFloat * hourWidth;
+      const width = (endHourFloat - startHourFloat) * hourWidth;
 
-const current = new Date(startDate);
-let processedDays = 0;
-let closedDaysCount = 0;
+      return {
+        left: `${left}px`,
+        width: `${width}px`,
+      };
+    };
 
-while (current <= endDate) {
-  const dateStr = `${current.getFullYear()}-${(current.getMonth() + 1)
-    .toString()
-    .padStart(2, "0")}-${current.getDate().toString().padStart(2, "0")}`;
-  const dayOfWeek = current.getDay();
-  const dayOfWeekLabel = ["日", "月", "火", "水", "木", "金", "土"][
-    dayOfWeek
-  ];
+    // 時間を浮動小数点数にパース
+    const parseTimeToFloat = (timeStr) => {
+      const [hours, minutes] = timeStr.split(":").map(Number);
+      return hours + minutes / 60;
+    };
 
-  const storeClosedForDay = isStoreClosedOnDate(dateStr);
+    // 時間をコンポーネントにパース
+    const parseTimeToComponents = (timeStr) => {
+      if (!timeStr) return { hour: "09", minute: "00" };
+      const [hour, minute] = timeStr.split(":");
+      return {
+        hour: hour.padStart(2, "0"),
+        minute: minute.padStart(2, "0"),
+      };
+    };
 
-  if (storeClosedForDay) {
-    closedDaysCount++;
-  }
+    // 時間コンポーネントを結合
+    const combineTimeComponents = (hour, minute) => {
+      return `${hour}:${minute}`;
+    };
 
-  days.push({
-    date: dateStr,
-    day: current.getDate(),
-    dayOfWeek,
-    dayOfWeekLabel,
-    isHoliday: isHoliday(dateStr) || dayOfWeek === 0 || dayOfWeek === 6,
-    isNationalHoliday: isHoliday(dateStr),
-    isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
-    isStoreClosed: storeClosedForDay,
-    isToday:
-      today.getFullYear() === current.getFullYear() &&
-      today.getMonth() === current.getMonth() &&
-      today.getDate() === current.getDate(),
-  });
+    // ガントチャートシフトエディタ開く
+    const openGanttShiftEditor = (date, staff, event) => {
+      if (!isEditMode.value) return;
+      if (isStoreClosedOnDate(date)) return;
 
-  current.setDate(current.getDate() + 1);
-  processedDays++;
-}
+      const existingShift = getShiftForStaff(date, staff.id);
+      if (existingShift) return;
 
-daysInMonth.value = days;
-};
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const hourWidth = 60;
 
-// デフォルト選択日設定
-const setDefaultSelectedDate = () => {
-const today = new Date();
-const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
-  .toString()
-  .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+      const clickedHour = Math.floor(clickX / hourWidth);
+      const startHour = clickedHour.toString().padStart(2, "0");
+      const endHour = (clickedHour + 8).toString().padStart(2, "0");
 
-const todayExists = daysInMonth.value.some(
-  (day) => day.date === todayString
-);
+      shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${date}`;
+      shiftEditorDialog.date = date;
+      shiftEditorDialog.staff = staff;
+      shiftEditorDialog.startTimeHour = startHour;
+      shiftEditorDialog.startTimeMinute = "00";
+      shiftEditorDialog.endTimeHour = endHour;
+      shiftEditorDialog.endTimeMinute = "00";
+      shiftEditorDialog.isRestDay = false;
+      shiftEditorDialog.isPast = isPastDate(date);
+      shiftEditorDialog.hasShift = false;
+      shiftEditorDialog.changeReason = "";
+      shiftEditorDialog.visible = true;
+    };
 
-if (todayExists) {
-  selectedDate.value = todayString;
-} else {
-  const firstDayOfMonthString = `${currentYear.value}-${String(
-    currentMonth.value
-  ).padStart(2, "0")}-01`;
-  const firstDayOfMonthExists = daysInMonth.value.some(
-    (day) => day.date === firstDayOfMonthString
-  );
-
-  if (firstDayOfMonthExists) {
-    selectedDate.value = firstDayOfMonthString;
-  } else if (daysInMonth.value.length > 0) {
-    selectedDate.value = daysInMonth.value[0].date;
-  } else {
-    selectedDate.value = null;
-  }
-}
-
-updateSelectedDateCalendar();
-updateDateRanges();
-};
-
-// デフォルト月表示設定
-const setDefaultMonthView = () => {
-if (!systemSettings.value) return;
-
-const today = new Date();
-const closingDay = systemSettings.value.closing_day || 25;
-let year = today.getFullYear();
-let month = today.getMonth() + 1;
-
-if (today.getDate() > closingDay) {
-  if (month === 12) {
-    month = 1;
-    year += 1;
-  } else {
-    month += 1;
-  }
-}
-
-currentYear.value = year;
-currentMonth.value = month;
-};
-
-// 前月へ移動
-const previousMonth = async () => {
-if (currentMonth.value === 1) {
-  currentYear.value--;
-  currentMonth.value = 12;
-} else {
-  currentMonth.value--;
-}
-await fetchHolidays(currentYear.value);
-await loadShiftData();
-await fetchAllSystemStaffAndShifts();
-setDefaultSelectedDate();
-};
-
-// 次月へ移動
-const nextMonth = async () => {
-if (currentMonth.value === 12) {
-  currentYear.value++;
-  currentMonth.value = 1;
-} else {
-  currentMonth.value++;
-}
-await fetchHolidays(currentYear.value);
-await loadShiftData();
-await fetchAllSystemStaffAndShifts();
-setDefaultSelectedDate();
-};
-
-// 店舗詳細取得
-const fetchStoreDetails = async (storeId) => {
-try {
-  const storeData = await store.dispatch("store/fetchStore", storeId);
-
-  const businessHours = await store.dispatch(
-    "store/fetchStoreBusinessHours",
-    storeId
-  );
-
-  const closedDays = await store.dispatch(
-    "store/fetchStoreClosedDays",
-    storeId
-  );
-
-  currentStore.value = {
-    ...storeData,
-    operating_hours: businessHours || [],
-  };
-
-  storeBusinessHours.value = businessHours || [];
-  storeClosedDays.value = closedDays || [];
-
-  const requirements = await store.dispatch(
-    "store/fetchStoreStaffRequirements",
-    storeId
-  );
-  storeRequirements.value = requirements || [];
-} catch (error) {
-  storeRequirements.value = [];
-  storeBusinessHours.value = [];
-  storeClosedDays.value = [];
-}
-};
-
-// 店舗変更
-const changeStore = async () => {
-if (selectedStore.value) {
-  await loadShiftData();
-  setDefaultSelectedDate();
-}
-};
-
-// AI自動シフト生成
-const generateAutomaticShift = async () => {
-try {
-  loading.value = true;
-
-  toast.add({
-    severity: "info",
-    summary: "シフト生成開始",
-    detail: "AIによるシフト生成を開始しています...",
-    life: 5000,
-  });
-
-  const params = {
-    storeId: selectedStore.value.id,
-    year: currentYear.value,
-    month: currentMonth.value,
-  };
-
-  const result = await store.dispatch("shift/generateShift", params);
-
-  await loadShiftData();
-
-  const staffViolations = [];
-  const dateViolations = [];
-
-  staffList.value.forEach((staff) => {
-    if (hasStaffWarningsAllStores(staff.id)) {
-      const warnings = getStaffWarningsAllStores(staff.id);
-      staffViolations.push(
-        `${staff.last_name} ${staff.first_name}: ${warnings
-          .map((w) => w.message)
-          .join(", ")}`
-      );
-    }
-  });
-
-  daysInMonth.value.forEach((day) => {
-    if (hasDateWarnings(day.date)) {
-      const warnings = getDateWarnings(day.date);
-      dateViolations.push(
-        `${day.date}: ${warnings.map((w) => w.message).join(", ")}`
-      );
-    }
-  });
-
-  if (staffViolations.length > 0 || dateViolations.length > 0) {
-    let warningMessage =
-      "シフト生成は完了しましたが、以下の注意点があります：\n\n";
-
-    if (staffViolations.length > 0) {
-      warningMessage +=
-        "【スタッフ関連】\n" + staffViolations.slice(0, 3).join("\n");
-      if (staffViolations.length > 3) {
-        warningMessage += `\n...他${staffViolations.length - 3}件`;
+    // システム設定取得
+    const fetchSystemSettings = async () => {
+      try {
+        const response = await api.get("/shifts/system-settings");
+        systemSettings.value = response.data;
+      } catch (error) {
+        systemSettings.value = { closing_day: 25 };
       }
-      warningMessage += "\n\n";
-    }
+    };
 
-    if (dateViolations.length > 0) {
-      warningMessage +=
-        "【日付関連】\n" + dateViolations.slice(0, 3).join("\n");
-      if (dateViolations.length > 3) {
-        warningMessage += `\n...他${dateViolations.length - 3}件`;
+    // シフト期間取得
+    const getShiftPeriod = (year, month, closingDay) => {
+      let startDate, endDate;
+
+      if (month === 1) {
+        startDate = new Date(year - 1, 11, closingDay + 1);
+        endDate = new Date(year, 0, closingDay);
+      } else {
+        startDate = new Date(year, month - 2, closingDay + 1);
+        endDate = new Date(year, month - 1, closingDay);
       }
-    }
 
-    toast.add({
-      severity: "warn",
-      summary: "シフト生成完了（要確認）",
-      detail: warningMessage,
-      life: 10000,
-    });
-  } else {
-    toast.add({
-      severity: "success",
-      summary: "シフト生成完了",
-      detail: "制約を守ったシフトが正常に生成されました",
-      life: 5000,
-    });
-  }
-} catch (error) {
-  let errorMessage = "AIシフト生成に失敗しました";
+      const daysInPrevMonth = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth() + 1,
+        0
+      ).getDate();
+      if (startDate.getDate() > daysInPrevMonth) {
+        startDate.setDate(daysInPrevMonth);
+      }
 
-  if (error.response?.data?.message) {
-    errorMessage = error.response.data.message;
-  } else if (error.message) {
-    if (error.message.includes("制約違反")) {
-      errorMessage =
-        "スタッフの勤務条件を満たすシフトを生成できませんでした。勤務条件の見直しをご検討ください。";
-    } else if (error.message.includes("最大試行回数")) {
-      errorMessage =
-        "制約条件が厳しすぎるため、シフトを生成できませんでした。条件を緩和するか、手動でシフトを作成してください。";
-    } else {
-      errorMessage = error.message;
-    }
-  }
+      const daysInCurrentMonth = new Date(
+        endDate.getFullYear(),
+        endDate.getMonth() + 1,
+        0
+      ).getDate();
+      if (endDate.getDate() > daysInCurrentMonth) {
+        endDate.setDate(daysInCurrentMonth);
+      }
 
-  toast.add({
-    severity: "error",
-    summary: "生成エラー",
-    detail: errorMessage,
-    life: 8000,
-  });
+      return { startDate, endDate };
+    };
 
-  confirm.require({
-    message:
-      "AIシフト生成に失敗しました。空のシフトを作成して手動で編集しますか？",
-    header: "代替手段の提案",
-    icon: "pi pi-question-circle",
-    acceptLabel: "空シフト作成",
-    rejectLabel: "キャンセル",
-    accept: () => {
-      createEmptyShift();
-    },
-  });
-} finally {
-  loading.value = false;
-}
-};
+    // 過去の日付かチェック
+    const isPastDate = (date) => {
+      const today = new Date();
+      const checkDate = new Date(date);
+      today.setHours(0, 0, 0, 0);
+      checkDate.setHours(0, 0, 0, 0);
+      return checkDate < today;
+    };
 
-// シフト再生成
-const regenerateShift = async () => {
-confirm.require({
-  message: `現在のシフトを削除してAIで再生成しますか？
+    // 編集モード切り替え
+    const toggleEditMode = () => {
+      isEditMode.value = !isEditMode.value;
+
+      toast.add({
+        severity: "info",
+        summary: isEditMode.value ? "編集モード開始" : "編集モード終了",
+        detail: isEditMode.value
+          ? "シフトセルをクリックして編集できます"
+          : "編集モードを終了しました",
+        life: 3000,
+      });
+    };
+
+    // シフトエディタ開く
+    const openShiftEditor = async (day, staff) => {
+      if (!isEditMode.value) {
+        toast.add({
+          severity: "info",
+          summary: "編集不可",
+          detail: "「シフト編集」ボタンを押して編集モードにしてください",
+          life: 2000,
+        });
+        return;
+      }
+
+      const shift = getShiftForStaff(day.date, staff.id);
+
+      shiftEditorDialog.title = `${staff.last_name} ${staff.first_name} - ${day.date}`;
+      shiftEditorDialog.date = day.date;
+      shiftEditorDialog.staff = staff;
+      shiftEditorDialog.isPast = isPastDate(day.date);
+      shiftEditorDialog.changeReason = "";
+
+      if (shift) {
+        const startTime = parseTimeToComponents(shift.start_time);
+        const endTime = parseTimeToComponents(shift.end_time);
+
+        shiftEditorDialog.startTimeHour = startTime.hour;
+        shiftEditorDialog.startTimeMinute = startTime.minute;
+        shiftEditorDialog.endTimeHour = endTime.hour;
+        shiftEditorDialog.endTimeMinute = endTime.minute;
+        shiftEditorDialog.isRestDay = shift.is_day_off;
+        shiftEditorDialog.hasShift = true;
+
+        if (shift.break_start_time && shift.break_end_time) {
+          shiftEditorDialog.hasBreak = true;
+          const breakStart = parseTimeToComponents(shift.break_start_time);
+          const breakEnd = parseTimeToComponents(shift.break_end_time);
+          shiftEditorDialog.breakStartTimeHour = breakStart.hour;
+          shiftEditorDialog.breakStartTimeMinute = breakStart.minute;
+          shiftEditorDialog.breakEndTimeHour = breakEnd.hour;
+          shiftEditorDialog.breakEndTimeMinute = breakEnd.minute;
+        } else {
+          shiftEditorDialog.hasBreak = false;
+          shiftEditorDialog.breakStartTimeHour = "";
+          shiftEditorDialog.breakStartTimeMinute = "";
+          shiftEditorDialog.breakEndTimeHour = "";
+          shiftEditorDialog.breakEndTimeMinute = "";
+        }
+      } else {
+        shiftEditorDialog.startTimeHour = "09";
+        shiftEditorDialog.startTimeMinute = "00";
+        shiftEditorDialog.endTimeHour = "18";
+        shiftEditorDialog.endTimeMinute = "00";
+        shiftEditorDialog.isRestDay = false;
+        shiftEditorDialog.hasShift = false;
+        shiftEditorDialog.hasBreak = false;
+        shiftEditorDialog.breakStartTimeHour = "";
+        shiftEditorDialog.breakStartTimeMinute = "";
+        shiftEditorDialog.breakEndTimeHour = "";
+        shiftEditorDialog.breakEndTimeMinute = "";
+      }
+
+      shiftEditorDialog.visible = true;
+    };
+
+    // シフトエディタ閉じる
+    const closeShiftEditor = () => {
+      shiftEditorDialog.visible = false;
+    };
+
+    // シフトデータ読み込み
+    const loadShiftData = async () => {
+      if (!selectedStore.value) {
+        return;
+      }
+
+      loading.value = true;
+
+      try {
+        await fetchStoreDetails(selectedStore.value.id);
+
+        const staffData = await store.dispatch(
+          "staff/fetchStaff",
+          selectedStore.value.id
+        );
+        staffList.value = staffData;
+
+        try {
+          const shiftData = await store.dispatch(
+            "shift/fetchShiftByYearMonth",
+            {
+              year: currentYear.value,
+              month: currentMonth.value,
+              storeId: selectedStore.value.id,
+            }
+          );
+
+          if (shiftData) {
+            currentShift.value = {
+              id: shiftData.id,
+              store_id: shiftData.store_id,
+              year: shiftData.year,
+              month: shiftData.month,
+              status: shiftData.status,
+            };
+            shifts.value = shiftData.shifts || [];
+          } else {
+            currentShift.value = null;
+            shifts.value = [];
+          }
+        } catch (error) {
+          if (error.response && error.response.status === 404) {
+            currentShift.value = null;
+            shifts.value = [];
+          } else {
+            throw error;
+          }
+        }
+
+        if (staffList.value && staffList.value.length > 0) {
+          await fetchAllStoreShifts();
+        }
+
+        generateDaysInMonth();
+      } catch (error) {
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "シフトデータの取得に失敗しました",
+          life: 3000,
+        });
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    // 月内日数生成
+    const generateDaysInMonth = () => {
+      const year = currentYear.value;
+      const month = currentMonth.value;
+      const closingDay = systemSettings.value.closing_day || 25;
+
+      const { startDate, endDate } = getShiftPeriod(year, month, closingDay);
+      const today = new Date();
+      const days = [];
+
+      const current = new Date(startDate);
+      let processedDays = 0;
+      let closedDaysCount = 0;
+
+      while (current <= endDate) {
+        const dateStr = `${current.getFullYear()}-${(current.getMonth() + 1)
+          .toString()
+          .padStart(2, "0")}-${current.getDate().toString().padStart(2, "0")}`;
+        const dayOfWeek = current.getDay();
+        const dayOfWeekLabel = ["日", "月", "火", "水", "木", "金", "土"][
+          dayOfWeek
+        ];
+
+        const storeClosedForDay = isStoreClosedOnDate(dateStr);
+
+        if (storeClosedForDay) {
+          closedDaysCount++;
+        }
+
+        days.push({
+          date: dateStr,
+          day: current.getDate(),
+          dayOfWeek,
+          dayOfWeekLabel,
+          isHoliday: isHoliday(dateStr) || dayOfWeek === 0 || dayOfWeek === 6,
+          isNationalHoliday: isHoliday(dateStr),
+          isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+          isStoreClosed: storeClosedForDay,
+          isToday:
+            today.getFullYear() === current.getFullYear() &&
+            today.getMonth() === current.getMonth() &&
+            today.getDate() === current.getDate(),
+        });
+
+        current.setDate(current.getDate() + 1);
+        processedDays++;
+      }
+
+      daysInMonth.value = days;
+    };
+
+    // デフォルト選択日設定
+    const setDefaultSelectedDate = () => {
+      const today = new Date();
+      const todayString = `${today.getFullYear()}-${(today.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+
+      const todayExists = daysInMonth.value.some(
+        (day) => day.date === todayString
+      );
+
+      if (todayExists) {
+        selectedDate.value = todayString;
+      } else {
+        const firstDayOfMonthString = `${currentYear.value}-${String(
+          currentMonth.value
+        ).padStart(2, "0")}-01`;
+        const firstDayOfMonthExists = daysInMonth.value.some(
+          (day) => day.date === firstDayOfMonthString
+        );
+
+        if (firstDayOfMonthExists) {
+          selectedDate.value = firstDayOfMonthString;
+        } else if (daysInMonth.value.length > 0) {
+          selectedDate.value = daysInMonth.value[0].date;
+        } else {
+          selectedDate.value = null;
+        }
+      }
+
+      updateSelectedDateCalendar();
+      updateDateRanges();
+    };
+
+    // デフォルト月表示設定
+    const setDefaultMonthView = () => {
+      if (!systemSettings.value) return;
+
+      const today = new Date();
+      const closingDay = systemSettings.value.closing_day || 25;
+      let year = today.getFullYear();
+      let month = today.getMonth() + 1;
+
+      if (today.getDate() > closingDay) {
+        if (month === 12) {
+          month = 1;
+          year += 1;
+        } else {
+          month += 1;
+        }
+      }
+
+      currentYear.value = year;
+      currentMonth.value = month;
+    };
+
+    // 前月へ移動
+    const previousMonth = async () => {
+      if (currentMonth.value === 1) {
+        currentYear.value--;
+        currentMonth.value = 12;
+      } else {
+        currentMonth.value--;
+      }
+      await fetchHolidays(currentYear.value);
+      await loadShiftData();
+      await fetchAllSystemStaffAndShifts();
+      setDefaultSelectedDate();
+    };
+
+    // 次月へ移動
+    const nextMonth = async () => {
+      if (currentMonth.value === 12) {
+        currentYear.value++;
+        currentMonth.value = 1;
+      } else {
+        currentMonth.value++;
+      }
+      await fetchHolidays(currentYear.value);
+      await loadShiftData();
+      await fetchAllSystemStaffAndShifts();
+      setDefaultSelectedDate();
+    };
+
+    // 店舗詳細取得
+    const fetchStoreDetails = async (storeId) => {
+      try {
+        const storeData = await store.dispatch("store/fetchStore", storeId);
+
+        const businessHours = await store.dispatch(
+          "store/fetchStoreBusinessHours",
+          storeId
+        );
+
+        const closedDays = await store.dispatch(
+          "store/fetchStoreClosedDays",
+          storeId
+        );
+
+        currentStore.value = {
+          ...storeData,
+          operating_hours: businessHours || [],
+        };
+
+        storeBusinessHours.value = businessHours || [];
+        storeClosedDays.value = closedDays || [];
+
+        const requirements = await store.dispatch(
+          "store/fetchStoreStaffRequirements",
+          storeId
+        );
+        storeRequirements.value = requirements || [];
+      } catch (error) {
+        storeRequirements.value = [];
+        storeBusinessHours.value = [];
+        storeClosedDays.value = [];
+      }
+    };
+
+    // 店舗変更
+    const changeStore = async () => {
+      if (selectedStore.value) {
+        await loadShiftData();
+        setDefaultSelectedDate();
+      }
+    };
+
+    // AI自動シフト生成
+    const generateAutomaticShift = async () => {
+      try {
+        loading.value = true;
+
+        toast.add({
+          severity: "info",
+          summary: "シフト生成開始",
+          detail: "AIによるシフト生成を開始しています...",
+          life: 5000,
+        });
+
+        const params = {
+          storeId: selectedStore.value.id,
+          year: currentYear.value,
+          month: currentMonth.value,
+        };
+
+        const result = await store.dispatch("shift/generateShift", params);
+
+        await loadShiftData();
+
+        const staffViolations = [];
+        const dateViolations = [];
+
+        staffList.value.forEach((staff) => {
+          if (hasStaffWarningsAllStores(staff.id)) {
+            const warnings = getStaffWarningsAllStores(staff.id);
+            staffViolations.push(
+              `${staff.last_name} ${staff.first_name}: ${warnings
+                .map((w) => w.message)
+                .join(", ")}`
+            );
+          }
+        });
+
+        daysInMonth.value.forEach((day) => {
+          if (hasDateWarnings(day.date)) {
+            const warnings = getDateWarnings(day.date);
+            dateViolations.push(
+              `${day.date}: ${warnings.map((w) => w.message).join(", ")}`
+            );
+          }
+        });
+
+        if (staffViolations.length > 0 || dateViolations.length > 0) {
+          let warningMessage =
+            "シフト生成は完了しましたが、以下の注意点があります：\n\n";
+
+          if (staffViolations.length > 0) {
+            warningMessage +=
+              "【スタッフ関連】\n" + staffViolations.slice(0, 3).join("\n");
+            if (staffViolations.length > 3) {
+              warningMessage += `\n...他${staffViolations.length - 3}件`;
+            }
+            warningMessage += "\n\n";
+          }
+
+          if (dateViolations.length > 0) {
+            warningMessage +=
+              "【日付関連】\n" + dateViolations.slice(0, 3).join("\n");
+            if (dateViolations.length > 3) {
+              warningMessage += `\n...他${dateViolations.length - 3}件`;
+            }
+          }
+
+          toast.add({
+            severity: "warn",
+            summary: "シフト生成完了（要確認）",
+            detail: warningMessage,
+            life: 10000,
+          });
+        } else {
+          toast.add({
+            severity: "success",
+            summary: "シフト生成完了",
+            detail: "制約を守ったシフトが正常に生成されました",
+            life: 5000,
+          });
+        }
+      } catch (error) {
+        let errorMessage = "AIシフト生成に失敗しました";
+
+        if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.message) {
+          if (error.message.includes("制約違反")) {
+            errorMessage =
+              "スタッフの勤務条件を満たすシフトを生成できませんでした。勤務条件の見直しをご検討ください。";
+          } else if (error.message.includes("最大試行回数")) {
+            errorMessage =
+              "制約条件が厳しすぎるため、シフトを生成できませんでした。条件を緩和するか、手動でシフトを作成してください。";
+          } else {
+            errorMessage = error.message;
+          }
+        }
+
+        toast.add({
+          severity: "error",
+          summary: "生成エラー",
+          detail: errorMessage,
+          life: 8000,
+        });
+
+        confirm.require({
+          message:
+            "AIシフト生成に失敗しました。空のシフトを作成して手動で編集しますか？",
+          header: "代替手段の提案",
+          icon: "pi pi-question-circle",
+          acceptLabel: "空シフト作成",
+          rejectLabel: "キャンセル",
+          accept: () => {
+            createEmptyShift();
+          },
+        });
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    // シフト再生成
+    const regenerateShift = async () => {
+      confirm.require({
+        message: `現在のシフトを削除してAIで再生成しますか？
 
 ⚠️ 注意：
 - 現在のシフトは完全に削除されます
 - スタッフの勤務条件に違反しないシフトが生成されます
 - 条件が厳しい場合、生成に失敗する可能性があります`,
-  header: "シフト再生成の確認",
-  icon: "pi pi-exclamation-triangle",
-  acceptClass: "p-button-warning",
-  acceptLabel: "再生成実行",
-  rejectLabel: "キャンセル",
-  accept: async () => {
-    await generateAutomaticShift();
-  },
-});
-};
+        header: "シフト再生成の確認",
+        icon: "pi pi-exclamation-triangle",
+        acceptClass: "p-button-warning",
+        acceptLabel: "再生成実行",
+        rejectLabel: "キャンセル",
+        accept: async () => {
+          await generateAutomaticShift();
+        },
+      });
+    };
 
-// AI生成選択
-const selectAIGeneration = () => {
-selectionDialogVisible.value = false;
-generateAutomaticShift();
-};
+    // AI生成選択
+    const selectAIGeneration = () => {
+      selectionDialogVisible.value = false;
+      generateAutomaticShift();
+    };
 
-// 手動作成選択
-const selectManualCreation = () => {
-selectionDialogVisible.value = false;
-createEmptyShift();
-};
+    // 手動作成選択
+    const selectManualCreation = () => {
+      selectionDialogVisible.value = false;
+      createEmptyShift();
+    };
 
-// シフト作成
-const createShift = async () => {
-const hasStaffData = staffList.value && staffList.value.length > 0;
+    // シフト作成
+    const createShift = async () => {
+      const hasStaffData = staffList.value && staffList.value.length > 0;
 
-if (!hasStaffData) {
-  toast.add({
-    severity: "warn",
-    summary: "注意",
-    detail:
-      "スタッフが登録されていません。先にスタッフを登録してください。",
-    life: 5000,
-  });
-  return;
-}
+      if (!hasStaffData) {
+        toast.add({
+          severity: "warn",
+          summary: "注意",
+          detail:
+            "スタッフが登録されていません。先にスタッフを登録してください。",
+          life: 5000,
+        });
+        return;
+      }
 
-const hasValidStaff = staffList.value.some((staff) => {
-  const hasValidDayPreferences =
-    staff.dayPreferences &&
-    staff.dayPreferences.some((pref) => pref.available);
-  return hasValidDayPreferences;
-});
+      const hasValidStaff = staffList.value.some((staff) => {
+        const hasValidDayPreferences =
+          staff.dayPreferences &&
+          staff.dayPreferences.some((pref) => pref.available);
+        return hasValidDayPreferences;
+      });
 
-if (!hasValidStaff) {
-  toast.add({
-    severity: "warn",
-    summary: "注意",
-    detail:
-      "勤務可能なスタッフがいません。スタッフの勤務設定を確認してください。",
-    life: 5000,
-  });
-}
+      if (!hasValidStaff) {
+        toast.add({
+          severity: "warn",
+          summary: "注意",
+          detail:
+            "勤務可能なスタッフがいません。スタッフの勤務設定を確認してください。",
+          life: 5000,
+        });
+      }
 
-selectionDialogVisible.value = true;
-};
+      selectionDialogVisible.value = true;
+    };
 
-// 空シフト作成
-const createEmptyShift = async () => {
-try {
-  loading.value = true;
+    // 空シフト作成
+    const createEmptyShift = async () => {
+      try {
+        loading.value = true;
 
-  await store.dispatch("shift/createShift", {
-    store_id: selectedStore.value.id,
-    year: currentYear.value,
-    month: currentMonth.value,
-    status: "draft",
-  });
+        await store.dispatch("shift/createShift", {
+          store_id: selectedStore.value.id,
+          year: currentYear.value,
+          month: currentMonth.value,
+          status: "draft",
+        });
 
-  await loadShiftData();
-  isEditMode.value = true;
+        await loadShiftData();
+        isEditMode.value = true;
 
-  toast.add({
-    severity: "success",
-    summary: "作成完了",
-    detail: "シフトを作成しました。編集モードになりました。",
-    life: 3000,
-  });
-} catch (error) {
-  toast.add({
-    severity: "error",
-    summary: "エラー",
-    detail: "シフトの作成に失敗しました",
-    life: 3000,
-  });
-} finally {
-  loading.value = false;
-}
-};
+        toast.add({
+          severity: "success",
+          summary: "作成完了",
+          detail: "シフトを作成しました。編集モードになりました。",
+          life: 3000,
+        });
+      } catch (error) {
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "シフトの作成に失敗しました",
+          life: 3000,
+        });
+      } finally {
+        loading.value = false;
+      }
+    };
 
-// シフト印刷
-const printShift = () => {
-if (!hasCurrentShift.value) return;
+    // シフト印刷
+    const printShift = () => {
+      if (!hasCurrentShift.value) return;
 
-const printWindow = window.open("", "_blank");
+      const printWindow = window.open("", "_blank");
 
-if (!printWindow) {
-  toast.add({
-    severity: "error",
-    summary: "エラー",
-    detail:
-      "ポップアップがブロックされました。ブラウザの設定を確認してください。",
-    life: 3000,
-  });
-  return;
-}
+      if (!printWindow) {
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail:
+            "ポップアップがブロックされました。ブラウザの設定を確認してください。",
+          life: 3000,
+        });
+        return;
+      }
 
-const printContent = generatePrintContent();
-printWindow.document.write(printContent);
-printWindow.document.close();
-printWindow.focus();
-printWindow.print();
-};
+      const printContent = generatePrintContent();
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    };
 
-// 印刷コンテンツ生成
-const generatePrintContent = () => {
-const storeName = selectedStore.value ? selectedStore.value.name : "";
-const period = `${currentYear.value}年${currentMonth.value}月`;
+    // 印刷コンテンツ生成
+    const generatePrintContent = () => {
+      const storeName = selectedStore.value ? selectedStore.value.name : "";
+      const period = `${currentYear.value}年${currentMonth.value}月`;
 
-let printHtml = `
+      let printHtml = `
  <!DOCTYPE html>
  <html>
  <head>
@@ -3318,13 +3422,13 @@ let printHtml = `
          <th class="staff-col">スタッフ</th>
 `;
 
-daysInMonth.value.forEach((day) => {
-  const holidayClass = day.isHoliday ? "holiday" : "";
-  const todayClass = day.isToday ? "today" : "";
-  const storeClosedClass = day.isStoreClosed ? "store-closed" : "";
-  const cellClass =
-    `${holidayClass} ${todayClass} ${storeClosedClass}`.trim();
-  printHtml += `
+      daysInMonth.value.forEach((day) => {
+        const holidayClass = day.isHoliday ? "holiday" : "";
+        const todayClass = day.isToday ? "today" : "";
+        const storeClosedClass = day.isStoreClosed ? "store-closed" : "";
+        const cellClass =
+          `${holidayClass} ${todayClass} ${storeClosedClass}`.trim();
+        printHtml += `
    <th class="date-col ${cellClass}">
      <div style="${
        day.isWeekend || day.isNationalHoliday
@@ -3336,9 +3440,10 @@ daysInMonth.value.forEach((day) => {
      <div style="font-size: 6px; ${
        day.isWeekend || day.isNationalHoliday
          ? "color: #dc2626;"
-         : day.isStoreClosed && !day.isWeekend && !day.isNationalHoliday? "color: #6b7280;"
-              : ""
-          }">${day.dayOfWeekLabel}</div>
+         : day.isStoreClosed && !day.isWeekend && !day.isNationalHoliday
+         ? "color: #6b7280;"
+         : ""
+     }">${day.dayOfWeekLabel}</div>
           ${
             day.isNationalHoliday
               ? '<div style="font-size: 5px; color: red;">祝</div>'
@@ -3351,43 +3456,43 @@ daysInMonth.value.forEach((day) => {
           }
         </th>
       `;
-     });
+      });
 
-     printHtml += `
+      printHtml += `
             </tr>
           </thead>
           <tbody>
     `;
 
-     staffList.value.forEach((staff) => {
-       printHtml += `<tr>`;
-       printHtml += `<td class="staff-col">${staff.last_name} ${staff.first_name}</td>`;
+      staffList.value.forEach((staff) => {
+        printHtml += `<tr>`;
+        printHtml += `<td class="staff-col">${staff.last_name} ${staff.first_name}</td>`;
 
-       daysInMonth.value.forEach((day) => {
-         const shift = getShiftForStaff(day.date, staff.id);
-         const holidayClass = day.isHoliday ? "holiday" : "";
-         const todayClass = day.isToday ? "today" : "";
-         const storeClosedClass = day.isStoreClosed ? "store-closed" : "";
-         const cellClass =
-           `shift-cell ${holidayClass} ${todayClass} ${storeClosedClass}`.trim();
+        daysInMonth.value.forEach((day) => {
+          const shift = getShiftForStaff(day.date, staff.id);
+          const holidayClass = day.isHoliday ? "holiday" : "";
+          const todayClass = day.isToday ? "today" : "";
+          const storeClosedClass = day.isStoreClosed ? "store-closed" : "";
+          const cellClass =
+            `shift-cell ${holidayClass} ${todayClass} ${storeClosedClass}`.trim();
 
-         if (shift) {
-           printHtml += `<td class="${cellClass}">
+          if (shift) {
+            printHtml += `<td class="${cellClass}">
             ${formatTime(shift.start_time)}<br>-<br>${formatTime(
-             shift.end_time
-           )}
+              shift.end_time
+            )}
           </td>`;
-         } else if (day.isStoreClosed) {
-           printHtml += `<td class="${cellClass}">定休日</td>`;
-         } else {
-           printHtml += `<td class="${cellClass}">-</td>`;
-         }
-       });
+          } else if (day.isStoreClosed) {
+            printHtml += `<td class="${cellClass}">定休日</td>`;
+          } else {
+            printHtml += `<td class="${cellClass}">-</td>`;
+          }
+        });
 
-       printHtml += `</tr>`;
-     });
+        printHtml += `</tr>`;
+      });
 
-     printHtml += `
+      printHtml += `
           </tbody>
         </table>
         
@@ -3404,20 +3509,20 @@ daysInMonth.value.forEach((day) => {
             <tbody>
     `;
 
-     staffList.value.forEach((staff) => {
-       const currentStoreHours = calculateTotalHours(staff.id);
-       const allStoreHours = calculateTotalHoursAllStores(staff.id);
+      staffList.value.forEach((staff) => {
+        const currentStoreHours = calculateTotalHours(staff.id);
+        const allStoreHours = calculateTotalHoursAllStores(staff.id);
 
-       printHtml += `
+        printHtml += `
         <tr>
           <td>${staff.last_name} ${staff.first_name}</td>
           <td>${formatHours(currentStoreHours)}</td>
           <td>${formatHours(allStoreHours)}</td>
         </tr>
       `;
-     });
+      });
 
-     printHtml += `
+      printHtml += `
             </tbody>
           </table>
         </div>
@@ -3425,433 +3530,433 @@ daysInMonth.value.forEach((day) => {
       </html>
     `;
 
-     return printHtml;
-   };
+      return printHtml;
+    };
 
-   // シフト保存
-   const saveShift = async () => {
-     if (!shiftEditorDialog.date || !shiftEditorDialog.staff) return;
+    // シフト保存
+    const saveShift = async () => {
+      if (!shiftEditorDialog.date || !shiftEditorDialog.staff) return;
 
-     if (shiftEditorDialog.isRestDay) {
-       await clearShift();
-       return;
-     }
+      if (shiftEditorDialog.isRestDay) {
+        await clearShift();
+        return;
+      }
 
-     if (
-       !shiftEditorDialog.startTimeHour ||
-       !shiftEditorDialog.startTimeMinute ||
-       !shiftEditorDialog.endTimeHour ||
-       !shiftEditorDialog.endTimeMinute
-     ) {
-       toast.add({
-         severity: "warn",
-         summary: "入力エラー",
-         detail: "開始時間と終了時間を選択してください",
-         life: 3000,
-       });
-       return;
-     }
+      if (
+        !shiftEditorDialog.startTimeHour ||
+        !shiftEditorDialog.startTimeMinute ||
+        !shiftEditorDialog.endTimeHour ||
+        !shiftEditorDialog.endTimeMinute
+      ) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "開始時間と終了時間を選択してください",
+          life: 3000,
+        });
+        return;
+      }
 
-     const startTime = combineTimeComponents(
-       shiftEditorDialog.startTimeHour,
-       shiftEditorDialog.startTimeMinute
-     );
-     const endTime = combineTimeComponents(
-       shiftEditorDialog.endTimeHour,
-       shiftEditorDialog.endTimeMinute
-     );
+      const startTime = combineTimeComponents(
+        shiftEditorDialog.startTimeHour,
+        shiftEditorDialog.startTimeMinute
+      );
+      const endTime = combineTimeComponents(
+        shiftEditorDialog.endTimeHour,
+        shiftEditorDialog.endTimeMinute
+      );
 
-     if (startTime >= endTime) {
-       toast.add({
-         severity: "warn",
-         summary: "入力エラー",
-         detail: "終了時間は開始時間より後にしてください",
-         life: 3000,
-       });
-       return;
-     }
+      if (startTime >= endTime) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "終了時間は開始時間より後にしてください",
+          life: 3000,
+        });
+        return;
+      }
 
-     if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
-       toast.add({
-         severity: "warn",
-         summary: "入力エラー",
-         detail: "過去の日付を編集する場合は変更理由を入力してください",
-         life: 3000,
-       });
-       return;
-     }
+      if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "過去の日付を編集する場合は変更理由を入力してください",
+          life: 3000,
+        });
+        return;
+      }
 
-     saving.value = true;
+      saving.value = true;
 
-     try {
-       const shiftData = {
-         store_id: selectedStore.value.id,
-         staff_id: shiftEditorDialog.staff.id,
-         date: shiftEditorDialog.date,
-         start_time: startTime,
-         end_time: endTime,
-         break_start_time: null,
-         break_end_time: null,
-         notes: null,
-       };
+      try {
+        const shiftData = {
+          store_id: selectedStore.value.id,
+          staff_id: shiftEditorDialog.staff.id,
+          date: shiftEditorDialog.date,
+          start_time: startTime,
+          end_time: endTime,
+          break_start_time: null,
+          break_end_time: null,
+          notes: null,
+        };
 
-       if (
-         shiftEditorDialog.hasBreak &&
-         shiftEditorDialog.breakStartTimeHour &&
-         shiftEditorDialog.breakStartTimeMinute &&
-         shiftEditorDialog.breakEndTimeHour &&
-         shiftEditorDialog.breakEndTimeMinute
-       ) {
-         const breakStartTime = combineTimeComponents(
-           shiftEditorDialog.breakStartTimeHour,
-           shiftEditorDialog.breakStartTimeMinute
-         );
-         const breakEndTime = combineTimeComponents(
-           shiftEditorDialog.breakEndTimeHour,
-           shiftEditorDialog.breakEndTimeMinute
-         );
+        if (
+          shiftEditorDialog.hasBreak &&
+          shiftEditorDialog.breakStartTimeHour &&
+          shiftEditorDialog.breakStartTimeMinute &&
+          shiftEditorDialog.breakEndTimeHour &&
+          shiftEditorDialog.breakEndTimeMinute
+        ) {
+          const breakStartTime = combineTimeComponents(
+            shiftEditorDialog.breakStartTimeHour,
+            shiftEditorDialog.breakStartTimeMinute
+          );
+          const breakEndTime = combineTimeComponents(
+            shiftEditorDialog.breakEndTimeHour,
+            shiftEditorDialog.breakEndTimeMinute
+          );
 
-         if (
-           breakStartTime >= startTime &&
-           breakEndTime <= endTime &&
-           breakStartTime < breakEndTime
-         ) {
-           shiftData.break_start_time = breakStartTime;
-           shiftData.break_end_time = breakEndTime;
-         }
-       }
+          if (
+            breakStartTime >= startTime &&
+            breakEndTime <= endTime &&
+            breakStartTime < breakEndTime
+          ) {
+            shiftData.break_start_time = breakStartTime;
+            shiftData.break_end_time = breakEndTime;
+          }
+        }
 
-       if (shiftEditorDialog.isPast) {
-         shiftData.change_reason = shiftEditorDialog.changeReason;
-       }
+        if (shiftEditorDialog.isPast) {
+          shiftData.change_reason = shiftEditorDialog.changeReason;
+        }
 
-       const existingShift = getShiftForStaff(
-         shiftEditorDialog.date,
-         shiftEditorDialog.staff.id
-       );
+        const existingShift = getShiftForStaff(
+          shiftEditorDialog.date,
+          shiftEditorDialog.staff.id
+        );
 
-       if (existingShift) {
-         await store.dispatch("shift/updateShiftAssignment", {
-           year: currentYear.value,
-           month: currentMonth.value,
-           assignmentId: existingShift.id,
-           assignmentData: shiftData,
-         });
-       } else {
-         await store.dispatch("shift/createShiftAssignment", {
-           year: currentYear.value,
-           month: currentMonth.value,
-           assignmentData: shiftData,
-         });
-       }
+        if (existingShift) {
+          await store.dispatch("shift/updateShiftAssignment", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            assignmentId: existingShift.id,
+            assignmentData: shiftData,
+          });
+        } else {
+          await store.dispatch("shift/createShiftAssignment", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            assignmentData: shiftData,
+          });
+        }
 
-       await loadShiftData();
-       await fetchAllSystemStaffAndShifts();
-       shiftEditorDialog.visible = false;
+        await loadShiftData();
+        await fetchAllSystemStaffAndShifts();
+        shiftEditorDialog.visible = false;
 
-       const successMessage = shiftEditorDialog.isPast
-         ? "過去のシフトを変更しました（変更履歴に記録されます）"
-         : "シフトを保存しました";
+        const successMessage = shiftEditorDialog.isPast
+          ? "過去のシフトを変更しました（変更履歴に記録されます）"
+          : "シフトを保存しました";
 
-       toast.add({
-         severity: "success",
-         summary: "保存完了",
-         detail: successMessage,
-         life: 3000,
-       });
-     } catch (error) {
-       if (error.response) {
-       }
+        toast.add({
+          severity: "success",
+          summary: "保存完了",
+          detail: successMessage,
+          life: 3000,
+        });
+      } catch (error) {
+        if (error.response) {
+        }
 
-       let errorMessage = "シフトの保存に失敗しました";
-       if (
-         error.response &&
-         error.response.data &&
-         error.response.data.message
-       ) {
-         errorMessage = error.response.data.message;
-       }
+        let errorMessage = "シフトの保存に失敗しました";
+        if (
+          error.response &&
+          error.response.data &&
+          error.response.data.message
+        ) {
+          errorMessage = error.response.data.message;
+        }
 
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: errorMessage,
-         life: 3000,
-       });
-     } finally {
-       saving.value = false;
-     }
-   };
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: errorMessage,
+          life: 3000,
+        });
+      } finally {
+        saving.value = false;
+      }
+    };
 
-   // シフトクリア
-   const clearShift = async () => {
-     if (!shiftEditorDialog.hasShift) {
-       shiftEditorDialog.visible = false;
-       return;
-     }
+    // シフトクリア
+    const clearShift = async () => {
+      if (!shiftEditorDialog.hasShift) {
+        shiftEditorDialog.visible = false;
+        return;
+      }
 
-     if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
-       toast.add({
-         severity: "warn",
-         summary: "入力エラー",
-         detail: "過去の日付を編集する場合は変更理由を入力してください",
-         life: 3000,
-       });
-       return;
-     }
+      if (shiftEditorDialog.isPast && !shiftEditorDialog.changeReason.trim()) {
+        toast.add({
+          severity: "warn",
+          summary: "入力エラー",
+          detail: "過去の日付を編集する場合は変更理由を入力してください",
+          life: 3000,
+        });
+        return;
+      }
 
-     saving.value = true;
+      saving.value = true;
 
-     try {
-       const existingShift = getShiftForStaff(
-         shiftEditorDialog.date,
-         shiftEditorDialog.staff.id
-       );
+      try {
+        const existingShift = getShiftForStaff(
+          shiftEditorDialog.date,
+          shiftEditorDialog.staff.id
+        );
 
-       if (existingShift) {
-         await store.dispatch("shift/deleteShiftAssignment", {
-           year: currentYear.value,
-           month: currentMonth.value,
-           assignmentId: existingShift.id,
-           change_reason: shiftEditorDialog.isPast
-             ? shiftEditorDialog.changeReason
-             : null,
-         });
+        if (existingShift) {
+          await store.dispatch("shift/deleteShiftAssignment", {
+            year: currentYear.value,
+            month: currentMonth.value,
+            assignmentId: existingShift.id,
+            change_reason: shiftEditorDialog.isPast
+              ? shiftEditorDialog.changeReason
+              : null,
+          });
 
-         await loadShiftData();
-         await fetchAllSystemStaffAndShifts();
-         shiftEditorDialog.visible = false;
+          await loadShiftData();
+          await fetchAllSystemStaffAndShifts();
+          shiftEditorDialog.visible = false;
 
-         const successMessage = shiftEditorDialog.isPast
-           ? "過去のシフトを削除しました（変更履歴に記録されます）"
-           : "シフトを削除しました";
+          const successMessage = shiftEditorDialog.isPast
+            ? "過去のシフトを削除しました（変更履歴に記録されます）"
+            : "シフトを削除しました";
 
-         toast.add({
-           severity: "success",
-           summary: "削除完了",
-           detail: successMessage,
-           life: 3000,
-         });
-       }
-     } catch (error) {
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: "シフトの削除に失敗しました",
-         life: 3000,
-       });
-     } finally {
-       saving.value = false;
-     }
-   };
+          toast.add({
+            severity: "success",
+            summary: "削除完了",
+            detail: successMessage,
+            life: 3000,
+          });
+        }
+      } catch (error) {
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "シフトの削除に失敗しました",
+          life: 3000,
+        });
+      } finally {
+        saving.value = false;
+      }
+    };
 
-   // スタッフのシフト取得
-   const getShiftForStaff = (date, staffId) => {
-     const dayShifts = shifts.value.find((s) => s.date === date);
-     if (!dayShifts) return null;
+    // スタッフのシフト取得
+    const getShiftForStaff = (date, staffId) => {
+      const dayShifts = shifts.value.find((s) => s.date === date);
+      if (!dayShifts) return null;
 
-     return dayShifts.assignments.find((a) => a.staff_id === staffId);
-   };
+      return dayShifts.assignments.find((a) => a.staff_id === staffId);
+    };
 
-   // 時間フォーマット
-   const formatTime = (time) => {
-     if (!time) return "";
-     return time.slice(0, 5);
-   };
+    // 時間フォーマット
+    const formatTime = (time) => {
+      if (!time) return "";
+      return time.slice(0, 5);
+    };
 
-   // シフト削除
-   const deleteShift = async () => {
-     confirm.require({
-       message: `${currentYear.value}年${currentMonth.value}月のシフトを完全に削除しますか？この操作は取り消せません。`,
-       header: "シフト削除の確認",
-       icon: "pi pi-exclamation-triangle",
-       acceptClass: "p-button-danger",
-       acceptLabel: "削除",
-       rejectLabel: "キャンセル",
-       accept: async () => {
-         try {
-           loading.value = true;
+    // シフト削除
+    const deleteShift = async () => {
+      confirm.require({
+        message: `${currentYear.value}年${currentMonth.value}月のシフトを完全に削除しますか？この操作は取り消せません。`,
+        header: "シフト削除の確認",
+        icon: "pi pi-exclamation-triangle",
+        acceptClass: "p-button-danger",
+        acceptLabel: "削除",
+        rejectLabel: "キャンセル",
+        accept: async () => {
+          try {
+            loading.value = true;
 
-           await store.dispatch("shift/deleteShift", {
-             year: currentYear.value,
-             month: currentMonth.value,
-             storeId: selectedStore.value.id,
-           });
+            await store.dispatch("shift/deleteShift", {
+              year: currentYear.value,
+              month: currentMonth.value,
+              storeId: selectedStore.value.id,
+            });
 
-           currentShift.value = null;
-           shifts.value = [];
-           selectedDate.value = null;
-           isEditMode.value = false;
+            currentShift.value = null;
+            shifts.value = [];
+            selectedDate.value = null;
+            isEditMode.value = false;
 
-           toast.add({
-             severity: "success",
-             summary: "削除完了",
-             detail: "シフトを削除しました",
-             life: 3000,
-           });
-         } catch (error) {
-           toast.add({
-             severity: "error",
-             summary: "エラー",
-             detail: "シフトの削除に失敗しました",
-             life: 3000,
-           });
-         } finally {
-           loading.value = false;
-         }
-       },
-     });
-   };
+            toast.add({
+              severity: "success",
+              summary: "削除完了",
+              detail: "シフトを削除しました",
+              life: 3000,
+            });
+          } catch (error) {
+            toast.add({
+              severity: "error",
+              summary: "エラー",
+              detail: "シフトの削除に失敗しました",
+              life: 3000,
+            });
+          } finally {
+            loading.value = false;
+          }
+        },
+      });
+    };
 
-   // 監視
-   watch([currentYear, currentMonth], async () => {
-     await loadShiftData();
-     await fetchAllSystemStaffAndShifts();
-     setDefaultSelectedDate();
-   });
+    // 監視
+    watch([currentYear, currentMonth], async () => {
+      await loadShiftData();
+      await fetchAllSystemStaffAndShifts();
+      setDefaultSelectedDate();
+    });
 
-   // マウント時処理
-   onMounted(async () => {
-     try {
-       generateTimeOptions();
-       await fetchSystemSettings();
-       setDefaultMonthView();
+    // マウント時処理
+    onMounted(async () => {
+      try {
+        generateTimeOptions();
+        await fetchSystemSettings();
+        setDefaultMonthView();
 
-       await fetchHolidays(currentYear.value);
+        await fetchHolidays(currentYear.value);
 
-       const storeData = await store.dispatch("store/fetchStores");
-       stores.value = storeData;
+        const storeData = await store.dispatch("store/fetchStores");
+        stores.value = storeData;
 
-       if (storeData.length > 0) {
-         selectedStore.value = storeData[0];
-         await fetchStoreDetails(selectedStore.value.id);
-         await loadShiftData();
-         await fetchAllSystemStaffAndShifts();
-         setDefaultSelectedDate();
-       }
-     } catch (error) {
-       toast.add({
-         severity: "error",
-         summary: "エラー",
-         detail: "データの取得に失敗しました",
-         life: 3000,
-       });
-     }
-   });
+        if (storeData.length > 0) {
+          selectedStore.value = storeData[0];
+          await fetchStoreDetails(selectedStore.value.id);
+          await loadShiftData();
+          await fetchAllSystemStaffAndShifts();
+          setDefaultSelectedDate();
+        }
+      } catch (error) {
+        toast.add({
+          severity: "error",
+          summary: "エラー",
+          detail: "データの取得に失敗しました",
+          life: 3000,
+        });
+      }
+    });
 
-   return {
-     // 状態
-     deleteShift,
-     loading,
-     saving,
-     isEditMode,
-     selectionDialogVisible,
-     selectedDate,
-     selectedDateCalendar,
-     minSelectableDate,
-     maxSelectableDate,
-     timelineHours,
-     hourOptions,
-     minuteOptions,
-     currentYear,
-     currentMonth,
-     selectedStore,
-     stores,
-     staffList,
-     shifts,
-     daysInMonth,
-     currentShift,
-     systemSettings,
-     shiftEditorDialog,
-     ganttContainer,
-     ganttTimelineHeader,
-     ganttBody,
-     storeRequirements,
-     currentStore,
-     storeBusinessHours,
-     storeClosedDays,
-     allStoreShifts,
-     allSystemStaff,
-     allSystemStoreShifts,
+    return {
+      // 状態
+      deleteShift,
+      loading,
+      saving,
+      isEditMode,
+      selectionDialogVisible,
+      selectedDate,
+      selectedDateCalendar,
+      minSelectableDate,
+      maxSelectableDate,
+      timelineHours,
+      hourOptions,
+      minuteOptions,
+      currentYear,
+      currentMonth,
+      selectedStore,
+      stores,
+      staffList,
+      shifts,
+      daysInMonth,
+      currentShift,
+      systemSettings,
+      shiftEditorDialog,
+      ganttContainer,
+      ganttTimelineHeader,
+      ganttBody,
+      storeRequirements,
+      currentStore,
+      storeBusinessHours,
+      storeClosedDays,
+      allStoreShifts,
+      allSystemStaff,
+      allSystemStoreShifts,
 
-     // コンピューテッド
-     hasCurrentShift,
+      // コンピューテッド
+      hasCurrentShift,
 
-     // メソッド
-     getDailyShiftStaff,
-     isStoreClosedOnDate,
-     isHoursOutOfRange,
-     isHoursOutOfRangeAllStores,
-     hasTotalHoursFromOtherStores,
-     calculateTotalHoursAllStores,
-     getOtherStoreHoursBreakdown,
-     hasStaffWarnings,
-     hasStaffWarningsAllStores,
-     getStaffWarnings,
-     getStaffWarningsAllStores,
-     selectDate,
-     onDateSelect,
-     onGanttDateSelect,
-     formatDateToString,
-     updateSelectedDateCalendar,
-     updateDateRanges,
-     syncGanttScroll,
-     formatDateForGantt,
-     formatSelectedDateDisplay,
-     getTimeHeaderStyle,
-     getGanttBarStyle,
-     parseTimeToFloat,
-     parseTimeToComponents,
-     combineTimeComponents,
-     openGanttShiftEditor,
-     isPastDate,
-     toggleEditMode,
-     openShiftEditor,
-     closeShiftEditor,
-     previousMonth,
-     nextMonth,
-     previousDate,
-     nextDate,
-     changeStore,
-     createShift,
-     selectAIGeneration,
-     selectManualCreation,
-     regenerateShift,
-     printShift,
-     saveShift,
-     clearShift,
-     getShiftForStaff,
-     formatTime,
-     calculateTotalHours,
-     getDailyRequirements,
-     calculateDayHours,
-     fetchStoreDetails,
-     hasStaffingShortage,
-     getAssignedStaffCount,
-     hasShiftViolation,
-     getShiftViolations,
-     hasDateWarnings,
-     getDateWarnings,
-     hasHourRequirements,
-     hasHourShortage,
-     getHourRequirements,
-     hasRequirementShortage,
-     formatHours,
-     canStaffWorkOnDate,
-     getWorkAvailabilityTooltip,
-     getWorkUnavailabilityReason,
-     getGanttAvailabilityStyle,
-     getGanttAvailabilityTooltip,
-     handleShiftTimeChange,
-     confirmQuickDelete,
-     getGanttBreakBarStyle,
-     getAllStoreHoursBreakdownForAllStaff,
-     calculateTotalHoursForAllSystemStaff,
-     isHoursOutOfRangeForAllSystemStaff,
-     hasStaffWarningsForAllSystemStaff,
-     getStaffWarningsForAllSystemStaff,
-   };
- },
+      // メソッド
+      getDailyShiftStaff,
+      isStoreClosedOnDate,
+      isHoursOutOfRange,
+      isHoursOutOfRangeAllStores,
+      hasTotalHoursFromOtherStores,
+      calculateTotalHoursAllStores,
+      getOtherStoreHoursBreakdown,
+      hasStaffWarnings,
+      hasStaffWarningsAllStores,
+      getStaffWarnings,
+      getStaffWarningsAllStores,
+      selectDate,
+      onDateSelect,
+      onGanttDateSelect,
+      formatDateToString,
+      updateSelectedDateCalendar,
+      updateDateRanges,
+      syncGanttScroll,
+      formatDateForGantt,
+      formatSelectedDateDisplay,
+      getTimeHeaderStyle,
+      getGanttBarStyle,
+      parseTimeToFloat,
+      parseTimeToComponents,
+      combineTimeComponents,
+      openGanttShiftEditor,
+      isPastDate,
+      toggleEditMode,
+      openShiftEditor,
+      closeShiftEditor,
+      previousMonth,
+      nextMonth,
+      previousDate,
+      nextDate,
+      changeStore,
+      createShift,
+      selectAIGeneration,
+      selectManualCreation,
+      regenerateShift,
+      printShift,
+      saveShift,
+      clearShift,
+      getShiftForStaff,
+      formatTime,
+      calculateTotalHours,
+      getDailyRequirements,
+      calculateDayHours,
+      fetchStoreDetails,
+      hasStaffingShortage,
+      getAssignedStaffCount,
+      hasShiftViolation,
+      getShiftViolations,
+      hasDateWarnings,
+      getDateWarnings,
+      hasHourRequirements,
+      hasHourShortage,
+      getHourRequirements,
+      hasRequirementShortage,
+      formatHours,
+      canStaffWorkOnDate,
+      getWorkAvailabilityTooltip,
+      getWorkUnavailabilityReason,
+      getGanttAvailabilityStyle,
+      getGanttAvailabilityTooltip,
+      handleShiftTimeChange,
+      confirmQuickDelete,
+      getGanttBreakBarStyle,
+      getAllStoreHoursBreakdownForAllStaff,
+      calculateTotalHoursForAllSystemStaff,
+      isHoursOutOfRangeForAllSystemStaff,
+      hasStaffWarningsForAllSystemStaff,
+      getStaffWarningsForAllSystemStaff,
+    };
+  },
 };
 </script>
 
@@ -4152,12 +4257,14 @@ daysInMonth.value.forEach((day) => {
   overflow: hidden;
   border: 1px solid #e5e7eb;
   margin-bottom: 4rem;
+  box-shadow: inset 0px 0px 8px rgba(147, 147, 147, 1);
+  padding: 8px;
 }
 
 .daily-details-wrapper {
   margin-top: 1.5rem;
   background-color: #ffffff;
-  border-radius:6px;
+  border-radius: 6px;
 }
 
 .details-header {
@@ -4168,7 +4275,7 @@ daysInMonth.value.forEach((day) => {
   background: linear-gradient(135deg, #275a79, #275a79);
   color: #fff;
   padding: 10px 1.5rem 20px 1.5rem;
-  border-radius:6px 6px 0 0;
+  border-radius: 6px 6px 0 0;
 }
 
 .details-title h3 {
@@ -4193,8 +4300,9 @@ daysInMonth.value.forEach((day) => {
 
 .gantt-section {
   margin-bottom: 1.5rem;
-  border-radius: 0px;
+  border-radius:6px 6px 0 0;
   overflow: hidden;
+
 }
 
 .daily-info-panel {
@@ -4921,7 +5029,9 @@ daysInMonth.value.forEach((day) => {
   overflow: hidden;
   min-height: 300px;
   flex: 1;
-  padding: 0 1.5rem;
+  padding: 0;
+  box-shadow: inset 0px 0px 8px rgba(147, 147, 147, 1);
+  padding: 8px;
 }
 
 .gantt-header {
@@ -5318,8 +5428,8 @@ daysInMonth.value.forEach((day) => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  min-height: 200px;
-  max-height: 300px;
+  min-height: 300px;
+  max-height: 1000px;
   overflow-y: auto;
 }
 
@@ -5910,7 +6020,6 @@ daysInMonth.value.forEach((day) => {
 }
 
 .selection-card {
-  border: 1px solid var(--surface-d);
   border-radius: 8px;
   padding: 1.5rem;
   height: 100%;
@@ -5920,12 +6029,12 @@ daysInMonth.value.forEach((day) => {
   flex-direction: column;
   text-align: center;
   background-color: var(--surface-a);
+  box-shadow: 0px 0px 2px rgb(103, 103, 103);
 }
 
 .selection-card:hover {
-  border-color: var(--primary-color);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  transform: translate(0, -2px);
+  box-shadow: 0px 0px 6px rgb(69, 146, 213);
 }
 
 .selection-card .card-header {
@@ -5955,5 +6064,318 @@ daysInMonth.value.forEach((day) => {
   margin-bottom: 1.5rem;
   white-space: pre-line;
   text-align: left;
+}
+
+// 全スタッフのシフト状況テーブル
+.all-staff-shift-summary {
+  background: white;
+  border-radius: 6px;
+  margin-top: 2rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.summary-header {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  color: white;
+}
+
+.summary-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.summary-header h3 i {
+  color: #93c5fd;
+  font-size: 1.5rem;
+}
+
+.all-staff-table-container {
+  overflow-x: auto;
+  background: #f8f9fa;
+}
+
+.all-staff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  background: white;
+}
+
+.all-staff-table thead {
+  background: #f1f5f9;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.all-staff-table th {
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #1e293b;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.staff-name-col {
+  width: 180px;
+  min-width: 180px;
+}
+
+.store-hours-col {
+  width: 280px;
+  min-width: 280px;
+}
+
+.total-hours-col {
+  width: 120px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.target-range-col {
+  width: 140px;
+  min-width: 140px;
+  text-align: center;
+}
+
+.status-col {
+  width: 100px;
+  min-width: 100px;
+  text-align: center;
+}
+
+.all-staff-row {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s;
+}
+
+.all-staff-row:hover {
+  background-color: #f9fafb;
+}
+
+.all-staff-row.has-warnings {
+  background-color: #fef3c7;
+}
+
+.all-staff-row.has-warnings:hover {
+  background-color: #fde68a;
+}
+
+.all-staff-row.hours-violation {
+  background-color: #fee2e2;
+}
+
+.all-staff-row.hours-violation:hover {
+  background-color: #fecaca;
+}
+
+.all-staff-table td {
+  padding: 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.staff-name-cell {
+  position: sticky;
+  left: 0;
+  background: inherit;
+  z-index: 2;
+}
+
+.staff-info-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.staff-avatar-table {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #3b82f6;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.staff-name-text {
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.store-hours-cell {
+  max-width: 280px;
+}
+
+.store-hours-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.store-hours-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  background: #f3f4f6;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.store-name-table {
+  color: #475569;
+  font-weight: 500;
+  flex: 1;
+}
+
+.store-hours-table {
+  color: #059669;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+.no-hours {
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.no-hours-text {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
+.total-hours-cell {
+  text-align: center;
+}
+
+.total-hours-value-table {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #10b981;
+}
+
+.total-hours-value-table.out-of-range {
+  color: #dc2626 !important;
+}
+
+.target-range-cell {
+  text-align: center;
+}
+
+.target-range-text {
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.status-cell {
+  text-align: center;
+}
+
+.status-indicators {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.warning-indicator-table {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: #f59e0b;
+  cursor: help;
+  font-size: 0.8rem;
+}
+
+.warning-indicator-table i {
+  font-size: 0.9rem;
+}
+
+.warning-text {
+  font-weight: 500;
+}
+
+.status-ok {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: #10b981;
+  font-size: 0.8rem;
+}
+
+.status-ok i {
+  font-size: 0.9rem;
+}
+
+.status-ok-text {
+  font-weight: 500;
+}
+
+@media (max-width: 1200px) {
+  .all-staff-table-container {
+    max-height: 500px;
+    overflow-y: auto;
+  }
+
+  .staff-name-col {
+    width: 160px;
+    min-width: 160px;
+  }
+
+  .store-hours-col {
+    width: 250px;
+    min-width: 250px;
+  }
+}
+
+@media (max-width: 768px) {
+  .all-staff-table {
+    font-size: 0.8rem;
+  }
+
+  .all-staff-table th,
+  .all-staff-table td {
+    padding: 0.5rem;
+  }
+
+  .staff-name-col {
+    width: 140px;
+    min-width: 140px;
+  }
+
+  .store-hours-col {
+    width: 200px;
+    min-width: 200px;
+  }
+
+  .total-hours-col,
+  .target-range-col,
+  .status-col {
+    width: 80px;
+    min-width: 80px;
+  }
+
+  .store-hours-item {
+    font-size: 0.75rem;
+  }
+
+  .staff-avatar-table {
+    width: 28px;
+    height: 28px;
+    font-size: 0.7rem;
+  }
 }
 </style>

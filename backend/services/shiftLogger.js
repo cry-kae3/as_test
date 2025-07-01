@@ -44,8 +44,8 @@ class ShiftLogger {
     async logStaffData(storeId, year, month, staffData) {
         await this.logShiftGeneration(storeId, year, month, {
             phase: 'STAFF_DATA_COLLECTION',
-            staffCount: staffData.length,
-            staffDetails: staffData.map(staff => ({
+            staffCount: staffData ? staffData.length : 0,
+            staffDetails: staffData ? staffData.map(staff => ({
                 id: staff.id,
                 name: staff.name,
                 minHours: staff.min_hours_for_this_store,
@@ -53,15 +53,16 @@ class ShiftLogger {
                 otherStoreHours: staff.other_store_hours,
                 totalMinHours: staff.min_hours_per_month,
                 totalMaxHours: staff.max_hours_per_month,
-                dayPreferences: staff.day_preferences.map(pref => ({
-                    day: pref.day_name,
-                    available: pref.available,
-                    startTime: pref.preferred_start_time,
-                    endTime: pref.preferred_end_time
-                })),
-                daysOff: staff.days_off,
-                otherStoreShifts: staff.other_store_shifts
-            }))
+                dayPreferences: staff.day_preferences && Array.isArray(staff.day_preferences) ?
+                    staff.day_preferences.map(pref => ({
+                        day: pref.day_name,
+                        available: pref.available,
+                        startTime: pref.preferred_start_time,
+                        endTime: pref.preferred_end_time
+                    })) : [],
+                daysOff: staff.days_off || [],
+                otherStoreShifts: staff.other_store_shifts || []
+            })) : []
         });
     }
 
@@ -75,45 +76,46 @@ class ShiftLogger {
     async logAIPrompt(storeId, year, month, prompt) {
         await this.logShiftGeneration(storeId, year, month, {
             phase: 'AI_PROMPT_GENERATION',
-            promptLength: prompt.length,
-            prompt: prompt
+            promptLength: prompt ? prompt.length : 0,
+            prompt: prompt || ''
         });
     }
 
     async logAIResponse(storeId, year, month, response, parsedData) {
         await this.logShiftGeneration(storeId, year, month, {
             phase: 'AI_RESPONSE_PROCESSING',
-            responseLength: response.length,
-            response: response,
-            parsedShifts: parsedData?.shifts?.length || 0,
-            parsedSummary: parsedData?.summary || null
+            responseLength: response ? response.length : 0,
+            response: response || '',
+            parsedShifts: parsedData && parsedData.shifts ? parsedData.shifts.length : 0,
+            parsedSummary: parsedData ? parsedData.summary : null
         });
     }
 
     async logValidation(storeId, year, month, validationResult) {
         await this.logShiftGeneration(storeId, year, month, {
             phase: 'SHIFT_VALIDATION',
-            isValid: validationResult.isValid,
-            warnings: validationResult.warnings,
-            violationCount: validationResult.warnings?.length || 0
+            isValid: validationResult ? validationResult.isValid : false,
+            warnings: validationResult ? validationResult.warnings : [],
+            violationCount: validationResult && validationResult.warnings ? validationResult.warnings.length : 0
         });
     }
 
     async logHoursValidation(storeId, year, month, staffHoursData) {
         await this.logShiftGeneration(storeId, year, month, {
             phase: 'HOURS_VALIDATION',
-            staffHours: staffHoursData.map(staff => ({
-                id: staff.staffId,
-                name: staff.name,
-                generatedHours: staff.generatedHours,
-                minRequired: staff.minRequired,
-                maxAllowed: staff.maxAllowed,
-                otherStoreHours: staff.otherStoreHours,
-                totalHours: staff.totalHours,
-                isUnderMin: staff.generatedHours < staff.minRequired,
-                isOverMax: staff.generatedHours > staff.maxAllowed,
-                isTotalOverMax: staff.totalHours > staff.maxAllowed
-            }))
+            staffHours: staffHoursData && Array.isArray(staffHoursData) ?
+                staffHoursData.map(staff => ({
+                    id: staff.staffId,
+                    name: staff.name,
+                    generatedHours: staff.generatedHours,
+                    minRequired: staff.minRequired,
+                    maxAllowed: staff.maxAllowed,
+                    otherStoreHours: staff.otherStoreHours,
+                    totalHours: staff.totalHours,
+                    isUnderMin: staff.generatedHours < staff.minRequired,
+                    isOverMax: staff.generatedHours > staff.maxAllowed,
+                    isTotalOverMax: staff.totalHours > staff.maxAllowed
+                })) : []
         });
     }
 
@@ -121,9 +123,9 @@ class ShiftLogger {
         await this.logShiftGeneration(storeId, year, month, {
             phase: phase || 'ERROR',
             error: {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
+                message: error ? error.message : 'Unknown error',
+                stack: error ? error.stack : 'No stack trace available',
+                name: error ? error.name : 'Unknown error type'
             }
         });
     }

@@ -277,14 +277,17 @@ class ShiftGeneratorService {
 
     buildSimplePrompt(store, staffs, year, month, period, otherStoreShifts) {
         let prompt = `期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
-    
-    基本ルール:
-    - スタッフをシフトに入れる際は、1日の勤務時間が8時間を超えないように、可能な限り長く割り当ててください。
-    - 他店舗で既にシフトが入っている時間帯には絶対に割り当てないでください。
-    `;
+
+基本ルール:
+- 以下の利用可能なスタッフIDのみを使用してください。
+- スタッフをシフトに入れる際は、1日の勤務時間が8時間を超えないように、可能な限り長く割り当ててください。
+- 他店舗で既にシフトが入っている時間帯には絶対に割り当てないでください。
+
+利用可能なスタッフID:
+`;
 
         staffs.forEach(staff => {
-            prompt += `- ID:${staff.id} ${staff.first_name} (1日最大 ${staff.max_hours_per_day || 8}h)`;
+            prompt += `- スタッフID: ${staff.id} (${staff.last_name} ${staff.first_name}) 1日最大 ${staff.max_hours_per_day || 8}h`;
 
             const otherShifts = otherStoreShifts[staff.id] || [];
             if (otherShifts.length > 0) {
@@ -297,26 +300,26 @@ class ShiftGeneratorService {
         });
 
         prompt += `
-    上記ルールに従って、シフトをJSON形式で出力してください。
-    重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
-    
-    {"shifts":[{"date":"YYYY-MM-DD","assignments":[{"staff_id":1,"start_time":"09:00","end_time":"17:00"}]}]}`;
+上記ルールに従って、シフトをJSON形式で出力してください。
+重要: 必ず上記のスタッフIDのみを使用し、全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。
+
+{"shifts":[{"date":"YYYY-MM-DD","assignments":[{"staff_id":${staffs[0]?.id || 1},"start_time":"09:00","end_time":"17:00"}]}]}`;
 
         return prompt;
     }
 
-
     buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, violations, otherStoreShifts) {
         let prompt = `前回のシフト生成で以下の絶対守るべきルール違反がありました。今度は絶対にルールを守って生成してください。
+
 ### 前回の違反内容
 ${violations.slice(0, 5).join('\n')}
 
-### 絶対厳守ルール
+### 利用可能なスタッフIDとその制約
 `;
 
         staffs.forEach(staff => {
             prompt += `
-${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
+スタッフID: ${staff.id} (${staff.last_name} ${staff.first_name}):
 - 1日の勤務時間は絶対に${staff.max_hours_per_day || 8}時間以下にすること。`;
 
             const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
@@ -326,6 +329,7 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
                 prompt += `
 - ${unavailableDays.join(', ')}曜日は絶対に勤務させないこと。`;
             }
+
             const dayOffDates = staff.dayOffRequests?.filter(req => req.status === 'approved' || req.status === 'pending').map(req => req.date) || [];
             if (dayOffDates.length > 0) {
                 prompt += `
@@ -342,17 +346,15 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             }
         });
 
+        const availableStaffIds = staffs.map(s => s.id).join(', ');
         prompt += `
 
-### シフト生成の基本方針
-- スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てる。
-- 月間勤務時間は目安です。
-- 他店舗で既に勤務がある時間帯には絶対に割り当てない。
-
-### 期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
+### 重要な注意事項
+- 使用可能なスタッフID: ${availableStaffIds}
+- 上記以外のスタッフIDは絶対に使用しないこと
+- 期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
 
 前回の違反を修正し、ルールを厳守したシフトをJSON形式で出力してください。
-重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
 \`\`\`json
 {
   "shifts": [
@@ -360,7 +362,7 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
       "date": "YYYY-MM-DD", 
       "assignments": [
         {
-          "staff_id": スタッフID,
+          "staff_id": ${staffs[0]?.id || 1},
           "start_time": "HH:MM",
           "end_time": "HH:MM"
         }
@@ -373,15 +375,20 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         return prompt;
     }
 
-
     buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts) {
         let prompt = `あなたはシフト管理システムです。以下の条件を厳守してシフトを生成してください。
-    
-    ## 期間情報
-    - 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
-    
-    ## スタッフ制約（絶対遵守）
-    `;
+
+## 期間情報
+- 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
+
+## 利用可能なスタッフID（絶対遵守）
+`;
+
+        const availableStaffIds = staffs.map(s => s.id);
+        prompt += `使用可能なスタッフID: ${availableStaffIds.join(', ')}\n`;
+        prompt += `重要: 上記以外のスタッフIDは絶対に使用しないでください。\n\n`;
+
+        prompt += `## スタッフ制約（絶対遵守）\n`;
 
         staffs.forEach(staff => {
             const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p => ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]) || [];
@@ -389,15 +396,15 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             const otherShifts = otherStoreShifts[staff.id] || [];
 
             prompt += `
-    【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
-    - 月間時間 (目安): ${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}時間
-    - 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間
-    - 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
-    - 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}`;
+【スタッフID: ${staff.id} - ${staff.first_name} ${staff.last_name}】
+- 月間時間 (目安): ${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}時間
+- 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間
+- 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
+- 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}`;
 
             if (otherShifts.length > 0) {
                 prompt += `
-    - 他店舗勤務（重複不可）:`;
+- 他店舗勤務（重複不可）:`;
                 otherShifts.forEach(shift => {
                     prompt += `\n      ${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`;
                 });
@@ -405,33 +412,34 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
         });
 
         prompt += `
-    
-    ## 重要ルール
-    1. スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てること。
-    2. 各日付の人員要件（もしあれば）を満たすことを優先する。
-    3. 月間勤務時間は目安とし、多少の過不足は許容する。最終的な調整は人間が行う。
-    4. 勤務不可曜日と休み希望日には絶対に割り当てない。
-    5. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない。
-    6. 他店舗で既に勤務がある日時には絶対に割り当てない（同じ時間帯に複数店舗で勤務することはできない）。
-    
-    ## 出力形式
-    以下のJSON形式で正確に出力してください。余計な説明は不要です。
-    重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
-    
+
+## 重要ルール
+1. 使用可能スタッフID（${availableStaffIds.join(', ')}）以外は絶対に使用しない
+2. スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てること
+3. 各日付の人員要件（もしあれば）を満たすことを優先する
+4. 月間勤務時間は目安とし、多少の過不足は許容する
+5. 勤務不可曜日と休み希望日には絶対に割り当てない
+6. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない
+7. 他店舗で既に勤務がある日時には絶対に割り当てない
+
+## 出力形式
+以下のJSON形式で正確に出力してください。余計な説明は不要です。
+重要: スタッフIDは ${availableStaffIds.join(', ')} のいずれかを使用してください。
+
+{
+  "shifts": [
     {
-      "shifts": [
+      "date": "YYYY-MM-DD",
+      "assignments": [
         {
-          "date": "YYYY-MM-DD",
-          "assignments": [
-            {
-              "staff_id": 1,
-              "start_time": "09:00", 
-              "end_time": "17:00"
-            }
-          ]
+          "staff_id": ${staffs[0]?.id || availableStaffIds[0]},
+          "start_time": "09:00", 
+          "end_time": "17:00"
         }
       ]
-    }`;
+    }
+  ]
+}`;
 
         return prompt;
     }
@@ -445,6 +453,9 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
             return { isValid: false, violations: ['シフトデータが不正です'], warnings: [] };
         }
 
+        // 利用可能なスタッフIDの一覧を作成
+        const validStaffIds = staffs.map(s => s.id);
+
         for (const dayShift of shiftData.shifts) {
             const date = dayShift.date;
             const dayOfWeek = new Date(date).getDay();
@@ -453,10 +464,16 @@ ${staff.first_name} ${staff.last_name} (ID: ${staff.id}):
 
             for (const assignment of dayShift.assignments) {
                 const staffId = assignment.staff_id;
-                const staff = staffs.find(s => s.id === staffId);
 
-                if (!staff) {
+                // スタッフIDの存在チェック
+                if (!validStaffIds.includes(staffId)) {
                     violations.push(`存在しないスタッフID: ${staffId}`);
+                    continue;
+                }
+
+                const staff = staffs.find(s => s.id === staffId);
+                if (!staff) {
+                    violations.push(`スタッフが見つかりません: ${staffId}`);
                     continue;
                 }
 
