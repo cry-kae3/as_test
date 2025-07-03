@@ -77,7 +77,7 @@ export function useAllStoreShiftManagement() {
                 const shiftDetails = await api.get(`/shifts/${shift.id}`);
                 if (!shiftsByStore[shift.store_id]) {
                     shiftsByStore[shift.store_id] = {
-                        storeName: shift.Store.name,
+                        storeName: shift.Store?.name || `店舗${shift.store_id}`,
                         shifts: []
                     };
                 }
@@ -171,6 +171,12 @@ export function useAllStoreShiftManagement() {
 
     const getOtherStoreHoursBreakdown = (staffId, staffList, selectedStore) => {
         const breakdown = [];
+
+        // staffListの存在チェック
+        if (!staffList || !Array.isArray(staffList)) {
+            return breakdown;
+        }
+
         const staff = staffList.find((s) => s.id === staffId);
         if (!staff) return breakdown;
 
@@ -214,6 +220,11 @@ export function useAllStoreShiftManagement() {
     };
 
     const isHoursOutOfRangeAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHours) => {
+        // staffListの存在チェック
+        if (!staffList || !Array.isArray(staffList)) {
+            return false;
+        }
+
         const staff = staffList.find((s) => s.id === staffId);
         if (!staff) return false;
 
@@ -230,7 +241,15 @@ export function useAllStoreShiftManagement() {
 
     const getStaffWarningsAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHours) => {
         if (!hasStaffWarningsAllStores(staffId, staffList, shifts, selectedStore, calculateTotalHours)) return [];
+
+        // staffListの存在チェック
+        if (!staffList || !Array.isArray(staffList)) {
+            return [];
+        }
+
         const staff = staffList.find(s => s.id === staffId);
+        if (!staff) return [];
+
         const totalHours = calculateTotalHoursAllStores(staffId, shifts, staffList, selectedStore, calculateTotalHours);
         const minHours = staff.min_hours_per_month || 0;
         const maxHours = staff.max_hours_per_month || 0;

@@ -396,6 +396,8 @@ export function useShiftManagement() {
 
     // スタッフ勤務可能性チェック
     const canStaffWorkOnDate = (staff, date) => {
+        if (!staff) return false;
+
         const hasDayOffRequest =
             staff.dayOffRequests &&
             staff.dayOffRequests.some(
@@ -421,6 +423,8 @@ export function useShiftManagement() {
     };
 
     const getWorkAvailabilityTooltip = (staff, date) => {
+        if (!staff) return "";
+
         const dayOfWeek = new Date(date).getDay();
         const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
         const dayPreference =
@@ -443,6 +447,8 @@ export function useShiftManagement() {
     };
 
     const getWorkUnavailabilityReason = (staff, date) => {
+        if (!staff) return "勤務不可";
+
         const dayOffRequest =
             staff.dayOffRequests &&
             staff.dayOffRequests.find(
@@ -472,7 +478,7 @@ export function useShiftManagement() {
     const generateDaysInMonth = () => {
         const year = currentYear.value;
         const month = currentMonth.value;
-        const closingDay = systemSettings.value.closing_day || 25;
+        const closingDay = systemSettings.value?.closing_day || 25;
 
         const { startDate, endDate } = getShiftPeriod(year, month, closingDay);
         const today = new Date();

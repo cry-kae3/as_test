@@ -74,10 +74,16 @@ export function useShiftRequirements() {
     // 日付警告があるかチェック
     const hasDateWarnings = (date, storeRequirements, shifts, staffList, hasShiftViolation) => {
         const requirements = getDailyRequirements(date, storeRequirements);
-        return (
-            requirements.some((req) => hasStaffingShortage(date, req, shifts)) ||
-            staffList.some((staff) => hasShiftViolation(date, staff.id))
-        );
+
+        // 人員要件のチェック
+        const hasStaffingIssues = requirements.some((req) => hasStaffingShortage(date, req, shifts));
+
+        // スタッフ勤務条件違反のチェック - staffListがundefinedまたはnullの場合の対応
+        const hasStaffViolations = staffList && Array.isArray(staffList)
+            ? staffList.some((staff) => hasShiftViolation(date, staff.id))
+            : false;
+
+        return hasStaffingIssues || hasStaffViolations;
     };
 
     // 日付警告取得
@@ -98,22 +104,25 @@ export function useShiftRequirements() {
             }
         });
 
-        staffList.forEach((staff) => {
-            if (hasShiftViolation(date, staff.id)) {
-                warnings.push({
-                    type: "staff_violation",
-                    icon: "pi pi-exclamation-triangle",
-                    message: `${staff.last_name} ${staff.first_name}: 勤務条件違反`,
-                });
-            }
-        });
+        // staffListがundefinedまたはnullの場合の対応
+        if (staffList && Array.isArray(staffList)) {
+            staffList.forEach((staff) => {
+                if (hasShiftViolation(date, staff.id)) {
+                    warnings.push({
+                        type: "staff_violation",
+                        icon: "pi pi-exclamation-triangle",
+                        message: `${staff.last_name} ${staff.first_name}: 勤務条件違反`,
+                    });
+                }
+            });
+        }
 
         return warnings;
     };
 
     // 日次シフトスタッフ取得
     const getDailyShiftStaff = (date, staffList, shifts) => {
-        if (!date || !staffList) return [];
+        if (!date || !staffList || !Array.isArray(staffList)) return [];
 
         const dayShifts = shifts.find((shift) => shift.date === date);
         if (!dayShifts || !dayShifts.assignments) return [];
