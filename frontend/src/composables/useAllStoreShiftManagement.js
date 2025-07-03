@@ -160,15 +160,6 @@ export function useAllStoreShiftManagement() {
         return warnings;
     };
 
-    const calculateTotalHoursAllStores = (staffId, shifts, staffList, selectedStore, calculateTotalHours) => {
-        let totalHours = calculateTotalHours(staffId);
-        const breakdown = getOtherStoreHoursBreakdown(staffId, staffList, selectedStore);
-        breakdown.forEach(item => {
-            totalHours += item.hours;
-        });
-        return totalHours;
-    };
-
     const getOtherStoreHoursBreakdown = (staffId, staffList, selectedStore) => {
         const breakdown = [];
 
@@ -219,7 +210,40 @@ export function useAllStoreShiftManagement() {
         return breakdown.sort((a, b) => a.storeName.localeCompare(b.storeName));
     };
 
-    const isHoursOutOfRangeAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHours) => {
+    // 内部で勤務時間を計算するよう修正
+    const calculateTotalHoursAllStores = (staffId, shifts, staffList, selectedStore, calculateTotalHoursFunc) => {
+        // 現在の店舗での勤務時間を計算
+        let currentStoreHours = 0;
+        if (calculateTotalHoursFunc && typeof calculateTotalHoursFunc === 'function') {
+            currentStoreHours = calculateTotalHoursFunc(staffId);
+        } else if (shifts && Array.isArray(shifts)) {
+            // calculateTotalHoursFuncが渡されない場合は、shiftsから直接計算
+            shifts.forEach((dayShift) => {
+                const assignment = dayShift.assignments?.find((a) => a.staff_id === staffId);
+                if (assignment) {
+                    const startTime = new Date(`2000-01-01T${assignment.start_time}`);
+                    const endTime = new Date(`2000-01-01T${assignment.end_time}`);
+                    let minutes = (endTime - startTime) / (1000 * 60);
+
+                    if (assignment.break_start_time && assignment.break_end_time) {
+                        const breakStart = new Date(`2000-01-01T${assignment.break_start_time}`);
+                        const breakEnd = new Date(`2000-01-01T${assignment.break_end_time}`);
+                        minutes -= (breakEnd - breakStart) / (1000 * 60);
+                    }
+                    currentStoreHours += minutes;
+                }
+            });
+            currentStoreHours = Math.round((currentStoreHours / 60) * 10) / 10;
+        }
+
+        // 他店舗での勤務時間を取得
+        const breakdown = getOtherStoreHoursBreakdown(staffId, staffList, selectedStore);
+        const otherStoreHours = breakdown.reduce((total, item) => total + item.hours, 0);
+
+        return currentStoreHours + otherStoreHours;
+    };
+
+    const isHoursOutOfRangeAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc) => {
         // staffListの存在チェック
         if (!staffList || !Array.isArray(staffList)) {
             return false;
@@ -228,19 +252,19 @@ export function useAllStoreShiftManagement() {
         const staff = staffList.find((s) => s.id === staffId);
         if (!staff) return false;
 
-        const totalHours = calculateTotalHoursAllStores(staffId, shifts, staffList, selectedStore, calculateTotalHours);
+        const totalHours = calculateTotalHoursAllStores(staffId, shifts, staffList, selectedStore, calculateTotalHoursFunc);
         const minHours = staff.min_hours_per_month || 0;
         const maxHours = staff.max_hours_per_month || 0;
 
         return maxHours > 0 && (totalHours < minHours || totalHours > maxHours);
     };
 
-    const hasStaffWarningsAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHours) => {
-        return isHoursOutOfRangeAllStores(staffId, staffList, shifts, selectedStore, calculateTotalHours);
+    const hasStaffWarningsAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc) => {
+        return isHoursOutOfRangeAllStores(staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc);
     };
 
-    const getStaffWarningsAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHours) => {
-        if (!hasStaffWarningsAllStores(staffId, staffList, shifts, selectedStore, calculateTotalHours)) return [];
+    const getStaffWarningsAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc) => {
+        if (!hasStaffWarningsAllStores(staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc)) return [];
 
         // staffListの存在チェック
         if (!staffList || !Array.isArray(staffList)) {
@@ -250,7 +274,7 @@ export function useAllStoreShiftManagement() {
         const staff = staffList.find(s => s.id === staffId);
         if (!staff) return [];
 
-        const totalHours = calculateTotalHoursAllStores(staffId, shifts, staffList, selectedStore, calculateTotalHours);
+        const totalHours = calculateTotalHoursAllStores(staffId, shifts, staffList, selectedStore, calculateTotalHoursFunc);
         const minHours = staff.min_hours_per_month || 0;
         const maxHours = staff.max_hours_per_month || 0;
         const warnings = [];
