@@ -29,9 +29,6 @@ export function useShiftManagement() {
     const currentStore = ref(null);
     const storeBusinessHours = ref([]);
     const storeClosedDays = ref([]);
-    const allStoreShifts = ref({});
-    const allSystemStaff = ref([]);
-    const allSystemStoreShifts = ref({});
 
     // カレンダー関連
     const selectedDateCalendar = ref(null);
@@ -64,27 +61,6 @@ export function useShiftManagement() {
             hours.push(hour);
         }
         return hours;
-    });
-
-    // シフトエディタダイアログ
-    const shiftEditorDialog = reactive({
-        visible: false,
-        title: "",
-        date: null,
-        staff: null,
-        startTimeHour: "09",
-        startTimeMinute: "00",
-        endTimeHour: "18",
-        endTimeMinute: "00",
-        hasBreak: false,
-        breakStartTimeHour: "",
-        breakStartTimeMinute: "",
-        breakEndTimeHour: "",
-        breakEndTimeMinute: "",
-        isRestDay: false,
-        isPast: false,
-        hasShift: false,
-        changeReason: "",
     });
 
     // 現在のシフトがあるかどうか
@@ -634,14 +610,10 @@ export function useShiftManagement() {
         daysInMonth,
         currentShift,
         systemSettings,
-        shiftEditorDialog,
         storeRequirements,
         currentStore,
         storeBusinessHours,
         storeClosedDays,
-        allStoreShifts,
-        allSystemStaff,
-        allSystemStoreShifts,
         holidays,
 
         // コンピューテッド

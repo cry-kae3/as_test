@@ -278,11 +278,23 @@
 
     <ConfirmDialog></ConfirmDialog>
     <Toast />
+
+    <!-- デバッグ情報パネル（開発環境のみ） -->
+    <div v-if="isDevelopment" class="debug-panel">
+      <div class="debug-info">
+        <h4>デバッグ情報</h4>
+        <div>selectedStore: {{ selectedStore?.name }}</div>
+        <div>hasCurrentShift: {{ hasCurrentShift }}</div>
+        <div>staffList.length: {{ staffList.length }}</div>
+        <div>loading: {{ loading }}</div>
+        <div>stores.length: {{ stores.length }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, watch, nextTick } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 import { useStore } from "vuex";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
@@ -345,14 +357,23 @@ export default {
     const toast = useToast();
     const confirm = useConfirm();
 
-    // 基本状態
-    const loading = ref(false);
-    const isEditMode = ref(false);
-    const selectionDialogVisible = ref(false);
+    // 開発環境判定
+    const isDevelopment = computed(() => process.env.NODE_ENV === 'development');
 
     // Composablesの利用
+    const shiftManagement = useShiftManagement();
+    const allStoreManagement = useAllStoreShiftManagement();
+    const shiftRequirements = useShiftRequirements();
+    const shiftActions = useShiftActions();
+    const shiftEditor = useShiftEditor();
+    const shiftNavigation = useShiftNavigation();
+
+    // 状態を展開
     const {
-      // 状態
+      loading: managementLoading,
+      saving,
+      isEditMode,
+      selectionDialogVisible,
       selectedDate,
       selectedDateCalendar,
       minSelectableDate,
@@ -370,69 +391,35 @@ export default {
       currentShift,
       systemSettings,
       storeRequirements,
-      currentStore,
-      storeBusinessHours,
-      storeClosedDays,
-      holidays,
-
-      // コンピューテッド
       hasCurrentShift,
-
-      // ユーティリティ関数
-      parseTimeToFloat,
-      parseTimeToComponents,
-      combineTimeComponents,
       formatTime,
       formatHours,
       isPastDate,
       formatDateToString,
       formatSelectedDateDisplay,
       generateTimeOptions,
-
-      // 祝日関連
       fetchHolidays,
-      isHoliday,
-
-      // システム設定関連
       fetchSystemSettings,
-      getShiftPeriod,
       setDefaultMonthView,
-
-      // 店舗関連
       isStoreClosedOnDate,
       fetchStoreDetails,
-
-      // シフト関連
       getShiftForStaff,
       calculateDayHours,
       calculateTotalHours,
-
-      // スタッフ警告関連
       hasShiftViolation,
       getShiftViolations,
-
-      // スタッフ勤務可能性チェック
       canStaffWorkOnDate,
       getWorkAvailabilityTooltip,
       getWorkUnavailabilityReason,
-
-      // 日付・期間管理
       generateDaysInMonth,
       setDefaultSelectedDate,
       updateSelectedDateCalendar,
-      updateDateRanges,
-    } = useShiftManagement();
+    } = shiftManagement;
 
     const {
-      // 状態
-      allStoreShifts,
       allSystemStaff,
-      allSystemStoreShifts,
-
-      // メソッド
       fetchAllStoreShifts,
       fetchAllSystemStaffAndShifts,
-      calculateStoreHoursForAllStaff,
       getAllStoreHoursBreakdownForAllStaff,
       calculateTotalHoursForAllSystemStaff,
       isHoursOutOfRangeForAllSystemStaff,
@@ -444,12 +431,10 @@ export default {
       hasStaffWarningsAllStores,
       getStaffWarningsAllStores,
       getStaffStatus,
-      checkStaffOtherWarnings,
       getStaffStatusInfo,
-    } = useAllStoreShiftManagement();
+    } = allStoreManagement;
 
     const {
-      // メソッド
       getDailyRequirements,
       hasHourRequirements,
       getHourRequirements,
@@ -459,13 +444,10 @@ export default {
       hasDateWarnings,
       getDateWarnings,
       getDailyShiftStaff,
-    } = useShiftRequirements();
+    } = shiftRequirements;
 
     const {
-      // 状態
-      saving,
-
-      // メソッド
+      loading: actionsLoading,
       generateAutomaticShift,
       createEmptyShift,
       regenerateShift,
@@ -474,35 +456,42 @@ export default {
       clearShift,
       confirmQuickDelete,
       printShift,
-      generatePrintContent,
-    } = useShiftActions();
+    } = shiftActions;
 
     const {
-      // 状態
       shiftEditorDialog,
-
-      // メソッド
       openShiftEditor,
       openGanttShiftEditor,
       closeShiftEditor,
-    } = useShiftEditor();
+    } = shiftEditor;
 
     const {
-      // メソッド
       selectDate,
       previousDate,
       nextDate,
       onGanttDateSelect,
       previousMonth,
       nextMonth,
-    } = useShiftNavigation();
+    } = shiftNavigation;
+
+    // ローディング状態の統合
+    const loading = computed(() => managementLoading.value || actionsLoading.value);
 
     // データ読み込み関数
     const loadShiftData = async () => {
-      if (!selectedStore.value) return;
+      if (!selectedStore.value) {
+        console.warn('店舗が選択されていません');
+        return;
+      }
 
       try {
-        loading.value = true;
+        console.log('🔄 シフトデータ読み込み開始:', {
+          store: selectedStore.value.name,
+          year: currentYear.value,
+          month: currentMonth.value
+        });
+
+        managementLoading.value = true;
 
         // シフトデータの取得
         const shiftData = await store.dispatch("shift/fetchShiftByYearMonth", {
@@ -510,6 +499,8 @@ export default {
           month: currentMonth.value,
           storeId: selectedStore.value.id,
         });
+
+        console.log('📊 取得したシフトデータ:', shiftData);
 
         // シフトデータの設定
         if (shiftData && shiftData.shifts) {
@@ -529,6 +520,7 @@ export default {
         // スタッフデータの取得
         const staffData = await store.dispatch("staff/fetchStaff", selectedStore.value.id);
         staffList.value = staffData || [];
+        console.log('👥 取得したスタッフ数:', staffList.value.length);
 
         // 他店舗シフトデータの取得
         await fetchAllStoreShifts(staffList.value, selectedStore.value, currentYear.value, currentMonth.value);
@@ -543,14 +535,14 @@ export default {
         generateDaysInMonth();
         setDefaultSelectedDate();
 
-        console.log("シフトデータ読み込み完了:", {
+        console.log('✅ シフトデータ読み込み完了:', {
           shifts: shifts.value.length,
           staff: staffList.value.length,
           currentShift: currentShift.value,
           hasCurrentShift: hasCurrentShift.value,
         });
       } catch (error) {
-        console.error("シフトデータ読み込みエラー:", error);
+        console.error("❌ シフトデータ読み込みエラー:", error);
         toast.add({
           severity: "error",
           summary: "エラー",
@@ -558,20 +550,22 @@ export default {
           life: 3000,
         });
       } finally {
-        loading.value = false;
+        managementLoading.value = false;
       }
     };
 
     // 初期化関数
     const initializeData = async () => {
       try {
-        loading.value = true;
+        console.log('🚀 初期化開始');
+        managementLoading.value = true;
 
         // 時間オプションの生成
         generateTimeOptions();
 
         // システム設定の取得
         await fetchSystemSettings();
+        console.log('⚙️ システム設定:', systemSettings.value);
 
         // デフォルト月表示の設定
         setDefaultMonthView();
@@ -582,21 +576,23 @@ export default {
         // 店舗データの取得
         const storeData = await store.dispatch("store/fetchStores");
         stores.value = storeData || [];
+        console.log('🏬 取得した店舗数:', stores.value.length);
 
         // デフォルト店舗の設定
         if (stores.value.length > 0 && !selectedStore.value) {
           selectedStore.value = stores.value[0];
+          console.log('🎯 デフォルト店舗設定:', selectedStore.value.name);
           await loadShiftData();
         }
 
-        console.log("初期化完了:", {
+        console.log('✅ 初期化完了:', {
           stores: stores.value.length,
           selectedStore: selectedStore.value?.name,
           currentYear: currentYear.value,
           currentMonth: currentMonth.value,
         });
       } catch (error) {
-        console.error("初期化エラー:", error);
+        console.error("❌ 初期化エラー:", error);
         toast.add({
           severity: "error",
           summary: "エラー",
@@ -604,17 +600,19 @@ export default {
           life: 5000,
         });
       } finally {
-        loading.value = false;
+        managementLoading.value = false;
       }
     };
 
     // イベントハンドラー
     const handleStoreChange = async () => {
+      console.log('🏬 店舗変更:', selectedStore.value?.name);
       await loadShiftData();
     };
 
     const handleToggleEditMode = () => {
       isEditMode.value = !isEditMode.value;
+      console.log('✏️ 編集モード:', isEditMode.value);
       toast.add({
         severity: "info",
         summary: isEditMode.value ? "編集モード開始" : "編集モード終了",
@@ -626,6 +624,12 @@ export default {
     };
 
     const handleCreateShift = () => {
+      console.log('➕ シフト作成ボタンクリック:', {
+        selectedStore: selectedStore.value?.name,
+        staffCount: staffList.value?.length,
+        hasCurrentShift: hasCurrentShift.value
+      });
+
       const hasStaffData = staffList.value && staffList.value.length > 0;
 
       if (!hasStaffData) {
@@ -755,23 +759,23 @@ export default {
     };
 
     const handleSelectDate = (date) => {
-      selectDate(date, updateSelectedDateCalendar);
+      selectDate(date, selectedDate, updateSelectedDateCalendar);
     };
 
     const handlePreviousDate = () => {
-      previousDate(daysInMonth.value);
+      previousDate(selectedDate, daysInMonth.value);
     };
 
     const handleNextDate = () => {
-      nextDate(daysInMonth.value);
+      nextDate(selectedDate, daysInMonth.value);
     };
 
     const handleGanttDateSelect = (event) => {
-      onGanttDateSelect(event, daysInMonth.value, formatDateToString);
+      onGanttDateSelect(event, selectedDate, daysInMonth.value, formatDateToString);
     };
 
     const handleOpenShiftEditor = async (day, staff) => {
-      await openShiftEditor(day, staff, getShiftForStaff, parseTimeToComponents, isPastDate);
+      await openShiftEditor(day, staff, getShiftForStaff, shiftManagement.parseTimeToComponents, isPastDate);
     };
 
     const handleOpenGanttShiftEditor = (date, staff, event) => {
@@ -789,7 +793,7 @@ export default {
         currentYear.value,
         currentMonth.value,
         getShiftForStaff,
-        combineTimeComponents,
+        shiftManagement.combineTimeComponents,
         loadShiftData,
         fetchAllSystemStaffAndShifts
       );
@@ -822,15 +826,20 @@ export default {
     });
 
     // 監視
-    watch(selectedStore, async (newStore) => {
-      if (newStore) {
+    watch(selectedStore, async (newStore, oldStore) => {
+      if (newStore && newStore !== oldStore) {
+        console.log('👀 店舗変更監視:', { old: oldStore?.name, new: newStore?.name });
         await loadShiftData();
       }
     });
 
     return {
+      // 開発環境判定
+      isDevelopment,
+
       // 基本状態
       loading,
+      saving,
       isEditMode,
       selectionDialogVisible,
 
@@ -852,27 +861,12 @@ export default {
       currentShift,
       systemSettings,
       storeRequirements,
-      currentStore,
-      storeBusinessHours,
-      storeClosedDays,
-      holidays,
       hasCurrentShift,
-      parseTimeToFloat,
-      parseTimeToComponents,
-      combineTimeComponents,
       formatTime,
       formatHours,
       isPastDate,
-      formatDateToString,
       formatSelectedDateDisplay,
-      generateTimeOptions,
-      fetchHolidays,
-      isHoliday,
-      fetchSystemSettings,
-      getShiftPeriod,
-      setDefaultMonthView,
       isStoreClosedOnDate,
-      fetchStoreDetails,
       getShiftForStaff,
       calculateDayHours,
       calculateTotalHours,
@@ -881,18 +875,9 @@ export default {
       canStaffWorkOnDate,
       getWorkAvailabilityTooltip,
       getWorkUnavailabilityReason,
-      generateDaysInMonth,
-      setDefaultSelectedDate,
-      updateSelectedDateCalendar,
-      updateDateRanges,
 
       // allStoreShiftManagementから
-      allStoreShifts,
       allSystemStaff,
-      allSystemStoreShifts,
-      fetchAllStoreShifts,
-      fetchAllSystemStaffAndShifts,
-      calculateStoreHoursForAllStaff,
       getAllStoreHoursBreakdownForAllStaff,
       calculateTotalHoursForAllSystemStaff,
       isHoursOutOfRangeForAllSystemStaff,
@@ -904,7 +889,6 @@ export default {
       hasStaffWarningsAllStores,
       getStaffWarningsAllStores,
       getStaffStatus,
-      checkStaffOtherWarnings,
       getStaffStatusInfo,
 
       // shiftRequirementsから
@@ -918,31 +902,8 @@ export default {
       getDateWarnings,
       getDailyShiftStaff,
 
-      // shiftActionsから
-      saving,
-      generateAutomaticShift,
-      createEmptyShift,
-      regenerateShift,
-      deleteShift,
-      saveShift,
-      clearShift,
-      confirmQuickDelete,
-      printShift,
-      generatePrintContent,
-
       // shiftEditorから
       shiftEditorDialog,
-      openShiftEditor,
-      openGanttShiftEditor,
-      closeShiftEditor,
-
-      // shiftNavigationから
-      selectDate,
-      previousDate,
-      nextDate,
-      onGanttDateSelect,
-      previousMonth,
-      nextMonth,
 
       // イベントハンドラー
       handleStoreChange,
@@ -983,6 +944,7 @@ export default {
   min-width: 768px;
   width: 100%;
   box-sizing: border-box;
+  position: relative;
 }
 
 @media (min-width: 1536px) {
@@ -1262,6 +1224,28 @@ export default {
   text-align: left;
 }
 
+.debug-panel {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  z-index: 9999;
+  min-width: 250px;
+}
+
+.debug-info h4 {
+  margin: 0 0 0.5rem 0;
+  color: #ffd700;
+}
+
+.debug-info div {
+  margin-bottom: 0.25rem;
+}
+
 @media (max-width: 768px) {
   .shift-management {
     padding: 1rem;
@@ -1292,6 +1276,13 @@ export default {
   .action-button {
     flex: 1;
     min-width: 140px;
+  }
+
+  .debug-panel {
+    position: relative;
+    bottom: auto;
+    right: auto;
+    margin-top: 1rem;
   }
 }
 </style>

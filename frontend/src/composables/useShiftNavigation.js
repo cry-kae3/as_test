@@ -1,12 +1,9 @@
-import { ref, nextTick } from "vue";
+import { nextTick } from "vue";
 
 export function useShiftNavigation() {
 
-    const selectedDate = ref(null);
-    const selectedDateCalendar = ref(null);
-
     // 日付選択
-    const selectDate = (date, updateSelectedDateCalendar) => {
+    const selectDate = (date, selectedDate, updateSelectedDateCalendar) => {
         selectedDate.value = date;
         updateSelectedDateCalendar();
         nextTick(() => {
@@ -15,7 +12,7 @@ export function useShiftNavigation() {
     };
 
     // 前の日付へ移動
-    const previousDate = (daysInMonth) => {
+    const previousDate = (selectedDate, daysInMonth) => {
         if (!selectedDate.value || daysInMonth.length === 0) return;
 
         const currentIndex = daysInMonth.findIndex(
@@ -27,7 +24,7 @@ export function useShiftNavigation() {
     };
 
     // 次の日付へ移動
-    const nextDate = (daysInMonth) => {
+    const nextDate = (selectedDate, daysInMonth) => {
         if (!selectedDate.value || daysInMonth.length === 0) return;
 
         const currentIndex = daysInMonth.findIndex(
@@ -39,7 +36,7 @@ export function useShiftNavigation() {
     };
 
     // ガントチャート日付選択イベント
-    const onGanttDateSelect = (event, daysInMonth, formatDateToString) => {
+    const onGanttDateSelect = (event, selectedDate, daysInMonth, formatDateToString) => {
         if (event.value) {
             const selectedDateStr = formatDateToString(event.value);
             if (daysInMonth.some((day) => day.date === selectedDateStr)) {
@@ -91,10 +88,6 @@ export function useShiftNavigation() {
     };
 
     return {
-        // 状態
-        selectedDate,
-        selectedDateCalendar,
-
         // メソッド
         selectDate,
         previousDate,
