@@ -25,6 +25,7 @@
               icon="pi pi-chevron-left"
               class="period-nav-btn"
               @click="previousMonth"
+              :disabled="loading"
             />
             <Dropdown
               v-model="selectedYear"
@@ -33,6 +34,7 @@
               optionValue="value"
               class="year-selector"
               @change="onPeriodChange"
+              :disabled="loading"
             />
             <Dropdown
               v-model="selectedMonth"
@@ -41,93 +43,153 @@
               optionValue="value"
               class="month-selector"
               @change="onPeriodChange"
+              :disabled="loading"
             />
             <Button
               icon="pi pi-chevron-right"
               class="period-nav-btn"
               @click="nextMonth"
+              :disabled="loading"
             />
           </div>
 
           <div class="action-buttons">
             <Button
-              icon="pi pi-eye"
-              label="プレビュー"
-              class="p-button-outlined"
-              @click="toggleViewMode"
-              :class="{ active: !isEditMode }"
-            />
-            <Button
-              icon="pi pi-pencil"
-              label="編集"
-              class="p-button-primary"
-              @click="toggleEditMode"
-              :class="{ active: isEditMode }"
-            />
-            <Button
-              icon="pi pi-cog"
-              label="自動生成"
+              v-if="!hasCurrentShift"
+              icon="pi pi-plus"
+              label="シフト作成"
               class="p-button-success"
-              @click="generateShift"
-              :loading="generating"
+              @click="createShift"
+              :disabled="loading || !selectedStore"
             />
+            
+            <template v-if="hasCurrentShift">
+              <Button
+                icon="pi pi-eye"
+                label="プレビュー"
+                class="p-button-outlined"
+                @click="toggleViewMode"
+                :class="{ active: !isEditMode }"
+                :disabled="loading"
+              />
+              <Button
+                icon="pi pi-pencil"
+                :label="isEditMode ? '編集完了' : 'シフト編集'"
+                class="p-button-primary"
+                @click="toggleEditMode"
+                :class="{ active: isEditMode }"
+                :disabled="loading"
+              />
+              <Button
+                icon="pi pi-refresh"
+                label="AI再生成"
+                class="p-button-warning"
+                @click="regenerateShift"
+                :loading="generating"
+                :disabled="loading"
+              />
+              <Button
+                icon="pi pi-trash"
+                label="シフト削除"
+                class="p-button-danger"
+                @click="deleteShift"
+                :disabled="loading"
+              />
+              <Button
+                icon="pi pi-print"
+                label="印刷"
+                class="p-button-info"
+                @click="printShift"
+                :disabled="loading"
+              />
+            </template>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-if="selectedStore" class="shift-content">
-      <TabView v-model:activeIndex="activeTabIndex" class="shift-tabs">
-        <TabPanel header="カレンダー表示">
-          <ShiftCalendar
-            :is-edit-mode="isEditMode"
-            :selected-date="selectedDate"
-            :selected-store="selectedStore"
-            :days-in-month="daysInMonth"
-            :staff-list="staffList"
-            @select-date="selectDate"
-            @open-shift-editor="openShiftEditor"
-            @quick-delete-shift="confirmQuickDelete"
-          />
-        </TabPanel>
+    <div v-if="loading" class="loading-container">
+      <div class="loading-content">
+        <ProgressSpinner />
+        <span class="loading-text">データを読み込み中...</span>
+      </div>
+    </div>
 
-        <TabPanel header="ガントチャート">
-          <GanttChart
-            :selected-date="selectedDate"
-            :selected-date-calendar="selectedDateCalendar"
-            :min-selectable-date="minSelectableDate"
-            :max-selectable-date="maxSelectableDate"
-            :selected-store="selectedStore"
-            :staff-list="staffList"
-            :timeline-hours="timelineHours"
-            :loading="loading"
-            :is-edit-mode="isEditMode"
-            @update:selectedDateCalendar="updateSelectedDateCalendar"
-            @previous-date="previousDate"
-            @next-date="nextDate"
-            @gantt-date-select="onGanttDateSelect"
-            @open-gantt-shift-editor="openGanttShiftEditor"
-            @open-shift-editor="openShiftEditor"
-          />
-        </TabPanel>
+    <div v-else-if="selectedStore" class="shift-content">
+      <div v-if="!hasCurrentShift" class="no-shift-container">
+        <Card>
+          <template #content>
+            <div class="empty-state">
+              <i class="pi pi-calendar-plus empty-icon"></i>
+              <h3>シフトがありません</h3>
+              <p>{{ selectedYear }}年{{ selectedMonth }}月のシフトはまだ作成されていません</p>
+              <Button
+                icon="pi pi-plus"
+                label="シフトを作成"
+                class="p-button-success"
+                @click="createShift"
+              />
+            </div>
+          </template>
+        </Card>
+      </div>
 
-        <TabPanel header="詳細情報">
-          <DailyInfoPanel
-            :selected-date="selectedDate"
-            :selected-store="selectedStore"
-            :staff-list="staffList"
-            :shifts="shifts"
-          />
-        </TabPanel>
+      <div v-else>
+        <TabView v-model:activeIndex="activeTabIndex" class="shift-tabs">
+          <TabPanel header="カレンダー表示">
+            <ShiftCalendar
+              :is-edit-mode="isEditMode"
+              :selected-date="selectedDate"
+              :selected-store="selectedStore"
+              :days-in-month="daysInMonth"
+              :staff-list="staffList"
+              :shifts="shifts"
+              @select-date="selectDate"
+              @open-shift-editor="openShiftEditor"
+              @quick-delete-shift="confirmQuickDelete"
+            />
+          </TabPanel>
 
-        <TabPanel header="全スタッフ集計">
-          <AllStaffSummary
-            :current-year="selectedYear"
-            :current-month="selectedMonth"
-            :all-staff="staffList"
-          />
-        </TabPanel>
-      </TabView>
+          <TabPanel header="ガントチャート">
+            <GanttChart
+              :selected-date="selectedDate"
+              :selected-date-calendar="selectedDateCalendar"
+              :min-selectable-date="minSelectableDate"
+              :max-selectable-date="maxSelectableDate"
+              :selected-store="selectedStore"
+              :staff-list="staffList"
+              :shifts="shifts"
+              :timeline-hours="timelineHours"
+              :loading="loading"
+              :is-edit-mode="isEditMode"
+              @update:selectedDateCalendar="updateSelectedDateCalendar"
+              @previous-date="previousDate"
+              @next-date="nextDate"
+              @gantt-date-select="onGanttDateSelect"
+              @open-gantt-shift-editor="openGanttShiftEditor"
+              @open-shift-editor="openShiftEditor"
+            />
+          </TabPanel>
+
+          <TabPanel header="詳細情報">
+            <DailyInfoPanel
+              :selected-date="selectedDate"
+              :selected-store="selectedStore"
+              :staff-list="staffList"
+              :shifts="shifts"
+            />
+          </TabPanel>
+
+          <TabPanel header="全スタッフ集計">
+            <AllStaffSummary
+              :current-year="selectedYear"
+              :current-month="selectedMonth"
+              :all-staff="staffList"
+              :all-store-shifts="allStoreShifts"
+            />
+          </TabPanel>
+        </TabView>
+      </div>
     </div>
 
     <div v-else class="no-store-selected">
@@ -141,6 +203,42 @@
         </template>
       </Card>
     </div>
+
+    <!-- シフト作成方法選択ダイアログ -->
+    <Dialog
+      v-model:visible="selectionDialogVisible"
+      header="シフト作成方法の選択"
+      :modal="true"
+      :style="{ width: '50rem' }"
+      :breakpoints="{ '960px': '75vw', '640px': '90vw' }"
+    >
+      <div class="grid">
+        <div class="col-12 md:col-6 p-3">
+          <div class="selection-card" @click="selectAIGeneration">
+            <div class="card-header">
+              <i class="pi pi-sparkles"></i>
+              <h3>AI自動生成</h3>
+            </div>
+            <p class="card-content">
+              スタッフの勤務条件を最優先にシフトを組みます。人員要件を満たさない場合があるため、生成後に手動での調整が必要になることがあります。
+            </p>
+            <Button label="AIで作成" class="p-button-primary mt-auto" />
+          </div>
+        </div>
+        <div class="col-12 md:col-6 p-3">
+          <div class="selection-card" @click="selectManualCreation">
+            <div class="card-header">
+              <i class="pi pi-pencil"></i>
+              <h3>手動作成</h3>
+            </div>
+            <p class="card-content">
+              空のシフト表が作成されます。すべての割り当てを手動で行い、ご自身で勤務条件を確認する必要があります。
+            </p>
+            <Button label="手動で作成" class="p-button-secondary mt-auto" />
+          </div>
+        </div>
+      </div>
+    </Dialog>
 
     <ShiftEditorDialog
       :visible="shiftEditorDialog.visible"
@@ -196,11 +294,15 @@ export default {
     const isEditMode = ref(false)
     const loading = ref(false)
     const generating = ref(false)
+    const selectionDialogVisible = ref(false)
 
     const staffList = ref([])
     const shifts = ref([])
     const daysInMonth = ref([])
     const timelineHours = ref([])
+    const currentShift = ref(null)
+    const allStoreShifts = ref({})
+    const systemSettings = ref(null)
 
     const minSelectableDate = ref(null)
     const maxSelectableDate = ref(null)
@@ -209,6 +311,10 @@ export default {
       visible: false,
       saving: false,
       data: {}
+    })
+
+    const hasCurrentShift = computed(() => {
+      return currentShift.value !== null
     })
 
     const yearOptions = computed(() => {
@@ -293,6 +399,16 @@ export default {
       shiftEditorDialog.visible = value
     }
 
+    const fetchSystemSettings = async () => {
+      try {
+        const response = await store.dispatch('shift/fetchSystemSettings')
+        systemSettings.value = response
+      } catch (error) {
+        console.error('システム設定取得エラー:', error)
+        systemSettings.value = { closing_day: 25 }
+      }
+    }
+
     const fetchStores = async () => {
       try {
         const storeData = await store.dispatch('store/fetchStores')
@@ -343,13 +459,31 @@ export default {
         })
         
         if (shiftData) {
+          currentShift.value = {
+            id: shiftData.id,
+            store_id: shiftData.store_id,
+            year: shiftData.year,
+            month: shiftData.month,
+            status: shiftData.status
+          }
           shifts.value = shiftData.shifts || []
         } else {
+          currentShift.value = null
           shifts.value = []
         }
       } catch (error) {
         console.error('シフトデータ取得エラー:', error)
-        shifts.value = []
+        if (error.response && error.response.status === 404) {
+          currentShift.value = null
+          shifts.value = []
+        } else {
+          toast.add({
+            severity: 'error',
+            summary: 'エラー',
+            detail: 'シフトデータの取得に失敗しました',
+            life: 3000
+          })
+        }
       } finally {
         loading.value = false
       }
@@ -429,51 +563,321 @@ export default {
 
     const toggleViewMode = () => {
       isEditMode.value = false
+      toast.add({
+        severity: 'info',
+        summary: 'プレビューモード',
+        detail: 'プレビューモードに切り替えました',
+        life: 2000
+      })
     }
 
     const toggleEditMode = () => {
-      isEditMode.value = true
+      isEditMode.value = !isEditMode.value
+      toast.add({
+        severity: 'info',
+        summary: isEditMode.value ? '編集モード開始' : '編集モード終了',
+        detail: isEditMode.value
+          ? 'シフトセルをクリックして編集できます'
+          : '編集モードを終了しました',
+        life: 3000
+      })
+    }
+
+    const createShift = () => {
+      const hasStaffData = staffList.value && staffList.value.length > 0
+
+      if (!hasStaffData) {
+        toast.add({
+          severity: 'warn',
+          summary: '注意',
+          detail: 'スタッフが登録されていません。先にスタッフを登録してください。',
+          life: 5000
+        })
+        return
+      }
+
+      selectionDialogVisible.value = true
+    }
+
+    const selectAIGeneration = () => {
+      selectionDialogVisible.value = false
+      generateShift()
+    }
+
+    const selectManualCreation = () => {
+      selectionDialogVisible.value = false
+      createEmptyShift()
+    }
+
+    const createEmptyShift = async () => {
+      try {
+        loading.value = true
+
+        await store.dispatch('shift/createShift', {
+          store_id: selectedStore.value.id,
+          year: selectedYear.value,
+          month: selectedMonth.value,
+          status: 'draft'
+        })
+
+        await fetchShiftData()
+        isEditMode.value = true
+
+        toast.add({
+          severity: 'success',
+          summary: '作成完了',
+          detail: 'シフトを作成しました。編集モードになりました。',
+          life: 3000
+        })
+      } catch (error) {
+        console.error('シフト作成エラー:', error)
+        toast.add({
+          severity: 'error',
+          summary: 'エラー',
+          detail: 'シフトの作成に失敗しました',
+          life: 3000
+        })
+      } finally {
+        loading.value = false
+      }
     }
 
     const generateShift = async () => {
-      if (!selectedStore.value) return
-      
+      try {
+        generating.value = true
+
+        toast.add({
+          severity: 'info',
+          summary: 'シフト生成開始',
+          detail: 'AIによるシフト生成を開始しています...',
+          life: 5000
+        })
+
+        await store.dispatch('shift/generateShift', {
+          storeId: selectedStore.value.id,
+          year: selectedYear.value,
+          month: selectedMonth.value
+        })
+
+        await fetchShiftData()
+
+        toast.add({
+          severity: 'success',
+          summary: 'シフト生成完了',
+          detail: 'AIシフト生成が完了しました',
+          life: 5000
+        })
+      } catch (error) {
+        console.error('シフト生成エラー:', error)
+        
+        let errorMessage = 'AIシフト生成に失敗しました'
+        if (error.response?.data?.message) {
+          errorMessage = error.response.data.message
+        }
+
+        toast.add({
+          severity: 'error',
+          summary: '生成エラー',
+          detail: errorMessage,
+          life: 8000
+        })
+
+        confirm.require({
+          message: 'AIシフト生成に失敗しました。空のシフトを作成して手動で編集しますか？',
+          header: '代替手段の提案',
+          icon: 'pi pi-question-circle',
+          acceptLabel: '空シフト作成',
+          rejectLabel: 'キャンセル',
+          accept: () => {
+            createEmptyShift()
+          }
+        })
+      } finally {
+        generating.value = false
+      }
+    }
+
+    const regenerateShift = () => {
       confirm.require({
-        message: `${selectedYear.value}年${selectedMonth.value}月のシフトを自動生成しますか？既存のシフトは上書きされます。`,
-        header: 'シフト自動生成',
+        message: `現在のシフトを削除してAIで再生成しますか？
+
+⚠️ 注意：
+- 現在のシフトは完全に削除されます
+- スタッフの勤務条件に違反しないシフトが生成されます
+- 条件が厳しい場合、生成に失敗する可能性があります`,
+        header: 'シフト再生成の確認',
         icon: 'pi pi-exclamation-triangle',
-        acceptLabel: '生成',
+        acceptClass: 'p-button-warning',
+        acceptLabel: '再生成実行',
+        rejectLabel: 'キャンセル',
+        accept: async () => {
+          await generateShift()
+        }
+      })
+    }
+
+    const deleteShift = () => {
+      confirm.require({
+        message: `${selectedYear.value}年${selectedMonth.value}月のシフトを完全に削除しますか？この操作は取り消せません。`,
+        header: 'シフト削除の確認',
+        icon: 'pi pi-exclamation-triangle',
+        acceptClass: 'p-button-danger',
+        acceptLabel: '削除',
         rejectLabel: 'キャンセル',
         accept: async () => {
           try {
-            generating.value = true
-            await store.dispatch('shift/generateShift', {
-              storeId: selectedStore.value.id,
+            loading.value = true
+
+            await store.dispatch('shift/deleteShift', {
               year: selectedYear.value,
-              month: selectedMonth.value
+              month: selectedMonth.value,
+              storeId: selectedStore.value.id
             })
-            
-            await fetchShiftData()
-            
+
+            currentShift.value = null
+            shifts.value = []
+            selectedDate.value = null
+            isEditMode.value = false
+
             toast.add({
               severity: 'success',
-              summary: '成功',
-              detail: 'シフトを自動生成しました',
+              summary: '削除完了',
+              detail: 'シフトを削除しました',
               life: 3000
             })
           } catch (error) {
-            console.error('シフト生成エラー:', error)
+            console.error('シフト削除エラー:', error)
             toast.add({
               severity: 'error',
               summary: 'エラー',
-              detail: 'シフトの自動生成に失敗しました',
+              detail: 'シフトの削除に失敗しました',
               life: 3000
             })
           } finally {
-            generating.value = false
+            loading.value = false
           }
         }
       })
+    }
+
+    const printShift = () => {
+      if (!hasCurrentShift.value) return
+
+      const printWindow = window.open('', '_blank')
+
+      if (!printWindow) {
+        toast.add({
+          severity: 'error',
+          summary: 'エラー',
+          detail: 'ポップアップがブロックされました。ブラウザの設定を確認してください。',
+          life: 3000
+        })
+        return
+      }
+
+      const printContent = generatePrintContent()
+      printWindow.document.write(printContent)
+      printWindow.document.close()
+      printWindow.focus()
+      printWindow.print()
+    }
+
+    const generatePrintContent = () => {
+      const storeName = selectedStore.value ? selectedStore.value.name : ''
+      const period = `${selectedYear.value}年${selectedMonth.value}月`
+
+      let printHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>${storeName} - ${period} シフト表</title>
+          <meta charset="utf-8">
+          <style>
+            @media print {
+              @page { margin: 1cm; size: A4 landscape; }
+              body { font-family: Arial, sans-serif; font-size: 9px; }
+            }
+            body { font-family: Arial, sans-serif; font-size: 12px; }
+            .print-header { text-align: center; margin-bottom: 20px; }
+            .print-title { font-size: 16px; font-weight: bold; margin-bottom: 8px; }
+            .print-period { font-size: 12px; color: #666; }
+            .print-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .print-table th, .print-table td { 
+              border: 1px solid #333; 
+              padding: 4px 2px; 
+              text-align: center; 
+              font-size: 8px;
+              vertical-align: middle;
+            }
+            .print-table th { background-color: #f0f0f0; font-weight: bold; }
+            .staff-col { width: 80px; text-align: left; padding-left: 4px; font-weight: bold; }
+            .date-col { width: 35px; font-weight: bold; }
+            .shift-cell { font-size: 7px; line-height: 1.2; }
+            .holiday { color: #dc2626; }
+            .store-closed { background-color: #f3f4f6; color: #6b7280; }
+            .today { background-color: #e6f3ff; }
+          </style>
+        </head>
+        <body>
+          <div class="print-header">
+            <div class="print-title">${storeName} シフト表</div>
+            <div class="print-period">${period}</div>
+          </div>
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th class="staff-col">スタッフ</th>`
+
+      daysInMonth.value.forEach((day) => {
+        const holidayClass = day.isHoliday ? 'holiday' : ''
+        const todayClass = day.isToday ? 'today' : ''
+        const storeClosedClass = day.isStoreClosed ? 'store-closed' : ''
+        const cellClass = `${holidayClass} ${todayClass} ${storeClosedClass}`.trim()
+        
+        printHtml += `
+                <th class="date-col ${cellClass}">
+                  <div>${day.day}</div>
+                  <div style="font-size: 6px;">${day.dayOfWeekLabel}</div>
+                </th>`
+      })
+
+      printHtml += `
+              </tr>
+            </thead>
+            <tbody>`
+
+      staffList.value.forEach((staff) => {
+        printHtml += `<tr>`
+        printHtml += `<td class="staff-col">${staff.last_name} ${staff.first_name}</td>`
+
+        daysInMonth.value.forEach((day) => {
+          const shift = getShiftForStaff(day.date, staff.id)
+          const holidayClass = day.isHoliday ? 'holiday' : ''
+          const todayClass = day.isToday ? 'today' : ''
+          const storeClosedClass = day.isStoreClosed ? 'store-closed' : ''
+          const cellClass = `shift-cell ${holidayClass} ${todayClass} ${storeClosedClass}`.trim()
+
+          if (shift) {
+            printHtml += `<td class="${cellClass}">
+              ${formatTime(shift.start_time)}<br>-<br>${formatTime(shift.end_time)}
+            </td>`
+          } else if (day.isStoreClosed) {
+            printHtml += `<td class="${cellClass}">定休日</td>`
+          } else {
+            printHtml += `<td class="${cellClass}">-</td>`
+          }
+        })
+
+        printHtml += `</tr>`
+      })
+
+      printHtml += `
+            </tbody>
+          </table>
+        </body>
+        </html>`
+
+      return printHtml
     }
 
     const onGanttDateSelect = (event) => {
@@ -487,6 +891,16 @@ export default {
     }
 
     const openShiftEditor = (day, staff) => {
+      if (!isEditMode.value) {
+        toast.add({
+          severity: 'info',
+          summary: '編集不可',
+          detail: '「シフト編集」ボタンを押して編集モードにしてください',
+          life: 2000
+        })
+        return
+      }
+
       const existingShift = getShiftForStaff(day.date, staff.id)
       const isPast = isPastDate(day.date)
       
@@ -517,6 +931,40 @@ export default {
     }
 
     const saveShift = async (shiftData) => {
+      if (!shiftData.startTimeHour || !shiftData.startTimeMinute || 
+          !shiftData.endTimeHour || !shiftData.endTimeMinute) {
+        toast.add({
+          severity: 'warn',
+          summary: '入力エラー',
+          detail: '開始時間と終了時間を選択してください',
+          life: 3000
+        })
+        return
+      }
+
+      const startTime = `${shiftData.startTimeHour}:${shiftData.startTimeMinute}`
+      const endTime = `${shiftData.endTimeHour}:${shiftData.endTimeMinute}`
+
+      if (startTime >= endTime) {
+        toast.add({
+          severity: 'warn',
+          summary: '入力エラー',
+          detail: '終了時間は開始時間より後にしてください',
+          life: 3000
+        })
+        return
+      }
+
+      if (shiftEditorDialog.data.isPast && !shiftData.changeReason?.trim()) {
+        toast.add({
+          severity: 'warn',
+          summary: '入力エラー',
+          detail: '過去の日付を編集する場合は変更理由を入力してください',
+          life: 3000
+        })
+        return
+      }
+
       try {
         shiftEditorDialog.saving = true
         
@@ -533,6 +981,21 @@ export default {
             : null,
           store_id: selectedStore.value.id,
           change_reason: shiftData.changeReason || null
+        }
+
+        if (shiftData.hasBreak && assignmentData.break_start_time && assignmentData.break_end_time) {
+          const breakStartTime = `${shiftData.breakStartTimeHour}:${shiftData.breakStartTimeMinute}`
+          const breakEndTime = `${shiftData.breakEndTimeHour}:${shiftData.breakEndTimeMinute}`
+
+          if (breakStartTime < startTime || breakEndTime > endTime || breakStartTime >= breakEndTime) {
+            toast.add({
+              severity: 'warn',
+              summary: '入力エラー',
+              detail: '休憩時間は勤務時間内に収まるように設定してください',
+              life: 3000
+            })
+            return
+          }
         }
 
         const existingShift = getShiftForStaff(shiftEditorDialog.data.date, shiftEditorDialog.data.staff.id)
@@ -554,20 +1017,30 @@ export default {
 
         await fetchShiftData()
         
+        const successMessage = shiftEditorDialog.data.isPast
+          ? '過去のシフトを変更しました（変更履歴に記録されます）'
+          : 'シフトを保存しました'
+        
         toast.add({
           severity: 'success',
-          summary: '成功',
-          detail: 'シフトを保存しました',
+          summary: '保存完了',
+          detail: successMessage,
           life: 3000
         })
         
         closeShiftEditor()
       } catch (error) {
         console.error('シフト保存エラー:', error)
+        
+        let errorMessage = 'シフトの保存に失敗しました'
+        if (error.response?.data?.message) {
+          errorMessage = error.response.data.message
+        }
+
         toast.add({
           severity: 'error',
           summary: 'エラー',
-          detail: 'シフトの保存に失敗しました',
+          detail: errorMessage,
           life: 3000
         })
       } finally {
@@ -576,6 +1049,21 @@ export default {
     }
 
     const clearShift = async (data) => {
+      if (!shiftEditorDialog.data.hasShift) {
+        closeShiftEditor()
+        return
+      }
+
+      if (shiftEditorDialog.data.isPast && !data.changeReason?.trim()) {
+        toast.add({
+          severity: 'warn',
+          summary: '入力エラー',
+          detail: '過去の日付を編集する場合は変更理由を入力してください',
+          life: 3000
+        })
+        return
+      }
+
       try {
         const existingShift = getShiftForStaff(shiftEditorDialog.data.date, shiftEditorDialog.data.staff.id)
         
@@ -584,15 +1072,19 @@ export default {
             year: selectedYear.value,
             month: selectedMonth.value,
             assignmentId: existingShift.id,
-            change_reason: data.changeReason || null
+            change_reason: shiftEditorDialog.data.isPast ? data.changeReason : null
           })
 
           await fetchShiftData()
           
+          const successMessage = shiftEditorDialog.data.isPast
+            ? '過去のシフトを削除しました（変更履歴に記録されます）'
+            : 'シフトを削除しました'
+          
           toast.add({
             severity: 'success',
-            summary: '成功',
-            detail: 'シフトを削除しました',
+            summary: '削除完了',
+            detail: successMessage,
             life: 3000
           })
         }
@@ -610,13 +1102,15 @@ export default {
     }
 
     const confirmQuickDelete = (shift) => {
+      if (!shift) return
+
       confirm.require({
         message: 'このシフトを削除しますか？',
-        header: 'シフト削除',
+        header: 'シフト削除の確認',
         icon: 'pi pi-exclamation-triangle',
+        acceptClass: 'p-button-danger',
         acceptLabel: '削除',
         rejectLabel: 'キャンセル',
-        acceptClass: 'p-button-danger',
         accept: async () => {
           try {
             await store.dispatch('shift/deleteShiftAssignment', {
@@ -626,10 +1120,10 @@ export default {
             })
 
             await fetchShiftData()
-            
+
             toast.add({
               severity: 'success',
-              summary: '成功',
+              summary: '削除完了',
               detail: 'シフトを削除しました',
               life: 3000
             })
@@ -661,6 +1155,11 @@ export default {
       return checkDate < today
     }
 
+    const formatTime = (time) => {
+      if (!time) return ''
+      return time.slice(0, 5)
+    }
+
     const formatDateDisplay = (date) => {
       if (!date) return ''
       const d = new Date(date)
@@ -678,6 +1177,7 @@ export default {
     })
 
     onMounted(async () => {
+      await fetchSystemSettings()
       await fetchStores()
       
       daysInMonth.value = generateDaysInMonth(selectedYear.value, selectedMonth.value)
@@ -710,13 +1210,17 @@ export default {
       isEditMode,
       loading,
       generating,
+      selectionDialogVisible,
       staffList,
       shifts,
       daysInMonth,
       timelineHours,
+      currentShift,
+      allStoreShifts,
       minSelectableDate,
       maxSelectableDate,
       shiftEditorDialog,
+      hasCurrentShift,
       yearOptions,
       monthOptions,
       hourOptions,
@@ -732,7 +1236,13 @@ export default {
       selectDate,
       toggleViewMode,
       toggleEditMode,
+      createShift,
+      selectAIGeneration,
+      selectManualCreation,
       generateShift,
+      regenerateShift,
+      deleteShift,
+      printShift,
       onGanttDateSelect,
       openGanttShiftEditor,
       openShiftEditor,
@@ -829,12 +1339,33 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .action-buttons .p-button.active {
   background: #3b82f6;
   border-color: #3b82f6;
   color: white;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  padding: 2rem;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.loading-text {
+  font-size: 1rem;
+  color: #666;
 }
 
 .shift-content {
@@ -856,7 +1387,8 @@ export default {
   padding: 0;
 }
 
-.no-store-selected {
+.no-store-selected,
+.no-shift-container {
   padding: 0 1.5rem 1.5rem;
 }
 
@@ -878,8 +1410,55 @@ export default {
 }
 
 .empty-state p {
-  margin: 0;
+  margin: 0 0 1.5rem 0;
   color: #94a3b8;
+}
+
+.selection-card {
+  border-radius: 8px;
+  padding: 1.5rem;
+  height: 100%;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  background-color: var(--surface-a);
+  box-shadow: 0px 0px 2px rgb(103, 103, 103);
+}
+
+.selection-card:hover {
+  transform: translate(0, -2px);
+  box-shadow: 0px 0px 6px rgb(69, 146, 213);
+}
+
+.selection-card .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.selection-card .card-header i {
+  font-size: 1.75rem;
+  color: var(--primary-color);
+}
+
+.selection-card .card-header h3 {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.selection-card .card-content {
+  color: var(--text-color-secondary);
+  flex-grow: 1;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+  white-space: pre-line;
+  text-align: left;
 }
 
 @media (max-width: 768px) {
@@ -914,7 +1493,8 @@ export default {
     padding: 0 1rem 1rem;
   }
 
-  .no-store-selected {
+  .no-store-selected,
+  .no-shift-container {
     padding: 0 1rem 1rem;
   }
 }
@@ -928,5 +1508,9 @@ export default {
     width: 100%;
     justify-content: center;
   }
+}
+
+:deep(.p-confirm-dialog-message) {
+  white-space: pre-line;
 }
 </style>
