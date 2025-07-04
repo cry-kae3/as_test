@@ -1,4 +1,4 @@
-const { Shift, ShiftAssignment, Store, Staff, SystemSetting, ShiftChangeLog } = require('../models');
+const { Shift, ShiftAssignment, Store, Staff, SystemSetting, ShiftChangeLog, StoreStaffRequirement } = require('../models');
 const { Op } = require('sequelize');
 const shiftGeneratorService = require('../services/shiftGenerator');
 
@@ -158,7 +158,11 @@ const getShiftByYearMonth = async (req, res) => {
         });
 
         if (!shift) {
-            return res.status(404).json({ message: 'シフトが見つかりません' });
+            return res.status(404).json({
+                message: 'シフトが見つかりません',
+                shifts: [],
+                allStoreHours: null
+            });
         }
 
         const shifts = [];
@@ -410,7 +414,13 @@ const deleteShift = async (req, res) => {
             await shift.destroy({ transaction: t });
         });
 
-        res.status(200).json({ message: 'シフトを削除しました' });
+        res.status(200).json({
+            message: 'シフトを削除しました',
+            deleted: true,
+            store_id: parseInt(store_id),
+            year: parseInt(year),
+            month: parseInt(month)
+        });
     } catch (error) {
         console.error('シフト削除エラー:', error);
         res.status(500).json({ message: 'シフトの削除中にエラーが発生しました' });

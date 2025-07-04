@@ -716,7 +716,9 @@ export default {
         selectedStore.value
       );
       if (success) {
+        console.log('✅ シフト削除成功、データ再読み込み開始');
         await loadShiftData();
+        console.log('✅ データ再読み込み完了');
       }
     };
 

@@ -58,6 +58,11 @@ exports.getAllStores = async (req, res) => {
                     model: StoreClosedDay,
                     as: 'closedDays',
                     required: false
+                },
+                {
+                    model: StoreStaffRequirement,
+                    as: 'staffRequirements',
+                    required: false
                 }
             ]
         });
@@ -155,22 +160,389 @@ exports.getStoreClosedDays = async (req, res) => {
                 'postal_code',
                 'createdAt',
                 'updatedAt'
+            ],
+            transaction
+        });
+
+        if (!store) {
+            return res.status(404).json({
+                message: '店舗が見つかりません'
+            });
+        }
+
+        const businessHoursData = req.body;
+
+        await BusinessHours.destroy({
+            where: { store_id: storeIdNum },
+            transaction
+        });
+
+        let savedBusinessHours = [];
+        if (businessHoursData && businessHoursData.length > 0) {
+            const processedData = businessHoursData.map(hour => ({
+                store_id: storeIdNum,
+                day_of_week: hour.day_of_week,
+                is_closed: hour.is_closed,
+                opening_time: hour.opening_time,
+                closing_time: hour.closing_time
+            }));
+
+            savedBusinessHours = await BusinessHours.bulkCreate(processedData, { transaction });
+        }
+
+        await transaction.commit();
+        return res.status(200).json({
+            message: '営業時間が保存されました',
+            data: savedBusinessHours
+        });
+    } catch (error) {
+        if (transaction) await transaction.rollback();
+        console.error('営業時間保存エラー:', error);
+        return res.status(500).json({
+            message: '営業時間の保存に失敗しました',
+            error: error.message
+        });
+    }
+}
+
+exports.saveClosedDays = async (req, res) => {
+    let transaction;
+    try {
+        transaction = await sequelize.transaction();
+        const { id } = req.params;
+        const closedDaysData = req.body;
+
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ],
+            transaction
+        });
+
+        if (!store) {
+            return res.status(404).json({
+                message: '店舗が見つかりません'
+            });
+        }
+
+        console.log('定休日保存開始:', { storeId: id, data: closedDaysData });
+
+        await StoreClosedDay.destroy({
+            where: { store_id: id },
+            transaction
+        });
+
+        let savedClosedDays = [];
+        if (closedDaysData && closedDaysData.length > 0) {
+            const processedData = closedDaysData.map(day => {
+                const result = {
+                    store_id: parseInt(id, 10),
+                    day_of_week: day.day_of_week !== undefined ? day.day_of_week : null,
+                    specific_date: null
+                };
+
+                if (day.specific_date) {
+                    // 日付形式の正規化
+                    let dateStr = day.specific_date;
+                    if (dateStr instanceof Date) {
+                        dateStr = dateStr.toISOString().split('T')[0];
+                    } else if (typeof dateStr === 'string') {
+                        // YYYY-MM-DD形式に正規化
+                        const dateObj = new Date(dateStr);
+                        if (!isNaN(dateObj.getTime())) {
+                            dateStr = dateObj.toISOString().split('T')[0];
+                        }
+                    }
+                    result.specific_date = dateStr;
+                }
+
+                return result;
+            });
+
+            console.log('処理済み定休日データ:', processedData);
+
+            savedClosedDays = await StoreClosedDay.bulkCreate(processedData, { transaction });
+        }
+
+        await transaction.commit();
+        return res.status(200).json({
+            message: '定休日が保存されました',
+            data: savedClosedDays
+        });
+    } catch (error) {
+        console.error('定休日保存処理エラー:', error);
+        if (transaction) await transaction.rollback();
+        return res.status(500).json({
+            message: '定休日の保存に失敗しました',
+            error: error.message,
+            stack: error.stack
+        });
+    }
+};
+
+exports.saveStaffRequirements = async (req, res) => {
+    let transaction;
+    try {
+        transaction = await sequelize.transaction();
+        const { id } = req.params;
+        const requirementsData = req.body;
+
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ],
+            transaction
+        });
+
+        if (!store) {
+            return res.status(404).json({
+                message: '店舗が見つかりません'
+            });
+        }
+
+        console.log('人員要件保存開始:', { storeId: id, data: requirementsData });
+
+        await StoreStaffRequirement.destroy({
+            where: { store_id: id },
+            transaction
+        });
+
+        let savedRequirements = [];
+        if (requirementsData && requirementsData.length > 0) {
+            const processedData = requirementsData.map(req => {
+                return {
+                    store_id: parseInt(id, 10),
+                    day_of_week: req.day_of_week !== undefined ? parseInt(req.day_of_week, 10) : null,
+                    specific_date: req.specific_date || null,
+                    start_time: req.start_time,
+                    end_time: req.end_time,
+                    required_staff_count: parseInt(req.required_staff_count, 10)
+                };
+            });
+
+            console.log('処理済み人員要件データ:', processedData);
+
+            savedRequirements = await StoreStaffRequirement.bulkCreate(processedData, { transaction });
+        }
+
+        await transaction.commit();
+        return res.status(200).json({
+            message: '人員要件が保存されました',
+            data: savedRequirements
+        });
+    } catch (error) {
+        console.error('人員要件保存処理エラー:', error);
+        if (transaction) await transaction.rollback();
+        return res.status(500).json({
+            message: '人員要件の保存に失敗しました',
+            error: error.message,
+            stack: error.stack
+        });
+    }
+};
+
+exports.deleteAllStaffRequirements = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
             ]
         });
 
         if (!store) {
-            return res.status(404).json({ message: '店舗が見つかりません' });
+            return res.status(404).json({
+                message: '店舗が見つかりません'
+            });
         }
 
-        const closedDays = await StoreClosedDay.findAll({
+        await StoreStaffRequirement.destroy({
             where: { store_id: id }
         });
-
-        res.status(200).json(closedDays);
+        return res.status(200).json({
+            message: '人員要件が削除されました'
+        });
     } catch (error) {
-        console.error('定休日取得エラー:', error);
-        res.status(500).json({ message: '定休日情報の取得中にエラーが発生しました' });
+        return res.status(500).json({
+            message: '人員要件の削除に失敗しました',
+            error: error.message
+        });
     }
+};
+
+exports.deleteAllClosedDays = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        let storeWhereClause = { id };
+
+        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
+            if (req.user.role === 'owner' || req.user.role === 'manager') {
+                storeWhereClause.owner_id = req.user.id;
+            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+                storeWhereClause.owner_id = req.user.parent_user_id;
+            }
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+            storeWhereClause.owner_id = req.user.id;
+        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
+            storeWhereClause.owner_id = req.user.parent_user_id;
+        }
+
+        const store = await Store.findOne({
+            where: storeWhereClause,
+            attributes: [
+                'id',
+                'name',
+                'address',
+                'phone',
+                'email',
+                'opening_time',
+                'closing_time',
+                'owner_id',
+                'area',
+                'postal_code',
+                'createdAt',
+                'updatedAt'
+            ]
+        });
+
+        if (!store) {
+            return res.status(404).json({
+                message: '店舗が見つかりません'
+            });
+        }
+
+        await StoreClosedDay.destroy({
+            where: { store_id: id }
+        });
+        return res.status(200).json({
+            message: '定休日が削除されました'
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: '定休日の削除に失敗しました',
+            error: error.message
+        });
+    }
+}.role === 'staff' && req.user.parent_user_id) {
+    storeWhereClause.owner_id = req.user.parent_user_id;
+}
+        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
+    storeWhereClause.owner_id = req.user.id;
+} else if (req.user.role === 'staff' && req.user.parent_user_id) {
+    storeWhereClause.owner_id = req.user.parent_user_id;
+}
+
+const store = await Store.findOne({
+    where: storeWhereClause,
+    attributes: [
+        'id',
+        'name',
+        'address',
+        'phone',
+        'email',
+        'opening_time',
+        'closing_time',
+        'owner_id',
+        'area',
+        'postal_code',
+        'createdAt',
+        'updatedAt'
+    ]
+});
+
+if (!store) {
+    return res.status(404).json({ message: '店舗が見つかりません' });
+}
+
+const closedDays = await StoreClosedDay.findAll({
+    where: { store_id: id }
+});
+
+res.status(200).json(closedDays);
+    } catch (error) {
+    console.error('定休日取得エラー:', error);
+    res.status(500).json({ message: '定休日情報の取得中にエラーが発生しました' });
+}
 };
 
 exports.getStoreStaffRequirements = async (req, res) => {
@@ -214,7 +586,12 @@ exports.getStoreStaffRequirements = async (req, res) => {
         }
 
         const staffRequirements = await StoreStaffRequirement.findAll({
-            where: { store_id: id }
+            where: { store_id: id },
+            order: [
+                ['day_of_week', 'ASC'],
+                ['specific_date', 'ASC'],
+                ['start_time', 'ASC']
+            ]
         });
 
         res.status(200).json(staffRequirements);
@@ -600,371 +977,4 @@ exports.saveBusinessHours = async (req, res) => {
         if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
             if (req.user.role === 'owner' || req.user.role === 'manager') {
                 storeWhereClause.owner_id = req.user.id;
-            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-                storeWhereClause.owner_id = req.user.parent_user_id;
-            }
-        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
-            storeWhereClause.owner_id = req.user.id;
-        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-            storeWhereClause.owner_id = req.user.parent_user_id;
-        }
-
-        const store = await Store.findOne({
-            where: storeWhereClause,
-            attributes: [
-                'id',
-                'name',
-                'address',
-                'phone',
-                'email',
-                'opening_time',
-                'closing_time',
-                'owner_id',
-                'area',
-                'postal_code',
-                'createdAt',
-                'updatedAt'
-            ],
-            transaction
-        });
-
-        if (!store) {
-            return res.status(404).json({
-                message: '店舗が見つかりません'
-            });
-        }
-
-        const businessHoursData = req.body;
-
-        await BusinessHours.destroy({
-            where: { store_id: storeIdNum },
-            transaction
-        });
-
-        let savedBusinessHours = [];
-        if (businessHoursData && businessHoursData.length > 0) {
-            const processedData = businessHoursData.map(hour => ({
-                store_id: storeIdNum,
-                day_of_week: hour.day_of_week,
-                is_closed: hour.is_closed,
-                opening_time: hour.opening_time,
-                closing_time: hour.closing_time
-            }));
-
-            savedBusinessHours = await BusinessHours.bulkCreate(processedData, { transaction });
-        }
-
-        await transaction.commit();
-        return res.status(200).json({
-            message: '営業時間が保存されました',
-            data: savedBusinessHours
-        });
-    } catch (error) {
-        if (transaction) await transaction.rollback();
-        console.error('営業時間保存エラー:', error);
-        return res.status(500).json({
-            message: '営業時間の保存に失敗しました',
-            error: error.message
-        });
-    }
-}
-
-exports.saveClosedDays = async (req, res) => {
-    let transaction;
-    try {
-        transaction = await sequelize.transaction();
-        const { id } = req.params;
-        const closedDaysData = req.body;
-
-        let storeWhereClause = { id };
-
-        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
-            if (req.user.role === 'owner' || req.user.role === 'manager') {
-                storeWhereClause.owner_id = req.user.id;
-            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-                storeWhereClause.owner_id = req.user.parent_user_id;
-            }
-        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
-            storeWhereClause.owner_id = req.user.id;
-        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-            storeWhereClause.owner_id = req.user.parent_user_id;
-        }
-
-        const store = await Store.findOne({
-            where: storeWhereClause,
-            attributes: [
-                'id',
-                'name',
-                'address',
-                'phone',
-                'email',
-                'opening_time',
-                'closing_time',
-                'owner_id',
-                'area',
-                'postal_code',
-                'createdAt',
-                'updatedAt'
-            ],
-            transaction
-        });
-
-        if (!store) {
-            return res.status(404).json({
-                message: '店舗が見つかりません'
-            });
-        }
-
-        console.log('定休日保存開始:', { storeId: id, data: closedDaysData });
-
-        await StoreClosedDay.destroy({
-            where: { store_id: id },
-            transaction
-        });
-
-        let savedClosedDays = [];
-        if (closedDaysData && closedDaysData.length > 0) {
-            const processedData = closedDaysData.map(day => {
-                const result = {
-                    store_id: parseInt(id, 10),
-                    day_of_week: day.day_of_week !== undefined ? day.day_of_week : null,
-                    specific_date: null
-                };
-
-                if (day.specific_date) {
-                    // 日付形式の正規化
-                    let dateStr = day.specific_date;
-                    if (dateStr instanceof Date) {
-                        dateStr = dateStr.toISOString().split('T')[0];
-                    } else if (typeof dateStr === 'string') {
-                        // YYYY-MM-DD形式に正規化
-                        const dateObj = new Date(dateStr);
-                        if (!isNaN(dateObj.getTime())) {
-                            dateStr = dateObj.toISOString().split('T')[0];
-                        }
-                    }
-                    result.specific_date = dateStr;
-                }
-
-                return result;
-            });
-
-            console.log('処理済み定休日データ:', processedData);
-
-            savedClosedDays = await StoreClosedDay.bulkCreate(processedData, { transaction });
-        }
-
-        await transaction.commit();
-        return res.status(200).json({
-            message: '定休日が保存されました',
-            data: savedClosedDays
-        });
-    } catch (error) {
-        console.error('定休日保存処理エラー:', error);
-        if (transaction) await transaction.rollback();
-        return res.status(500).json({
-            message: '定休日の保存に失敗しました',
-            error: error.message,
-            stack: error.stack
-        });
-    }
-};
-
-exports.saveStaffRequirements = async (req, res) => {
-    let transaction;
-    try {
-        transaction = await sequelize.transaction();
-        const { id } = req.params;
-        const requirementsData = req.body;
-
-        let storeWhereClause = { id };
-
-        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
-            if (req.user.role === 'owner' || req.user.role === 'manager') {
-                storeWhereClause.owner_id = req.user.id;
-            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-                storeWhereClause.owner_id = req.user.parent_user_id;
-            }
-        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
-            storeWhereClause.owner_id = req.user.id;
-        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-            storeWhereClause.owner_id = req.user.parent_user_id;
-        }
-
-        const store = await Store.findOne({
-            where: storeWhereClause,
-            attributes: [
-                'id',
-                'name',
-                'address',
-                'phone',
-                'email',
-                'opening_time',
-                'closing_time',
-                'owner_id',
-                'area',
-                'postal_code',
-                'createdAt',
-                'updatedAt'
-            ],
-            transaction
-        });
-
-        if (!store) {
-            return res.status(404).json({
-                message: '店舗が見つかりません'
-            });
-        }
-
-        console.log('人員要件保存開始:', { storeId: id, data: requirementsData });
-
-        await StoreStaffRequirement.destroy({
-            where: { store_id: id },
-            transaction
-        });
-
-        let savedRequirements = [];
-        if (requirementsData && requirementsData.length > 0) {
-            const processedData = requirementsData.map(req => {
-                return {
-                    store_id: parseInt(id, 10),
-                    day_of_week: req.day_of_week !== undefined ? parseInt(req.day_of_week, 10) : null,
-                    specific_date: req.specific_date || null,
-                    start_time: req.start_time,
-                    end_time: req.end_time,
-                    required_staff_count: parseInt(req.required_staff_count, 10)
-                };
-            });
-
-            console.log('処理済み人員要件データ:', processedData);
-
-            savedRequirements = await StoreStaffRequirement.bulkCreate(processedData, { transaction });
-        }
-
-        await transaction.commit();
-        return res.status(200).json({
-            message: '人員要件が保存されました',
-            data: savedRequirements
-        });
-    } catch (error) {
-        console.error('人員要件保存処理エラー:', error);
-        if (transaction) await transaction.rollback();
-        return res.status(500).json({
-            message: '人員要件の保存に失敗しました',
-            error: error.message,
-            stack: error.stack
-        });
-    }
-};
-
-exports.deleteAllStaffRequirements = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        let storeWhereClause = { id };
-
-        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
-            if (req.user.role === 'owner' || req.user.role === 'manager') {
-                storeWhereClause.owner_id = req.user.id;
-            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-                storeWhereClause.owner_id = req.user.parent_user_id;
-            }
-        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
-            storeWhereClause.owner_id = req.user.id;
-        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-            storeWhereClause.owner_id = req.user.parent_user_id;
-        }
-
-        const store = await Store.findOne({
-            where: storeWhereClause,
-            attributes: [
-                'id',
-                'name',
-                'address',
-                'phone',
-                'email',
-                'opening_time',
-                'closing_time',
-                'owner_id',
-                'area',
-                'postal_code',
-                'createdAt',
-                'updatedAt'
-            ]
-        });
-
-        if (!store) {
-            return res.status(404).json({
-                message: '店舗が見つかりません'
-            });
-        }
-
-        await StoreStaffRequirement.destroy({
-            where: { store_id: id }
-        });
-        return res.status(200).json({
-            message: '人員要件が削除されました'
-        });
-    } catch (error) {
-        return res.status(500).json({
-            message: '人員要件の削除に失敗しました',
-            error: error.message
-        });
-    }
-};
-
-exports.deleteAllClosedDays = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        let storeWhereClause = { id };
-
-        if (req.isImpersonating && req.originalUser && req.originalUser.role === 'admin') {
-            if (req.user.role === 'owner' || req.user.role === 'manager') {
-                storeWhereClause.owner_id = req.user.id;
-            } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-                storeWhereClause.owner_id = req.user.parent_user_id;
-            }
-        } else if (req.user.role === 'owner' || req.user.role === 'manager') {
-            storeWhereClause.owner_id = req.user.id;
-        } else if (req.user.role === 'staff' && req.user.parent_user_id) {
-            storeWhereClause.owner_id = req.user.parent_user_id;
-        }
-
-        const store = await Store.findOne({
-            where: storeWhereClause,
-            attributes: [
-                'id',
-                'name',
-                'address',
-                'phone',
-                'email',
-                'opening_time',
-                'closing_time',
-                'owner_id',
-                'area',
-                'postal_code',
-                'createdAt',
-                'updatedAt'
-            ]
-        });
-
-        if (!store) {
-            return res.status(404).json({
-                message: '店舗が見つかりません'
-            });
-        }
-
-        await StoreClosedDay.destroy({
-            where: { store_id: id }
-        });
-        return res.status(200).json({
-            message: '定休日が削除されました'
-        });
-    } catch (error) {
-        return res.status(500).json({
-            message: '定休日の削除に失敗しました',
-            error: error.message
-        });
-    }
-};
+            } else if (req.user
