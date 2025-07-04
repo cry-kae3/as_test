@@ -288,6 +288,7 @@
         <div>staffList.length: {{ staffList.length }}</div>
         <div>loading: {{ loading }}</div>
         <div>stores.length: {{ stores.length }}</div>
+        <div>storeRequirements.length: {{ storeRequirements.length }}</div>
       </div>
     </div>
   </div>
@@ -363,7 +364,6 @@ export default {
     // Composablesの利用
     const shiftManagement = useShiftManagement();
     const allStoreManagement = useAllStoreShiftManagement();
-    const shiftRequirements = useShiftRequirements();
     const shiftActions = useShiftActions();
     const shiftEditor = useShiftEditor();
     const shiftNavigation = useShiftNavigation();
@@ -433,6 +433,15 @@ export default {
       getStaffStatus,
       getStaffStatusInfo,
     } = allStoreManagement;
+
+    // useShiftRequirementsに必要な引数を渡す
+    const shiftRequirements = useShiftRequirements(
+      storeRequirements,
+      shifts,
+      staffList,
+      hasShiftViolation,
+      formatTime
+    );
 
     const {
       getDailyRequirements,
@@ -540,6 +549,7 @@ export default {
           staff: staffList.value.length,
           currentShift: currentShift.value,
           hasCurrentShift: hasCurrentShift.value,
+          storeRequirements: storeRequirements.value.length,
         });
       } catch (error) {
         console.error("❌ シフトデータ読み込みエラー:", error);
@@ -817,7 +827,13 @@ export default {
     };
 
     const handleQuickDeleteShift = async (shift) => {
-      await confirmQuickDelete(shift, currentYear.value, currentMonth.value, loadShiftData);
+      await confirmQuickDelete(
+        shift, 
+        currentYear.value, 
+        currentMonth.value, 
+        loadShiftData, 
+        fetchAllSystemStaffAndShifts
+      );
     };
 
     // ライフサイクル
