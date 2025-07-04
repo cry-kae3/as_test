@@ -1,0 +1,63 @@
+{
+  "timestamp": "2025-07-01T01:39:54.616Z",
+  "storeId": 2,
+  "year": 2025,
+  "month": 7,
+  "type": "SHIFT_GENERATION",
+  "phase": "AI_RESPONSE_PROCESSING",
+  "response": {
+    "candidates": [
+      {
+        "content": {
+          "parts": [
+            {
+              "text": "{\"shifts\": [{\"date\": \"2025-06-26\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"17:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-06-27\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-06-28\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-06-29\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"17:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-06-30\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-01\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-02\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-03\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"17:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-04\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-05\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-06\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-07\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"17:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-08\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-09\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-10\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-11\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"17:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-12\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-13\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-14\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-15\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"17:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-16\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-17\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-18\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-19\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"17:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-20\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-21\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-22\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-23\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"17:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}, {\"date\": \"2025-07-24\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"10:00\", \"end_time\": \"18:00\"}]}, {\"date\": \"2025-07-25\", \"assignments\": [{\"staff_id\": 1, \"start_time\": \"09:00\", \"end_time\": \"15:00\"}, {\"staff_id\": 3, \"start_time\": \"13:00\", \"end_time\": \"21:00\"}]}]}"
+            }
+          ],
+          "role": "model"
+        },
+        "finishReason": "STOP",
+        "safetyRatings": [
+          {
+            "category": "HARM_CATEGORY_HATE_SPEECH",
+            "probability": "NEGLIGIBLE"
+          },
+          {
+            "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+            "probability": "NEGLIGIBLE"
+          },
+          {
+            "category": "HARM_CATEGORY_HARASSMENT",
+            "probability": "NEGLIGIBLE"
+          },
+          {
+            "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            "probability": "NEGLIGIBLE"
+          }
+        ],
+        "avgLogprobs": -0.0012342920508636654
+      }
+    ],
+    "usageMetadata": {
+      "promptTokenCount": 576,
+      "candidatesTokenCount": 2555,
+      "totalTokenCount": 3131,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 576
+        }
+      ],
+      "candidatesTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 2555
+        }
+      ]
+    },
+    "modelVersion": "gemini-1.5-flash",
+    "responseId": "WDxjaOH8KeOXmecPnNjlSA"
+  },
+  "parsedShifts": 30
+}
+
