@@ -1,4 +1,15 @@
 require('dotenv').config();
+
+// SSL証明書検証を無効化（開発環境用）
+if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
+  require('https').globalAgent.options.rejectUnauthorized = false;
+  console.log('🔓 .envの設定によりSSL証明書検証を無効化しました');
+  console.log('NODE_TLS_REJECT_UNAUTHORIZED:', process.env.NODE_TLS_REJECT_UNAUTHORIZED);
+} else {
+  console.log('ℹ️ SSL証明書検証は有効です');
+}
+
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');

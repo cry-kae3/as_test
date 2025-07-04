@@ -1188,11 +1188,12 @@ export default {
   text-align: center;
   background-color: var(--surface-a);
   box-shadow: 0px 0px 2px rgb(103, 103, 103);
+  border: 2px solid #fff;
 }
 
 .selection-card:hover {
-  transform: translate(0, -2px);
-  box-shadow: 0px 0px 6px rgb(69, 146, 213);
+  border: 2px solid #21a3ff;
+  box-shadow: 4px 4px 4px rgb(172, 172, 172);
 }
 
 .selection-card .card-header {
