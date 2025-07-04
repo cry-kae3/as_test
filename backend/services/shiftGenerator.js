@@ -1,5 +1,6 @@
 const axios = require('axios');
-const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const {
     Store, Staff, StaffDayPreference, StaffDayOffRequest,
     StoreClosedDay, StoreStaffRequirement, Shift, ShiftAssignment, SystemSetting, sequelize
@@ -9,16 +10,71 @@ const moment = require('moment-timezone');
 
 class ShiftGeneratorService {
     constructor() {
-        this.geminiApiKey = process.env.GEMINI_API_KEY;
-        this.geminiModel = 'gemini-2.5-flash';
-        this.geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${this.geminiModel}:generateContent`;
+        this.claudeApiKey = process.env.CLAUDE_API_KEY;
+        this.claudeApiUrl = 'https://api.anthropic.com/v1/messages';
+
+        // ログディレクトリの作成
+        this.logDir = path.join(process.cwd(), 'logs');
+        if (!fs.existsSync(this.logDir)) {
+            fs.mkdirSync(this.logDir, { recursive: true });
+        }
+
+        this.log('=== ShiftGeneratorService 初期化開始 ===');
+        if (!this.claudeApiKey) {
+            this.log('❌ CLAUDE_API_KEY環境変数が設定されていません', 'error');
+        } else {
+            this.log('✅ Claude API設定完了:', {
+                apiUrl: this.claudeApiUrl,
+                apiKeyPrefix: this.claudeApiKey.substring(0, 10) + '...',
+                apiKeyLength: this.claudeApiKey.length
+            });
+        }
+        this.log('=== ShiftGeneratorService 初期化完了 ===');
+    }
+
+    log(message, level = 'info', data = null) {
+        const timestamp = moment().format('YYYY-MM-DD HH:mm:ss.SSS');
+        const logMessage = typeof message === 'object' ? JSON.stringify(message, null, 2) : message;
+        const dataStr = data ? ` | データ: ${JSON.stringify(data, null, 2)}` : '';
+        const logLevel = typeof level === 'string' ? level.toUpperCase() : 'INFO';
+        const fullMessage = `[${timestamp}] [${logLevel}] ${logMessage}${dataStr}`;
+
+        // コンソール出力
+        if (logLevel === 'ERROR') {
+            console.error(fullMessage);
+        } else {
+            console.log(fullMessage);
+        }
+
+        // ファイル出力
+        const today = moment().format('YYYY-MM-DD');
+        const logFile = path.join(this.logDir, `shift-generator-${today}.log`);
+
+        try {
+            fs.appendFileSync(logFile, fullMessage + '\n', 'utf8');
+        } catch (error) {
+            console.error('ログファイル書き込みエラー:', error);
+        }
+
+        // エラーログは別ファイルにも出力
+        if (logLevel === 'ERROR') {
+            const errorLogFile = path.join(this.logDir, `shift-generator-error-${today}.log`);
+            try {
+                fs.appendFileSync(errorLogFile, fullMessage + '\n', 'utf8');
+            } catch (error) {
+                console.error('エラーログファイル書き込みエラー:', error);
+            }
+        }
     }
 
     getShiftPeriod(year, month, closingDay) {
+        this.log(`getShiftPeriod実行`, 'info', { year, month, closingDay });
         const targetMonth = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, "Asia/Tokyo");
         const endDate = targetMonth.date(closingDay).startOf('day');
         const startDate = endDate.clone().subtract(1, 'month').add(1, 'day').startOf('day');
-        return { startDate, endDate };
+        const period = { startDate, endDate };
+        this.log(`期間計算結果: ${startDate.format('YYYY-MM-DD')} ～ ${endDate.format('YYYY-MM-DD')}`);
+        return period;
     }
 
     calculateWorkMinutes(startTime, endTime) {
@@ -31,6 +87,7 @@ class ShiftGeneratorService {
 
     async getStaffTotalHoursAllStores(staffIds, year, month) {
         try {
+            this.log('getStaffTotalHoursAllStores開始', 'info', { staffIds, year, month });
             const shiftsInMonth = await Shift.findAll({
                 where: { year, month },
                 include: [{
@@ -75,13 +132,16 @@ class ShiftGeneratorService {
                 };
             }
 
+            this.log('スタッフ総労働時間計算完了', 'info', result);
             return result;
         } catch (error) {
+            this.log('getStaffTotalHoursAllStores エラー', 'error', error);
             throw new Error('Failed to calculate staff total hours.');
         }
     }
 
     async getOtherStoreShifts(staffList, currentStoreId, year, month, period) {
+        this.log('getOtherStoreShifts開始', 'info', { currentStoreId, staffCount: staffList.length });
         const otherStoreShifts = {};
 
         for (const staff of staffList) {
@@ -136,6 +196,7 @@ class ShiftGeneratorService {
             });
         }
 
+        this.log('他店舗シフト取得完了');
         return otherStoreShifts;
     }
 
@@ -178,104 +239,169 @@ class ShiftGeneratorService {
     }
 
     async generateShift(storeId, year, month) {
-        const store = await Store.findByPk(storeId);
-        if (!store) throw new Error('指定された店舗が見つかりません。');
+        const sessionId = `${storeId}-${year}-${month}-${Date.now()}`;
+        this.log('=== シフト生成開始 ===', 'info', { sessionId, storeId, year, month });
 
-        const settings = await SystemSetting.findOne({ where: { user_id: store.owner_id } });
-        const closingDay = settings ? settings.closing_day : 25;
+        try {
+            this.log('1. 店舗情報取得中...');
+            const store = await Store.findByPk(storeId);
+            if (!store) {
+                this.log('❌ 店舗が見つかりません', 'error', { storeId });
+                throw new Error('指定された店舗が見つかりません。');
+            }
+            this.log('✅ 店舗情報取得完了', 'info', { storeName: store.name });
 
-        const period = this.getShiftPeriod(year, month, closingDay);
+            this.log('2. システム設定取得中...');
+            const settings = await SystemSetting.findOne({ where: { user_id: store.owner_id } });
+            const closingDay = settings ? settings.closing_day : 25;
+            this.log('✅ 締め日設定', 'info', { closingDay });
 
-        const staffs = await Staff.findAll({
-            include: [
-                {
-                    model: Store,
-                    as: 'aiGenerationStores',
-                    where: { id: storeId },
-                    attributes: ['id', 'name'],
-                },
-                {
-                    model: Store,
-                    as: 'stores',
-                    attributes: ['id', 'name'],
-                    through: { attributes: [] },
-                    required: false
-                },
-                { model: StaffDayPreference, as: 'dayPreferences' },
-                {
-                    model: StaffDayOffRequest,
-                    as: 'dayOffRequests',
-                    where: { date: { [Op.between]: [period.startDate.format('YYYY-MM-DD'), period.endDate.format('YYYY-MM-DD')] } },
-                    required: false
-                }
-            ]
-        });
+            this.log('3. 期間計算中...');
+            const period = this.getShiftPeriod(year, month, closingDay);
 
-        if (staffs.length === 0) throw new Error('この店舗にAI生成対象のスタッフがいません。');
+            this.log('4. スタッフ情報取得中...');
+            const staffs = await Staff.findAll({
+                include: [
+                    {
+                        model: Store,
+                        as: 'aiGenerationStores',
+                        where: { id: storeId },
+                        attributes: ['id', 'name'],
+                    },
+                    {
+                        model: Store,
+                        as: 'stores',
+                        attributes: ['id', 'name'],
+                        through: { attributes: [] },
+                        required: false
+                    },
+                    { model: StaffDayPreference, as: 'dayPreferences' },
+                    {
+                        model: StaffDayOffRequest,
+                        as: 'dayOffRequests',
+                        where: { date: { [Op.between]: [period.startDate.format('YYYY-MM-DD'), period.endDate.format('YYYY-MM-DD')] } },
+                        required: false
+                    }
+                ]
+            });
 
-        const otherStoreShifts = await this.getOtherStoreShifts(staffs, storeId, year, month, period);
+            if (staffs.length === 0) {
+                this.log('❌ AI生成対象のスタッフがいません', 'error');
+                throw new Error('この店舗にAI生成対象のスタッフがいません。');
+            }
 
-        const storeClosedDays = await StoreClosedDay.findAll({ where: { store_id: storeId } });
-        const storeRequirements = await StoreStaffRequirement.findAll({ where: { store_id: storeId } });
+            this.log('✅ スタッフ情報取得完了', 'info', { staffCount: staffs.length });
+            staffs.forEach(staff => {
+                this.log(`スタッフ詳細: ID:${staff.id} ${staff.last_name} ${staff.first_name}`, 'info', {
+                    monthlyHours: `${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}h`,
+                    dailyHours: `${staff.max_hours_per_day || 8}h`
+                });
+            });
 
-        let attempts = 0;
-        const maxAttempts = 3;
-        let lastError = null;
-        let currentPrompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts);
+            this.log('5. 他店舗シフト情報取得中...');
+            const otherStoreShifts = await this.getOtherStoreShifts(staffs, storeId, year, month, period);
 
-        while (attempts < maxAttempts) {
-            attempts++;
+            this.log('6. 店舗設定取得中...');
+            const storeClosedDays = await StoreClosedDay.findAll({ where: { store_id: storeId } });
+            const storeRequirements = await StoreStaffRequirement.findAll({ where: { store_id: storeId } });
+            this.log('✅ 店舗設定取得完了', 'info', {
+                closedDaysCount: storeClosedDays.length,
+                requirementsCount: storeRequirements.length
+            });
 
-            try {
-                const response = await this.callGeminiApi(currentPrompt);
+            let attempts = 0;
+            const maxAttempts = 3;
+            let lastError = null;
+            let currentPrompt = this.buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts);
 
-                let generatedShiftData;
+            this.log('7. Claude APIでシフト生成開始...');
+            while (attempts < maxAttempts) {
+                attempts++;
+                this.log(`--- 試行 ${attempts}/${maxAttempts} ---`);
+
                 try {
-                    generatedShiftData = this.parseGeminiResponse(response);
-                } catch (parseError) {
+                    this.log('Claude API呼び出し中...');
+                    const response = await this.callClaudeApi(currentPrompt);
+                    this.log('✅ Claude APIレスポンス受信完了');
 
-                    if (parseError.message.includes('Unexpected end of JSON input')) {
+                    let generatedShiftData;
+                    try {
+                        this.log('レスポンス解析中...');
+                        generatedShiftData = this.parseClaudeResponse(response);
+                        this.log('✅ レスポンス解析完了');
+                    } catch (parseError) {
+                        this.log('❌ レスポンス解析エラー', 'error', parseError.message);
+                        if (parseError.message.includes('Unexpected end of JSON input')) {
+                            if (attempts < maxAttempts) {
+                                this.log('シンプルプロンプトで再試行します');
+                                currentPrompt = this.buildSimplePrompt(store, staffs, year, month, period, otherStoreShifts);
+                                continue;
+                            }
+                        }
+                        throw parseError;
+                    }
+
+                    if (!generatedShiftData || !generatedShiftData.shifts || !Array.isArray(generatedShiftData.shifts)) {
+                        this.log('❌ 生成されたシフトデータの構造が不正です', 'error');
+                        throw new Error('生成されたシフトデータの構造が不正です');
+                    }
+
+                    this.log('バリデーション実行中...');
+                    const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, otherStoreShifts);
+
+                    if (validationResult.isValid) {
+                        this.log('✅ バリデーション成功');
+                        this.log('シフト保存中...');
+                        const result = await this.saveShift(generatedShiftData, storeId, year, month);
+                        this.log('✅ シフト保存完了');
+                        this.log('=== シフト生成正常終了 ===', 'info', { sessionId });
+                        return result;
+                    } else {
+                        this.log('❌ バリデーション失敗', 'error', validationResult.violations.slice(0, 3));
+                        lastError = new Error(`制約違反: ${validationResult.violations.slice(0, 3).join(', ')}`);
+
                         if (attempts < maxAttempts) {
-                            currentPrompt = this.buildSimplePrompt(store, staffs, year, month, period, otherStoreShifts);
+                            this.log('より厳格なプロンプトで再試行します');
+                            currentPrompt = this.buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, validationResult.violations, otherStoreShifts);
                             continue;
                         }
                     }
-                    throw parseError;
-                }
+                } catch (error) {
+                    this.log(`❌ 試行 ${attempts} でエラー`, 'error', error.message);
+                    this.log('エラー詳細', 'error', error);
+                    lastError = error;
 
-                if (!generatedShiftData || !generatedShiftData.shifts || !Array.isArray(generatedShiftData.shifts)) {
-                    throw new Error('生成されたシフトデータの構造が不正です');
-                }
-
-                const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, otherStoreShifts);
-
-                if (validationResult.isValid) {
-                    return this.saveShift(generatedShiftData, storeId, year, month);
-                } else {
-                    lastError = new Error(`制約違反: ${validationResult.violations.slice(0, 3).join(', ')}`);
-
-                    if (attempts < maxAttempts) {
-                        currentPrompt = this.buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, validationResult.violations, otherStoreShifts);
+                    // レート制限対応
+                    if (error.response?.status === 429 || error.message.includes('rate') || error.message.includes('limit')) {
+                        this.log('⚠️ レート制限に達しました。60秒待機します...', 'warn');
+                        await new Promise(resolve => setTimeout(resolve, 60000));
+                    } else if (error.response?.status >= 500) {
+                        this.log('⚠️ サーバーエラーです。10秒待機します...', 'warn');
+                        await new Promise(resolve => setTimeout(resolve, 10000));
+                    } else if (attempts < maxAttempts) {
+                        if (error.message.includes('API')) {
+                            this.log('2秒待機後に再試行します...');
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                        }
                         continue;
                     }
                 }
-            } catch (error) {
-                lastError = error;
-
-                if (attempts < maxAttempts) {
-
-                    if (error.message.includes('API')) {
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                    }
-                    continue;
-                }
             }
-        }
 
-        throw lastError || new Error('制約を満たすシフトを生成できませんでした。スタッフの勤務条件を見直してください。');
+            this.log('❌ 全ての試行が失敗しました', 'error');
+            this.log('=== シフト生成異常終了 ===', 'error', { sessionId });
+            throw lastError || new Error('制約を満たすシフトを生成できませんでした。スタッフの勤務条件を見直してください。');
+
+        } catch (error) {
+            this.log('❌ generateShift 致命的エラー', 'error', error.message);
+            this.log('スタックトレース', 'error', error.stack);
+            this.log('=== シフト生成致命的エラーで終了 ===', 'error', { sessionId });
+            throw error;
+        }
     }
 
     buildSimplePrompt(store, staffs, year, month, period, otherStoreShifts) {
+        this.log('buildSimplePrompt 実行中...');
         let prompt = `期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
 
 基本ルール:
@@ -301,14 +427,19 @@ class ShiftGeneratorService {
 
         prompt += `
 上記ルールに従って、シフトをJSON形式で出力してください。
-重要: 必ず上記のスタッフIDのみを使用し、全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。
+重要: 
+- 必ず上記のスタッフIDのみを使用
+- 各スタッフの月間勤務時間を絶対に超過させない
+- 全てのオブジェクトは必ず \`{\` と \`}\` で囲む
 
 {"shifts":[{"date":"YYYY-MM-DD","assignments":[{"staff_id":${staffs[0]?.id || 1},"start_time":"09:00","end_time":"17:00"}]}]}`;
 
+        this.log('buildSimplePrompt 完了', 'info', { promptLength: prompt.length });
         return prompt;
     }
 
     buildStricterPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, violations, otherStoreShifts) {
+        this.log('buildStricterPrompt 実行中...', 'info', { violationsCount: violations.length });
         let prompt = `前回のシフト生成で以下の絶対守るべきルール違反がありました。今度は絶対にルールを守って生成してください。
 
 ### 前回の違反内容
@@ -349,13 +480,13 @@ ${violations.slice(0, 5).join('\n')}
         const availableStaffIds = staffs.map(s => s.id).join(', ');
         prompt += `
 
-### 重要な注意事項
+### 重要な注意事項（絶対遵守）
 - 使用可能なスタッフID: ${availableStaffIds}
 - 上記以外のスタッフIDは絶対に使用しないこと
+- 各スタッフの月間勤務時間は絶対に上限を超えないこと
 - 期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
 
 前回の違反を修正し、ルールを厳守したシフトをJSON形式で出力してください。
-\`\`\`json
 {
   "shifts": [
     {
@@ -369,13 +500,14 @@ ${violations.slice(0, 5).join('\n')}
       ]
     }
   ]
-}
-\`\`\``;
+}`;
 
+        this.log('buildStricterPrompt 完了', 'info', { promptLength: prompt.length });
         return prompt;
     }
 
     buildStrictPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts) {
+        this.log('buildStrictPrompt 実行中...');
         let prompt = `あなたはシフト管理システムです。以下の条件を厳守してシフトを生成してください。
 
 ## 期間情報
@@ -397,7 +529,8 @@ ${violations.slice(0, 5).join('\n')}
 
             prompt += `
 【スタッフID: ${staff.id} - ${staff.first_name} ${staff.last_name}】
-- 月間時間 (目安): ${staff.min_hours_per_month || 0}-${staff.max_hours_per_month || 160}時間
+- 月間時間上限（絶対遵守）: ${staff.max_hours_per_month || 160}時間
+- 月間時間下限（目標）: ${staff.min_hours_per_month || 0}時間
 - 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間
 - 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
 - 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}`;
@@ -413,14 +546,14 @@ ${violations.slice(0, 5).join('\n')}
 
         prompt += `
 
-## 重要ルール
+## 重要ルール（絶対遵守）
 1. 使用可能スタッフID（${availableStaffIds.join(', ')}）以外は絶対に使用しない
-2. スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てること
-3. 各日付の人員要件（もしあれば）を満たすことを優先する
-4. 月間勤務時間は目安とし、多少の過不足は許容する
-5. 勤務不可曜日と休み希望日には絶対に割り当てない
-6. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない
-7. 他店舗で既に勤務がある日時には絶対に割り当てない
+2. 勤務不可曜日と休み希望日には絶対に割り当てない
+3. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない
+4. 他店舗で既に勤務がある日時には絶対に割り当てない
+5. 各スタッフの月間勤務時間は絶対に上限（max_hours_per_month）を超えてはならない
+6. 各スタッフの月間勤務時間は下限（min_hours_per_month）から上限（max_hours_per_month）の範囲内に収めること
+7. 月間時間制限は「目安」ではなく「絶対的な制約」として扱うこと
 
 ## 出力形式
 以下のJSON形式で正確に出力してください。余計な説明は不要です。
@@ -441,20 +574,23 @@ ${violations.slice(0, 5).join('\n')}
   ]
 }`;
 
+        this.log('buildStrictPrompt 完了', 'info', { promptLength: prompt.length });
         return prompt;
     }
 
     async validateGeneratedShift(shiftData, staffs, otherStoreShifts) {
+        this.log('validateGeneratedShift 実行中...');
         const violations = [];
         const warnings = [];
         const staffWorkHours = {};
 
         if (!shiftData || !shiftData.shifts) {
+            this.log('❌ シフトデータが不正です', 'error');
             return { isValid: false, violations: ['シフトデータが不正です'], warnings: [] };
         }
 
-        // 利用可能なスタッフIDの一覧を作成
         const validStaffIds = staffs.map(s => s.id);
+        this.log('有効なスタッフID', 'info', validStaffIds);
 
         for (const dayShift of shiftData.shifts) {
             const date = dayShift.date;
@@ -465,7 +601,6 @@ ${violations.slice(0, 5).join('\n')}
             for (const assignment of dayShift.assignments) {
                 const staffId = assignment.staff_id;
 
-                // スタッフIDの存在チェック
                 if (!validStaffIds.includes(staffId)) {
                     violations.push(`存在しないスタッフID: ${staffId}`);
                     continue;
@@ -528,123 +663,191 @@ ${violations.slice(0, 5).join('\n')}
             const minHours = staff.min_hours_per_month || 0;
             const maxHours = staff.max_hours_per_month || 0;
 
+            this.log(`${staff.first_name} ${staff.last_name}: 月間勤務時間`, 'info', {
+                totalHours: totalHours.toFixed(1),
+                limits: `${minHours}-${maxHours}h`
+            });
+
             if (minHours > 0 && totalHours < minHours) {
                 const shortage = minHours - totalHours;
-                warnings.push(`${staff.first_name} ${staff.last_name}: 月間最小勤務時間不足 (${totalHours.toFixed(1)}h < ${minHours}h, 不足${shortage.toFixed(1)}h)`);
+                violations.push(`${staff.first_name} ${staff.last_name}: 月間最小勤務時間不足 (${totalHours.toFixed(1)}h < ${minHours}h, 不足${shortage.toFixed(1)}h)`);
             }
 
             if (maxHours > 0 && totalHours > maxHours) {
                 const excess = totalHours - maxHours;
-                warnings.push(`${staff.first_name} ${staff.last_name}: 月間最大勤務時間超過 (${totalHours.toFixed(1)}h > ${maxHours}h, 超過${excess.toFixed(1)}h)`);
+                violations.push(`${staff.first_name} ${staff.last_name}: 月間最大勤務時間超過 (${totalHours.toFixed(1)}h > ${maxHours}h, 超過${excess.toFixed(1)}h)`);
             }
         }
 
+        const isValid = violations.length === 0;
+        this.log(`バリデーション結果: ${isValid ? '✅ 成功' : '❌ 失敗'}`, isValid ? 'info' : 'error');
+        if (!isValid) {
+            this.log('違反内容', 'error', violations.slice(0, 5));
+        }
+
         return {
-            isValid: violations.length === 0,
+            isValid,
             violations,
             warnings
         };
     }
 
-    async callGeminiApi(prompt) {
-        const httpsAgent = new https.Agent({ rejectUnauthorized: false });
-        const url = `${this.geminiApiUrl}?key=${this.geminiApiKey}`;
+    async callClaudeApi(prompt) {
+        this.log('=== Claude API 呼び出し開始 ===');
+        const https = require('https');
+
+        if (!this.claudeApiKey) {
+            this.log('❌ CLAUDE_API_KEY環境変数が設定されていません', 'error');
+            throw new Error('CLAUDE_API_KEY環境変数が設定されていません。.envファイルを確認してください。');
+        }
+
+        const url = this.claudeApiUrl;
+        this.log('API URL', 'info', url);
 
         const data = {
-            contents: [{
-                parts: [{
-                    text: prompt
-                }]
-            }],
-            generationConfig: {
-                temperature: 0.2,
-                topK: 1,
-                topP: 1,
-                maxOutputTokens: 65535,
-                responseMimeType: "application/json"
-            },
-            safetySettings: [
+            model: 'claude-3-5-sonnet-20241022',
+            max_tokens: 8192,
+            temperature: 0.1,
+            messages: [
                 {
-                    category: "HARM_CATEGORY_HARASSMENT",
-                    threshold: "BLOCK_NONE"
-                },
-                {
-                    category: "HARM_CATEGORY_HATE_SPEECH",
-                    threshold: "BLOCK_NONE"
-                },
-                {
-                    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    threshold: "BLOCK_NONE"
-                },
-                {
-                    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    threshold: "BLOCK_NONE"
+                    role: 'user',
+                    content: prompt
                 }
             ]
         };
 
+        this.log('リクエストデータ', 'info', {
+            model: data.model,
+            max_tokens: data.max_tokens,
+            temperature: data.temperature,
+            promptLength: prompt.length
+        });
+
+        const httpsAgent = new https.Agent({
+            rejectUnauthorized: false
+        });
+
         const config = {
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'x-api-key': this.claudeApiKey,
+                'anthropic-version': '2023-06-01'
             },
-            timeout: 180000,
-            httpsAgent
+            timeout: 120000,
+            httpsAgent: httpsAgent
         };
 
+        this.log('ヘッダー情報', 'info', {
+            'Content-Type': config.headers['Content-Type'],
+            'anthropic-version': config.headers['anthropic-version'],
+            'x-api-key-prefix': this.claudeApiKey.substring(0, 10) + '...',
+            timeout: config.timeout
+        });
+
         try {
+            this.log('Claude API リクエスト送信中...');
+            const startTime = Date.now();
             const response = await axios.post(url, data, config);
+            const endTime = Date.now();
+            this.log('✅ Claude API レスポンス受信完了', 'info', {
+                responseTime: endTime - startTime,
+                status: response.status,
+                statusText: response.statusText,
+                contentLength: JSON.stringify(response.data).length
+            });
+            this.log('=== Claude API 呼び出し終了 ===');
             return response.data;
         } catch (error) {
-            if (error.response?.data) {
-                console.error('Gemini API Error:', error.response.data);
+            this.log('=== Claude API エラー発生 ===', 'error');
+            this.log('❌ エラータイプ', 'error', error.constructor.name);
+            this.log('❌ メッセージ', 'error', error.message);
+
+            if (error.response) {
+                this.log('❌ レスポンスエラー詳細', 'error', {
+                    status: error.response.status,
+                    statusText: error.response.statusText,
+                    headers: error.response.headers,
+                    data: error.response.data
+                });
+
+                // レート制限の詳細チェック
+                if (error.response.status === 429) {
+                    this.log('🚫 レート制限エラー - 1分後に再試行してください', 'error');
+                } else if (error.response.status >= 500) {
+                    this.log('🔧 サーバーエラー - Anthropic側の問題の可能性があります', 'error');
+                } else if (error.response.status === 400) {
+                    this.log('📝 リクエストエラー - APIキーまたはリクエスト形式を確認してください', 'error');
+                }
+            } else if (error.request) {
+                this.log('❌ リクエストエラー', 'error', error.request);
+            } else {
+                this.log('❌ その他のエラー', 'error', error.message);
             }
+
+            if (error.code) {
+                this.log('❌ エラーコード', 'error', error.code);
+            }
+
+            if (error.message.includes('certificate')) {
+                this.log('❌ SSL証明書エラーが発生しました', 'error');
+            }
+
+            if (error.message.includes('timeout')) {
+                this.log('❌ タイムアウトエラーが発生しました', 'error');
+            }
+
+            this.log('=== Claude API エラー終了 ===', 'error');
             throw error;
         }
     }
 
-    parseGeminiResponse(response) {
+    parseClaudeResponse(response) {
+        this.log('parseClaudeResponse 実行中...');
+
         if (!response) {
-            throw new Error('Gemini APIからのレスポンスが空です。');
+            this.log('❌ レスポンスが空です', 'error');
+            throw new Error('Claude APIからのレスポンスが空です。');
         }
 
-        if (!response.candidates || !Array.isArray(response.candidates) || response.candidates.length === 0) {
-            if (response.promptFeedback && response.promptFeedback.blockReason) {
-                throw new Error(`リクエストがブロックされました: ${response.promptFeedback.blockReason}`);
-            }
-            throw new Error('Gemini APIレスポンスにcandidatesが含まれていません。');
+        this.log('レスポンス構造確認', 'info', {
+            hasContent: !!response.content,
+            contentType: typeof response.content,
+            contentIsArray: Array.isArray(response.content),
+            contentLength: response.content ? response.content.length : 0
+        });
+
+        if (!response.content || !Array.isArray(response.content) || response.content.length === 0) {
+            this.log('❌ 有効なcontentが含まれていません', 'error');
+            throw new Error('Claude APIレスポンスに有効なcontentが含まれていません。');
         }
 
-        const candidate = response.candidates[0];
+        const content = response.content[0];
+        this.log('コンテンツ情報', 'info', {
+            hasText: !!content.text,
+            textLength: content.text ? content.text.length : 0
+        });
 
-        if (candidate.finishReason && candidate.finishReason === 'MAX_TOKENS') {
-            console.warn('AIの応答が最大トークン数に達したため、途中で打ち切られた可能性があります。');
-        }
-        if (candidate.finishReason) {
-            console.log(`AI response finishReason: ${candidate.finishReason}`);
-        }
-
-        if (!candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
-            throw new Error('Gemini APIレスポンスに有効なcontentが含まれていません。');
-        }
-
-        const content = candidate.content.parts[0];
         if (!content.text) {
-            throw new Error('Gemini APIレスポンスに有効なテキストが含まれていません。');
+            this.log('❌ 有効なテキストが含まれていません', 'error');
+            throw new Error('Claude APIレスポンスに有効なテキストが含まれていません。');
         }
 
         let jsonString = content.text;
+        this.log('レスポンステキスト（最初の500文字）', 'info', jsonString.substring(0, 500));
 
         let extractedJson = null;
 
         let match = jsonString.match(/```json\s*\n([\s\S]*?)\n\s*```/);
         if (match && match[1]) {
             extractedJson = match[1];
+            this.log('✅ JSONコードブロックを発見');
         }
 
         if (!extractedJson) {
             match = jsonString.match(/```\s*\n([\s\S]*?)\n\s*```/);
             if (match && match[1] && match[1].trim().startsWith('{')) {
                 extractedJson = match[1];
+                this.log('✅ 一般コードブロックからJSONを発見');
             }
         }
 
@@ -652,56 +855,69 @@ ${violations.slice(0, 5).join('\n')}
             match = jsonString.match(/\{[\s\S]*\}/);
             if (match) {
                 extractedJson = match[0];
+                this.log('✅ テキスト中からJSONオブジェクトを発見');
             }
         }
 
         if (extractedJson) {
             jsonString = extractedJson;
+            this.log('抽出されたJSON（最初の300文字）', 'info', jsonString.substring(0, 300));
         } else {
-            console.log('Gemini Response Text:', content.text);
+            this.log('⚠️ JSONが見つからない場合の全テキスト', 'warn', content.text);
         }
 
+        this.log('JSON修復処理実行中...');
         jsonString = this.cleanAndRepairJson(jsonString);
 
         try {
+            this.log('JSON解析実行中...');
             const parsed = JSON.parse(jsonString);
+            this.log('✅ JSON解析成功');
 
             if (!parsed.shifts || !Array.isArray(parsed.shifts)) {
+                this.log('❌ shiftsプロパティが配列ではありません', 'error');
                 throw new Error('shiftsプロパティが配列ではありません');
             }
 
+            this.log('✅ shifts配列を確認', 'info', { shiftCount: parsed.shifts.length });
             return parsed;
         } catch (error) {
-            console.error('JSON Parse Error:', error);
-            const lines = jsonString.split('\n');
-            lines.forEach((line, index) => {
-                console.error(`Line ${index + 1}: ${line}`);
-            });
+            this.log('❌ JSON解析エラー', 'error', error.message);
+            this.log('解析対象のJSON', 'error', jsonString);
 
             throw new Error(`AIからの応答をJSONとして解析できませんでした: ${error.message}`);
         }
     }
 
     cleanAndRepairJson(jsonString) {
+        this.log('cleanAndRepairJson 実行中...');
         jsonString = jsonString.trim();
 
         jsonString = jsonString.replace(/,\s*([}\]])/g, '$1');
-
         jsonString = jsonString.replace(/\}\s*\}\s*$/, '}');
         jsonString = jsonString.replace(/^\s*\{\s*\{/, '{');
 
         if (!jsonString.endsWith('}')) {
+            this.log('⚠️ JSONが不完全です。修復を試行します...', 'warn');
 
             const openBraces = (jsonString.match(/{/g) || []).length;
             const closeBraces = (jsonString.match(/}/g) || []).length;
             const openBrackets = (jsonString.match(/\[/g) || []).length;
             const closeBrackets = (jsonString.match(/\]/g) || []).length;
 
+            this.log('括弧の状況', 'info', {
+                openBraces,
+                closeBraces,
+                openBrackets,
+                closeBrackets
+            });
+
             let missingCloseBrackets = openBrackets - closeBrackets;
             let missingCloseBraces = openBraces - closeBraces;
 
             const lastCompleteEntry = this.findLastCompleteEntry(jsonString);
             if (lastCompleteEntry) {
+                this.log('✅ 最後の完全なエントリを使用');
                 jsonString = lastCompleteEntry;
             }
 
@@ -713,18 +929,21 @@ ${violations.slice(0, 5).join('\n')}
                 jsonString += '}';
                 missingCloseBraces--;
             }
-
         }
 
+        this.log('✅ JSON修復完了');
         return jsonString;
     }
 
     findLastCompleteEntry(jsonString) {
+        this.log('findLastCompleteEntry 実行中...');
         const shiftsMatch = jsonString.match(/"shifts":\s*\[([\s\S]*)/);
-        if (!shiftsMatch) return null;
+        if (!shiftsMatch) {
+            this.log('❌ shifts配列が見つかりません', 'error');
+            return null;
+        }
 
         const shiftsContent = shiftsMatch[1];
-
         const completeObjectPattern = /\{[^{}]*"date":\s*"[^"]+",\s*"assignments":\s*\[[^\]]*\]\s*\}/g;
         const matches = [];
         let match;
@@ -736,8 +955,12 @@ ${violations.slice(0, 5).join('\n')}
             });
         }
 
-        if (matches.length === 0) return null;
+        if (matches.length === 0) {
+            this.log('❌ 完全なエントリが見つかりません', 'error');
+            return null;
+        }
 
+        this.log('✅ 完全なエントリを発見', 'info', { entryCount: matches.length });
         const lastMatch = matches[matches.length - 1];
         const truncatedShifts = shiftsContent.substring(0, lastMatch.endIndex);
 
@@ -745,16 +968,25 @@ ${violations.slice(0, 5).join('\n')}
     }
 
     async saveShift(shiftData, storeId, year, month) {
+        this.log('saveShift 実行中...', 'info', { storeId, year, month });
+
         return await sequelize.transaction(async (t) => {
+            this.log('トランザクション開始');
+
             let shift = await Shift.findOne({ where: { store_id: storeId, year, month }, transaction: t });
             if (shift) {
+                this.log('既存のシフトを発見。シフト割り当てを削除中...', 'info', { shiftId: shift.id });
                 await ShiftAssignment.destroy({ where: { shift_id: shift.id }, transaction: t });
             } else {
+                this.log('新しいシフトを作成中...');
                 shift = await Shift.create({ store_id: storeId, year, month, status: 'draft' }, { transaction: t });
+                this.log('新しいシフトを作成完了', 'info', { shiftId: shift.id });
             }
 
             if (shiftData && shiftData.shifts) {
                 let assignmentCount = 0;
+                this.log('シフト割り当て保存開始', 'info', { dayCount: shiftData.shifts.length });
+
                 for (const dayShift of shiftData.shifts) {
                     if (dayShift.assignments && Array.isArray(dayShift.assignments)) {
                         for (const assignment of dayShift.assignments) {
@@ -769,7 +1001,10 @@ ${violations.slice(0, 5).join('\n')}
                         }
                     }
                 }
+                this.log('✅ シフト割り当て保存完了', 'info', { assignmentCount });
             }
+
+            this.log('トランザクション完了');
             return shiftData;
         });
     }
