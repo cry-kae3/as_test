@@ -261,8 +261,6 @@ class ShiftGeneratorService {
         return otherStoreShifts;
     }
 
-
-
     async validateGeneratedShift(shiftData, staffs, otherStoreShifts) {
         this.logProcess('VALIDATION_START', `シフト検証開始`);
         const violations = [];
@@ -311,11 +309,19 @@ class ShiftGeneratorService {
                     violations.push(`${staff.first_name} ${staff.last_name} (${date}): 他店舗（${conflictingShift.store_name}）と時間が重複`);
                 }
 
-                // 勤務不可曜日チェック
-                const availableDays = staff.dayPreferences?.filter(p => p.available).map(p => p.day_of_week) || [];
-                if (!availableDays.includes(dayOfWeek)) {
+                // 勤務不可曜日チェック（修正版）
+                console.log(`=== 勤務可否チェック: ${staff.first_name} ${staff.last_name} (${date}, 曜日=${dayOfWeek}) ===`);
+                console.log('スタッフの曜日設定:', JSON.stringify(staff.dayPreferences, null, 2));
+
+                const dayPreference = staff.dayPreferences?.find(p => p.day_of_week === dayOfWeek);
+                console.log(`該当曜日設定:`, dayPreference);
+
+                if (dayPreference && !dayPreference.available) {
                     const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
                     violations.push(`${staff.first_name} ${staff.last_name} (${date}): ${dayNames[dayOfWeek]}曜日は勤務不可`);
+                    console.log(`❌ 勤務不可曜日違反: ${dayNames[dayOfWeek]}曜日`);
+                } else {
+                    console.log(`✅ 勤務可能: ${dayOfWeek}曜日`);
                 }
 
                 // 休み希望チェック
@@ -561,10 +567,25 @@ class ShiftGeneratorService {
 
         // スタッフ制約の詳細をログ出力
         const staffConstraintDetails = staffs.map(staff => {
-            const unavailableDays = staff.dayPreferences?.filter(p => !p.available) || [];
+            console.log(`=== スタッフ ${staff.first_name} ${staff.last_name} の制約解析 ===`);
+            console.log('dayPreferences（生データ）:', JSON.stringify(staff.dayPreferences, null, 2));
+
+            const unavailableDays = staff.dayPreferences?.filter(p => {
+                console.log(`曜日${p.day_of_week}: available=${p.available}, type=${typeof p.available}`);
+                return p.available === false || p.available === 'false' || !p.available;
+            }) || [];
+
+            console.log('勤務不可曜日（フィルタ後）:', unavailableDays);
+
             const dayOffDates = staff.dayOffRequests?.filter(req =>
                 req.status === 'approved' || req.status === 'pending'
             ).map(req => req.date) || [];
+
+            const unavailableDayNames = unavailableDays.map(p =>
+                ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
+            );
+
+            console.log('勤務不可曜日名:', unavailableDayNames);
 
             return {
                 staffId: staff.id,
@@ -575,9 +596,7 @@ class ShiftGeneratorService {
                     dayName: ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week],
                     available: p.available
                 })),
-                unavailableDayNames: unavailableDays.map(p =>
-                    ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
-                ),
+                unavailableDayNames: unavailableDayNames,
                 dayOffDates: dayOffDates,
                 otherShifts: otherStoreShifts[staff.id] || []
             };
@@ -599,13 +618,24 @@ class ShiftGeneratorService {
     `;
 
         staffs.forEach(staff => {
-            const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
-                ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
-            ) || [];
+            console.log(`=== プロンプト生成: ${staff.first_name} ${staff.last_name} ===`);
+
+            const unavailableDays = staff.dayPreferences?.filter(p => {
+                const isUnavailable = p.available === false || p.available === 'false' || !p.available;
+                console.log(`曜日${p.day_of_week}: available=${p.available}, 勤務不可=${isUnavailable}`);
+                return isUnavailable;
+            }).map(p => {
+                const dayName = ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week];
+                console.log(`勤務不可曜日: ${p.day_of_week} → ${dayName}`);
+                return dayName;
+            }) || [];
+
             const dayOffDates = staff.dayOffRequests?.filter(req =>
                 req.status === 'approved' || req.status === 'pending'
             ).map(req => req.date) || [];
             const otherShifts = otherStoreShifts[staff.id] || [];
+
+            console.log(`最終的な勤務不可曜日: [${unavailableDays.join(', ')}]`);
 
             prompt += `【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
     - 月間勤務時間: このスタッフの月間合計勤務時間は、必ず ${staff.min_hours_per_month || 0} 時間から ${staff.max_hours_per_month || 160} 時間の範囲に収めてください。この範囲から逸脱してはいけません。
@@ -626,7 +656,9 @@ class ShiftGeneratorService {
         // プロンプトに反映された制約をログ出力
         this.logProcess('PROMPT_STAFF_CONSTRAINTS', `プロンプトに反映されたスタッフ制約`, {
             promptStaffConstraints: staffs.map(staff => {
-                const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
+                const unavailableDays = staff.dayPreferences?.filter(p => {
+                    return p.available === false || p.available === 'false' || !p.available;
+                }).map(p =>
                     ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
                 ) || [];
                 return {
@@ -702,7 +734,7 @@ class ShiftGeneratorService {
 
         return prompt;
     }
-    
+
     async callClaudeApi(prompt) {
         if (!this.claudeApiKey) {
             throw new Error('CLAUDE_API_KEY環境変数が設定されていません。.envファイルを確認してください。');
