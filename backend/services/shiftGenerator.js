@@ -400,73 +400,6 @@ class ShiftGeneratorService {
         }
     }
 
-    buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts) {
-        let prompt = `あなたはシフト管理システムです。以下の条件を参考にシフトを生成してください。
-
-## 期間情報
-- 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
-
-## スタッフ情報
-
-`;
-
-        staffs.forEach(staff => {
-            const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
-                ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
-            ) || [];
-            const dayOffDates = staff.dayOffRequests?.filter(req =>
-                req.status === 'approved' || req.status === 'pending'
-            ).map(req => req.date) || [];
-            const otherShifts = otherStoreShifts[staff.id] || [];
-
-            prompt += `【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
-- 月間勤務時間: このスタッフの月間合計勤務時間は、必ず ${staff.min_hours_per_month || 0} 時間から ${staff.max_hours_per_month || 160} 時間の範囲に収めてください。この範囲から逸脱してはいけません。
-- 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間
-- 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
-- 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}`;
-
-            if (otherShifts.length > 0) {
-                prompt += `
-- 他店舗勤務（重複不可）:`;
-                otherShifts.forEach(shift => {
-                    prompt += `\n  ${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`;
-                });
-            }
-            prompt += '\n';
-        });
-
-        prompt += `
-## 重要ルール
-1. 各スタッフの月間合計勤務時間は、指定された「月間勤務時間」の範囲内に必ず収めること。これが最も重要なルールです。
-2. スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てること。
-3. 各日付の人員要件（もしあれば）を満たすことを優先する。
-4. 勤務不可曜日と休み希望日には絶対に割り当てない。
-5. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない。
-6. 他店舗で既に勤務がある日時には絶対に割り当てない（同じ時間帯に複数店舗で勤務することはできない）。
-
-## 出力形式
-以下のJSON形式で正確に出力してください。余計な説明は不要です。
-重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
-
-\`\`\`json
-{
-  "shifts": [
-    {
-      "date": "YYYY-MM-DD",
-      "assignments": [
-        {
-          "staff_id": 1,
-          "start_time": "09:00", 
-          "end_time": "17:00"
-        }
-      ]
-    }
-  ]
-}
-\`\`\``;
-
-        return prompt;
-    }
 
     async validateGeneratedShift(shiftData, staffs, otherStoreShifts) {
         this.logProcess('VALIDATION_START', `シフト検証開始`);
@@ -607,14 +540,129 @@ class ShiftGeneratorService {
         return { isValid, violations, warnings };
     }
 
+    // backend/services/shiftGenerator.js の修正
+
+    buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts) {
+        // 期間内の全日付を生成
+        const allDates = [];
+        const startDate = period.startDate.clone();
+        while (startDate.isSameOrBefore(period.endDate)) {
+            allDates.push(startDate.format('YYYY-MM-DD'));
+            startDate.add(1, 'day');
+        }
+
+        let prompt = `あなたはシフト管理システムです。以下の条件を参考にシフトを生成してください。
+
+## 期間情報
+- 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
+- 生成する日数: ${allDates.length}日間
+- 生成対象日付: ${allDates.join(', ')}
+
+## スタッフ情報
+
+`;
+
+        staffs.forEach(staff => {
+            const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
+                ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
+            ) || [];
+            const dayOffDates = staff.dayOffRequests?.filter(req =>
+                req.status === 'approved' || req.status === 'pending'
+            ).map(req => req.date) || [];
+            const otherShifts = otherStoreShifts[staff.id] || [];
+
+            prompt += `【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
+- 月間勤務時間: このスタッフの月間合計勤務時間は、必ず ${staff.min_hours_per_month || 0} 時間から ${staff.max_hours_per_month || 160} 時間の範囲に収めてください。この範囲から逸脱してはいけません。
+- 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間
+- 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
+- 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}`;
+
+            if (otherShifts.length > 0) {
+                prompt += `
+- 他店舗勤務（重複不可）:`;
+                otherShifts.forEach(shift => {
+                    prompt += `\n  ${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`;
+                });
+            }
+            prompt += '\n';
+        });
+
+        prompt += `
+## 重要ルール
+1. 各スタッフの月間合計勤務時間は、指定された「月間勤務時間」の範囲内に必ず収めること。これが最も重要なルールです。
+2. **期間内のすべての日付（${allDates.length}日間）について、適切なスタッフ配置を考慮してシフトを生成すること。**
+3. スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てること。
+4. 各日付の人員要件（もしあれば）を満たすことを優先する。
+5. 勤務不可曜日と休み希望日には絶対に割り当てない。
+6. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない。
+7. 他店舗で既に勤務がある日時には絶対に割り当てない（同じ時間帯に複数店舗で勤務することはできない）。
+8. **すべての日付に少なくとも1人以上のスタッフを配置するよう努めること。**
+
+## 営業時間と店舗要件
+- 営業時間: ${store.opening_time} - ${store.closing_time}`;
+
+        // 店舗の人員要件を追加
+        if (storeRequirements && storeRequirements.length > 0) {
+            prompt += '\n- 人員要件:';
+            storeRequirements.forEach(req => {
+                if (req.day_of_week !== null) {
+                    const dayName = ['日', '月', '火', '水', '木', '金', '土'][req.day_of_week];
+                    prompt += `\n  ${dayName}曜日 ${req.start_time}-${req.end_time}: ${req.required_staff_count}人`;
+                }
+            });
+        }
+
+        // 定休日情報を追加
+        if (storeClosedDays && storeClosedDays.length > 0) {
+            prompt += '\n- 定休日:';
+            storeClosedDays.forEach(closedDay => {
+                if (closedDay.day_of_week !== null) {
+                    const dayName = ['日', '月', '火', '水', '木', '金', '土'][closedDay.day_of_week];
+                    prompt += `\n  ${dayName}曜日`;
+                } else if (closedDay.specific_date) {
+                    prompt += `\n  ${closedDay.specific_date}`;
+                }
+            });
+        }
+
+        prompt += `
+
+## 出力形式
+以下のJSON形式で正確に出力してください。**期間内のすべての日付（${allDates.length}日間）について出力してください。**
+重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
+
+\`\`\`json
+{
+  "shifts": [
+    {
+      "date": "YYYY-MM-DD",
+      "assignments": [
+        {
+          "staff_id": 1,
+          "start_time": "09:00", 
+          "end_time": "17:00"
+        }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+**注意: 必ず期間内のすべての日付（${period.startDate.format('YYYY-MM-DD')}から${period.endDate.format('YYYY-MM-DD')}まで）についてシフトを生成してください。定休日や勤務できる人がいない日でも、空の assignments 配列でdate要素を含めてください。**`;
+
+        return prompt;
+    }
+
+    // Claude APIのモデル名をSonnet 4に更新
+    // Claude APIのモデル名をSonnet 4に更新
     async callClaudeApi(prompt) {
         if (!this.claudeApiKey) {
             throw new Error('CLAUDE_API_KEY環境変数が設定されていません。.envファイルを確認してください。');
         }
 
         const data = {
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 8192,
+            model: 'claude-sonnet-4-20250514', // Claude Sonnet 4に更新
+            max_tokens: 8192, // Claude Sonnet 4の最大出力トークン数（64K）
             temperature: 0.1,
             messages: [{ role: 'user', content: prompt }]
         };
@@ -628,6 +676,15 @@ class ShiftGeneratorService {
             timeout: 120000
         };
 
+        // SSL証明書検証の無効化設定を継承
+        if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
+            const https = require('https');
+            config.httpsAgent = new https.Agent({
+                rejectUnauthorized: false
+            });
+            this.logProcess('SSL_CHECK_DISABLED', 'SSL証明書検証を無効化してAPI呼び出しを実行');
+        }
+
         try {
             const startTime = Date.now();
             const response = await axios.post(this.claudeApiUrl, data, config);
@@ -636,7 +693,12 @@ class ShiftGeneratorService {
             this.logProcess('API_CALL_SUCCESS', `Claude API呼び出し成功`, {
                 responseTime: endTime - startTime,
                 status: response.status,
-                contentLength: JSON.stringify(response.data).length
+                contentLength: JSON.stringify(response.data).length,
+                model: data.model,
+                inputTokens: response.data.usage?.input_tokens,
+                outputTokens: response.data.usage?.output_tokens,
+                stopReason: response.data.stop_reason,
+                sslDisabled: process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0'
             });
 
             return response.data;
@@ -644,7 +706,11 @@ class ShiftGeneratorService {
             this.logError('API_CALL_ERROR', error, {
                 status: error.response?.status,
                 statusText: error.response?.statusText,
-                data: error.response?.data
+                data: error.response?.data,
+                model: data.model,
+                sslDisabled: process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0',
+                errorCode: error.code,
+                errorMessage: error.message
             });
             throw error;
         }
