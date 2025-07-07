@@ -32,7 +32,6 @@ class ShiftGeneratorService {
     }
 
     initializeSession(storeId, year, month) {
-        // 日本時間でのタイムスタンプ生成
         const now = moment().tz('Asia/Tokyo');
         const dateTimeString = now.format('YYYY年MM月DD日_HH時mm分ss秒');
 
@@ -61,9 +60,7 @@ class ShiftGeneratorService {
             data
         };
 
-        // コンソール出力は簡潔に（大きなデータは省略）
         if (data && (data.prompt || data.response || data.parsedData)) {
-            // プロンプトやレスポンスなど大きなデータの場合は、サイズ情報のみコンソール出力
             const dataInfo = {};
             if (data.promptLength) dataInfo.promptLength = data.promptLength;
             if (data.responseLength) dataInfo.responseLength = data.responseLength;
@@ -75,7 +72,6 @@ class ShiftGeneratorService {
             console.log(`[${phase}] ${message}`, data || '');
         }
 
-        // ログファイルには全ての詳細データを含める
         if (this.currentSessionLog) {
             this.currentSessionLog.processes.push(logEntry);
         }
@@ -111,7 +107,6 @@ class ShiftGeneratorService {
                 this.logError('SESSION_END', error);
             }
 
-            // ログファイルに書き込み（日本時間ベースのファイル名）
             const logFileName = `${this.sessionId}.log`;
             const logFilePath = path.join(this.logDir, logFileName);
 
@@ -122,7 +117,6 @@ class ShiftGeneratorService {
                 console.error('ログ書き込みエラー:', writeError);
             }
 
-            // セッション情報をクリア
             this.currentSessionLog = null;
             this.sessionId = null;
         }
@@ -131,7 +125,6 @@ class ShiftGeneratorService {
     getShiftPeriod(year, month, closingDay) {
         this.logProcess('PERIOD_CALCULATION', `期間計算: ${year}年${month}月（締め日: ${closingDay}日）`);
 
-        // 元のロジック: 締め日25日の場合、26日～25日の期間を生成
         const targetMonth = moment.tz(`${year}-${String(month).padStart(2, '0')}-01`, "Asia/Tokyo");
         const endDate = targetMonth.date(closingDay).startOf('day');
         const startDate = endDate.clone().subtract(1, 'month').add(1, 'day').startOf('day');
@@ -261,12 +254,191 @@ class ShiftGeneratorService {
         return otherStoreShifts;
     }
 
+    // 🔥 完全リアルタイムデータベース取得
+    async fetchRealTimeStaffData(storeId, period) {
+        this.logProcess('REALTIME_STAFF_FETCH', `🔥 リアルタイムスタッフデータ取得開始`, { storeId });
+
+        // 🔥 強制的に最新データをデータベースから取得（キャッシュ無効）
+        const staffWithStores = await Staff.findAll({
+            include: [
+                {
+                    model: Store,
+                    as: 'stores',
+                    where: { id: storeId },
+                    attributes: ['id', 'name'],
+                    through: { attributes: [] }
+                },
+                {
+                    model: Store,
+                    as: 'stores',
+                    attributes: ['id', 'name'],
+                    through: { attributes: [] },
+                    required: false
+                }
+            ],
+            // 🔥 強制的にデータベースから取得
+            logging: (sql) => {
+                console.log('🔥 EXECUTING SQL:', sql);
+            }
+        });
+
+        this.logProcess('WORKABLE_STAFF_COUNT', `勤務可能スタッフ数`, { count: staffWithStores.length });
+
+        // 🔥 各スタッフの最新希望シフトを個別に取得
+        const finalStaffData = [];
+
+        for (const staff of staffWithStores) {
+            this.logProcess('FETCH_STAFF_PREFERENCES', `スタッフ${staff.id}の希望シフト取得中`, {
+                staffId: staff.id,
+                staffName: `${staff.last_name} ${staff.first_name}`
+            });
+
+            // 🔥 最新の希望シフトを強制取得
+            const latestPreferences = await StaffDayPreference.findAll({
+                where: { staff_id: staff.id },
+                order: [['day_of_week', 'ASC'], ['updatedAt', 'DESC']],
+                // 🔥 強制的にデータベースから取得
+                logging: (sql) => {
+                    console.log(`🔥 PREFERENCES SQL for staff ${staff.id}:`, sql);
+                }
+            });
+
+            // 🔥 最新の休み希望を強制取得
+            const latestDayOffRequests = await StaffDayOffRequest.findAll({
+                where: {
+                    staff_id: staff.id,
+                    date: {
+                        [Op.between]: [
+                            period.startDate.format('YYYY-MM-DD'),
+                            period.endDate.format('YYYY-MM-DD')
+                        ]
+                    }
+                },
+                // 🔥 強制的にデータベースから取得
+                logging: (sql) => {
+                    console.log(`🔥 DAY OFF SQL for staff ${staff.id}:`, sql);
+                }
+            });
+
+            // 🔥 希望シフトの詳細ログ
+            this.logProcess('STAFF_PREFERENCES_DETAIL', `スタッフ${staff.id}の希望シフト詳細`, {
+                staffId: staff.id,
+                staffName: `${staff.last_name} ${staff.first_name}`,
+                preferencesCount: latestPreferences.length,
+                dayOffCount: latestDayOffRequests.length,
+                preferences: latestPreferences.map(pref => ({
+                    day_of_week: pref.day_of_week,
+                    dayName: ['日', '月', '火', '水', '木', '金', '土'][pref.day_of_week],
+                    available: pref.available,
+                    availableType: typeof pref.available,
+                    updatedAt: pref.updatedAt,
+                    preferred_start_time: pref.preferred_start_time,
+                    preferred_end_time: pref.preferred_end_time
+                }))
+            });
+
+            // スタッフデータを結合
+            const staffObj = staff.toJSON();
+            staffObj.dayPreferences = latestPreferences.map(pref => pref.toJSON());
+            staffObj.dayOffRequests = latestDayOffRequests.map(req => req.toJSON());
+
+            finalStaffData.push(staffObj);
+        }
+
+        // 🔥 AI生成対象フィルタリング
+        const aiTargetStaffIds = await sequelize.query(`
+            SELECT DISTINCT staff_id 
+            FROM staff_ai_generation_stores 
+            WHERE store_id = :storeId
+        `, {
+            replacements: { storeId },
+            type: sequelize.QueryTypes.SELECT,
+            logging: (sql) => {
+                console.log('🔥 AI TARGET SQL:', sql);
+            }
+        });
+
+        const aiTargetIds = aiTargetStaffIds.map(row => row.staff_id);
+        this.logProcess('AI_TARGET_IDS', `AI生成対象スタッフID`, { aiTargetIds });
+
+        // AI生成対象のフィルタリング
+        let targetStaff;
+        if (aiTargetIds.length > 0) {
+            targetStaff = finalStaffData.filter(staff => aiTargetIds.includes(staff.id));
+            this.logProcess('AI_TARGET_FILTERED', `AI生成対象によるフィルタリング完了`, {
+                filteredCount: targetStaff.length,
+                originalCount: finalStaffData.length,
+                filteredStaffIds: targetStaff.map(s => s.id)
+            });
+        } else {
+            targetStaff = finalStaffData;
+            this.logProcess('NO_AI_FILTER', `AI生成対象設定なし、全勤務可能スタッフを対象`, {
+                count: targetStaff.length
+            });
+        }
+
+        // 🔥 データ整合性チェック
+        this.logProcess('DATA_INTEGRITY_CHECK', `データ整合性チェック`, {
+            totalWorkableStaff: finalStaffData.length,
+            aiTargetStaff: targetStaff.length,
+            staffWithoutPreferences: targetStaff.filter(s => !s.dayPreferences || s.dayPreferences.length === 0).length,
+            staffWithIncompletePreferences: targetStaff.filter(s => s.dayPreferences && s.dayPreferences.length < 7).length
+        });
+
+        return targetStaff;
+    }
+
+    // 🔥 データ正規化（Boolean型統一）
+    normalizeStaffData(staffs) {
+        this.logProcess('NORMALIZE_DATA', `データ正規化開始`, { staffCount: staffs.length });
+
+        const normalizedStaffs = staffs.map(staff => {
+            if (staff.dayPreferences) {
+                staff.dayPreferences = staff.dayPreferences.map(pref => {
+                    // 🔥 Boolean型に強制統一
+                    let normalizedAvailable;
+                    if (pref.available === null || pref.available === undefined) {
+                        normalizedAvailable = false;
+                    } else if (typeof pref.available === 'string') {
+                        normalizedAvailable = pref.available === 'true' || pref.available === '1';
+                    } else {
+                        normalizedAvailable = Boolean(pref.available);
+                    }
+
+                    return {
+                        ...pref,
+                        available: normalizedAvailable
+                    };
+                });
+            }
+
+            return staff;
+        });
+
+        // 🔥 正規化結果の詳細ログ
+        this.logProcess('NORMALIZE_RESULT', `正規化結果`, {
+            normalizedStaffs: normalizedStaffs.map(staff => ({
+                id: staff.id,
+                name: `${staff.last_name} ${staff.first_name}`,
+                dayPreferencesNormalized: staff.dayPreferences?.map(pref => ({
+                    day_of_week: pref.day_of_week,
+                    dayName: ['日', '月', '火', '水', '木', '金', '土'][pref.day_of_week],
+                    original: pref.available,
+                    type: typeof pref.available,
+                    updatedAt: pref.updatedAt
+                })) || []
+            }))
+        });
+
+        return normalizedStaffs;
+    }
+
     async validateGeneratedShift(shiftData, staffs, otherStoreShifts) {
         this.logProcess('VALIDATION_START', `シフト検証開始`);
         const violations = [];
         const warnings = [];
         const staffWorkHours = {};
-        const staffHoursSummary = {}; // スタッフ時間の詳細サマリー
+        const staffHoursSummary = {};
 
         if (!shiftData || !shiftData.shifts) {
             return { isValid: false, violations: ['シフトデータが不正です'], warnings: [] };
@@ -309,19 +481,16 @@ class ShiftGeneratorService {
                     violations.push(`${staff.first_name} ${staff.last_name} (${date}): 他店舗（${conflictingShift.store_name}）と時間が重複`);
                 }
 
-                // 勤務不可曜日チェック（修正版）
-                console.log(`=== 勤務可否チェック: ${staff.first_name} ${staff.last_name} (${date}, 曜日=${dayOfWeek}) ===`);
-                console.log('スタッフの曜日設定:', JSON.stringify(staff.dayPreferences, null, 2));
-
+                // 🔥 勤務不可曜日チェック（正規化後のデータで）
                 const dayPreference = staff.dayPreferences?.find(p => p.day_of_week === dayOfWeek);
-                console.log(`該当曜日設定:`, dayPreference);
 
-                if (dayPreference && !dayPreference.available) {
-                    const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-                    violations.push(`${staff.first_name} ${staff.last_name} (${date}): ${dayNames[dayOfWeek]}曜日は勤務不可`);
-                    console.log(`❌ 勤務不可曜日違反: ${dayNames[dayOfWeek]}曜日`);
-                } else {
-                    console.log(`✅ 勤務可能: ${dayOfWeek}曜日`);
+                if (dayPreference) {
+                    const isAvailable = Boolean(dayPreference.available);
+
+                    if (!isAvailable) {
+                        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+                        violations.push(`${staff.first_name} ${staff.last_name} (${date}): ${dayNames[dayOfWeek]}曜日は勤務不可`);
+                    }
                 }
 
                 // 休み希望チェック
@@ -394,11 +563,6 @@ class ShiftGeneratorService {
 
         const isValid = violations.length === 0;
 
-        // 詳細な時間情報をログに記録
-        this.logProcess('STAFF_HOURS_DETAIL', `スタッフ時間詳細`, {
-            staffHoursSummary: staffHoursSummary
-        });
-
         this.logProcess('VALIDATION_COMPLETE', `検証完了`, {
             isValid,
             violationCount: violations.length,
@@ -426,38 +590,19 @@ class ShiftGeneratorService {
 
             const period = this.getShiftPeriod(year, month, closingDay);
 
-            this.logProcess('STAFF_FETCH', `スタッフ情報取得開始`);
-            const staffs = await Staff.findAll({
-                include: [
-                    {
-                        model: Store,
-                        as: 'aiGenerationStores',
-                        where: { id: storeId },
-                        attributes: ['id', 'name'],
-                    },
-                    {
-                        model: Store,
-                        as: 'stores',
-                        attributes: ['id', 'name'],
-                        through: { attributes: [] },
-                        required: false
-                    },
-                    { model: StaffDayPreference, as: 'dayPreferences' },
-                    {
-                        model: StaffDayOffRequest,
-                        as: 'dayOffRequests',
-                        where: { date: { [Op.between]: [period.startDate.format('YYYY-MM-DD'), period.endDate.format('YYYY-MM-DD')] } },
-                        required: false
-                    }
-                ]
-            });
+            // 🔥 完全リアルタイムデータベース取得
+            this.logProcess('STAFF_FETCH', `🔥 リアルタイムスタッフ情報取得開始`);
+            const rawStaffs = await this.fetchRealTimeStaffData(storeId, period);
 
-            if (staffs.length === 0) {
-                throw new Error('この店舗にAI生成対象のスタッフがいません。');
+            if (rawStaffs.length === 0) {
+                throw new Error('この店舗に勤務可能なスタッフがいません。');
             }
 
+            // 🔥 データ正規化
+            const staffs = this.normalizeStaffData(rawStaffs);
+
             // 詳細なスタッフ情報をログ出力
-            this.logProcess('STAFF_RESULT', `スタッフ情報取得完了`, {
+            this.logProcess('STAFF_RESULT', `🔥 リアルタイムスタッフ情報取得完了`, {
                 staffCount: staffs.length,
                 staffDetails: staffs.map(staff => ({
                     id: staff.id,
@@ -466,11 +611,12 @@ class ShiftGeneratorService {
                     totalMaxHours: staff.max_hours_per_month || 160,
                     dayPreferences: staff.dayPreferences?.length || 0,
                     daysOff: staff.dayOffRequests?.length || 0,
-                    // 詳細な曜日設定を追加
                     dayPreferencesDetail: staff.dayPreferences?.map(pref => ({
                         day_of_week: pref.day_of_week,
                         dayName: ['日', '月', '火', '水', '木', '金', '土'][pref.day_of_week],
                         available: pref.available,
+                        availableType: typeof pref.available,
+                        updatedAt: pref.updatedAt,
                         preferred_start_time: pref.preferred_start_time,
                         preferred_end_time: pref.preferred_end_time
                     })) || []
@@ -487,34 +633,31 @@ class ShiftGeneratorService {
                 requirementsCount: storeRequirements.length
             });
 
-            // プロンプト生成（1回のみ）
+            // プロンプト生成
             const prompt = this.buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts);
             this.logProcess('PROMPT_GENERATION', `AIプロンプト生成完了`, {
-                promptLength: prompt.length,
-                prompt: prompt
+                promptLength: prompt.length
             });
 
-            // Claude API呼び出し（1回のみ）
+            // Claude API呼び出し
             this.logProcess('AI_API_CALL', `Claude API呼び出し開始`);
             const response = await this.callClaudeApi(prompt);
             this.logProcess('AI_API_RESULT', `Claude APIレスポンス受信完了`, {
-                responseLength: JSON.stringify(response).length,
-                response: response
+                responseLength: JSON.stringify(response).length
             });
 
             // レスポンス解析
             this.logProcess('RESPONSE_PARSING', `レスポンス解析開始`);
             const generatedShiftData = this.parseClaudeResponse(response);
             this.logProcess('RESPONSE_PARSING_RESULT', `レスポンス解析完了`, {
-                parsedShifts: generatedShiftData?.shifts?.length || 0,
-                parsedData: generatedShiftData
+                parsedShifts: generatedShiftData?.shifts?.length || 0
             });
 
             if (!generatedShiftData || !generatedShiftData.shifts || !Array.isArray(generatedShiftData.shifts)) {
                 throw new Error('生成されたシフトデータの構造が不正です');
             }
 
-            // バリデーション（警告のみ、エラーでも続行）
+            // バリデーション
             this.logProcess('VALIDATION', `バリデーション実行中`);
             const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, otherStoreShifts);
             this.logProcess('VALIDATION_RESULT', `バリデーション完了`, {
@@ -565,17 +708,12 @@ class ShiftGeneratorService {
             startDate.add(1, 'day');
         }
 
-        // スタッフ制約の詳細をログ出力
+        // 🔥 リアルタイムデータに基づくスタッフ制約解析
         const staffConstraintDetails = staffs.map(staff => {
-            console.log(`=== スタッフ ${staff.first_name} ${staff.last_name} の制約解析 ===`);
-            console.log('dayPreferences（生データ）:', JSON.stringify(staff.dayPreferences, null, 2));
-
             const unavailableDays = staff.dayPreferences?.filter(p => {
-                console.log(`曜日${p.day_of_week}: available=${p.available}, type=${typeof p.available}`);
-                return p.available === false || p.available === 'false' || !p.available;
+                const isAvailable = Boolean(p.available);
+                return !isAvailable;
             }) || [];
-
-            console.log('勤務不可曜日（フィルタ後）:', unavailableDays);
 
             const dayOffDates = staff.dayOffRequests?.filter(req =>
                 req.status === 'approved' || req.status === 'pending'
@@ -585,24 +723,16 @@ class ShiftGeneratorService {
                 ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
             );
 
-            console.log('勤務不可曜日名:', unavailableDayNames);
-
             return {
                 staffId: staff.id,
                 staffName: `${staff.first_name} ${staff.last_name}`,
-                rawDayPreferences: staff.dayPreferences,
-                unavailableDays: unavailableDays.map(p => ({
-                    day_of_week: p.day_of_week,
-                    dayName: ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week],
-                    available: p.available
-                })),
                 unavailableDayNames: unavailableDayNames,
                 dayOffDates: dayOffDates,
                 otherShifts: otherStoreShifts[staff.id] || []
             };
         });
 
-        this.logProcess('STAFF_CONSTRAINT_DETAIL', `スタッフ制約詳細解析`, {
+        this.logProcess('🔥 REALTIME_STAFF_CONSTRAINTS', `🔥 リアルタイムスタッフ制約解析`, {
             staffConstraints: staffConstraintDetails
         });
 
@@ -618,15 +748,11 @@ class ShiftGeneratorService {
     `;
 
         staffs.forEach(staff => {
-            console.log(`=== プロンプト生成: ${staff.first_name} ${staff.last_name} ===`);
-
             const unavailableDays = staff.dayPreferences?.filter(p => {
-                const isUnavailable = p.available === false || p.available === 'false' || !p.available;
-                console.log(`曜日${p.day_of_week}: available=${p.available}, 勤務不可=${isUnavailable}`);
-                return isUnavailable;
+                const isAvailable = Boolean(p.available);
+                return !isAvailable;
             }).map(p => {
                 const dayName = ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week];
-                console.log(`勤務不可曜日: ${p.day_of_week} → ${dayName}`);
                 return dayName;
             }) || [];
 
@@ -634,8 +760,6 @@ class ShiftGeneratorService {
                 req.status === 'approved' || req.status === 'pending'
             ).map(req => req.date) || [];
             const otherShifts = otherStoreShifts[staff.id] || [];
-
-            console.log(`最終的な勤務不可曜日: [${unavailableDays.join(', ')}]`);
 
             prompt += `【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
     - 月間勤務時間: このスタッフの月間合計勤務時間は、必ず ${staff.min_hours_per_month || 0} 時間から ${staff.max_hours_per_month || 160} 時間の範囲に収めてください。この範囲から逸脱してはいけません。
@@ -651,22 +775,6 @@ class ShiftGeneratorService {
                 });
             }
             prompt += '\n';
-        });
-
-        // プロンプトに反映された制約をログ出力
-        this.logProcess('PROMPT_STAFF_CONSTRAINTS', `プロンプトに反映されたスタッフ制約`, {
-            promptStaffConstraints: staffs.map(staff => {
-                const unavailableDays = staff.dayPreferences?.filter(p => {
-                    return p.available === false || p.available === 'false' || !p.available;
-                }).map(p =>
-                    ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
-                ) || [];
-                return {
-                    staffId: staff.id,
-                    staffName: `${staff.first_name} ${staff.last_name}`,
-                    promptUnavailableDays: unavailableDays
-                };
-            })
         });
 
         prompt += `
@@ -741,8 +849,8 @@ class ShiftGeneratorService {
         }
 
         const data = {
-            model: 'claude-sonnet-4-20250514', // Claude Sonnet 4に更新
-            max_tokens: 8192, // Claude Sonnet 4の最大出力トークン数（64K）
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 8192,
             temperature: 0.1,
             messages: [{ role: 'user', content: prompt }]
         };
@@ -756,7 +864,6 @@ class ShiftGeneratorService {
             timeout: 120000
         };
 
-        // SSL証明書検証の無効化設定を継承
         if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
             const https = require('https');
             config.httpsAgent = new https.Agent({

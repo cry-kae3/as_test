@@ -136,7 +136,8 @@
       :header="isEdit ? 'スタッフ編集' : '新規スタッフ'"
       :modal="true"
       class="staff-dialog"
-      :style="{ width: '800px' }"
+      :style="{ width: '900px', maxWidth: '95vw' }"
+      :breakpoints="{ '960px': '95vw', '640px': '95vw' }"
     >
       <div class="dialog-content">
         <TabView>
@@ -305,45 +306,81 @@
 
           <TabPanel header="希望シフト">
             <div class="day-preferences">
-              <h4>曜日別設定</h4>
-              <div class="preferences-grid">
+              <div class="preferences-header">
+                <h4>曜日別勤務設定</h4>
+                <p class="preferences-description">
+                  各曜日の勤務可否と希望時間を設定してください。
+                  時間は24時間形式（例：09:00）で入力してください。
+                </p>
+              </div>
+
+              <div class="preferences-container">
                 <div
                   v-for="(day, index) in dayOptions"
                   :key="day.value"
-                  class="day-preference"
+                  class="day-preference-card"
                 >
-                  <div class="day-header">
-                    <Checkbox
-                      :id="`available-${index}`"
-                      v-model="formData.day_preferences[index].available"
-                      :binary="true"
-                    />
-                    <label :for="`available-${index}`" class="day-label">
-                      {{ day.label }}
-                    </label>
+                  <div class="day-preference-header">
+                    <div class="day-checkbox-wrapper">
+                      <Checkbox
+                        :id="`available-${index}`"
+                        v-model="formData.day_preferences[index].available"
+                        :binary="true"
+                      />
+                      <label :for="`available-${index}`" class="day-name">
+                        {{ day.label }}
+                      </label>
+                    </div>
+                    <div class="availability-status" :class="{ active: formData.day_preferences[index].available }">
+                      {{ formData.day_preferences[index].available ? '勤務可' : '勤務不可' }}
+                    </div>
                   </div>
 
                   <div
                     v-if="formData.day_preferences[index].available"
-                    class="time-inputs"
+                    class="time-settings"
                   >
-                    <div class="time-group">
-                      <label>希望開始時間</label>
+                    <div class="time-input-group">
+                      <label class="time-label">開始時間</label>
                       <InputMask
                         v-model="formData.day_preferences[index].preferred_start_time"
                         mask="99:99"
                         placeholder="09:00"
+                        class="time-input"
                       />
                     </div>
-                    <div class="time-group">
-                      <label>希望終了時間</label>
+                    <div class="time-separator">〜</div>
+                    <div class="time-input-group">
+                      <label class="time-label">終了時間</label>
                       <InputMask
                         v-model="formData.day_preferences[index].preferred_end_time"
                         mask="99:99"
                         placeholder="18:00"
+                        class="time-input"
                       />
                     </div>
                   </div>
+
+                  <div
+                    v-else
+                    class="unavailable-message"
+                  >
+                    この曜日は勤務不可に設定されています
+                  </div>
+                </div>
+              </div>
+
+              <div class="preferences-note">
+                <div class="note-icon">
+                  <i class="pi pi-info-circle"></i>
+                </div>
+                <div class="note-content">
+                  <p><strong>設定のヒント：</strong></p>
+                  <ul>
+                    <li>勤務可能な曜日にチェックを入れてください</li>
+                    <li>希望時間が未入力の場合、AI生成時に店舗の営業時間内で自動設定されます</li>
+                    <li>設定後もシフト管理画面で個別に調整可能です</li>
+                  </ul>
                 </div>
               </div>
             </div>
@@ -351,14 +388,23 @@
 
           <TabPanel header="休み希望">
             <div class="day-off-requests">
-              <h4>休み希望</h4>
-              <div class="day-off-controls">
+              <div class="day-off-header">
+                <h4>休み希望管理</h4>
                 <Button
                   label="新しい休み希望を追加"
                   icon="pi pi-plus"
                   @click="addDayOffRequest"
                   class="p-button-success"
+                  size="small"
                 />
+              </div>
+
+              <div v-if="formData.day_off_requests.length === 0" class="no-requests">
+                <div class="no-requests-icon">
+                  <i class="pi pi-calendar-times"></i>
+                </div>
+                <p>休み希望がありません</p>
+                <p class="no-requests-sub">上のボタンから新しい休み希望を追加できます</p>
               </div>
 
               <div
@@ -366,33 +412,40 @@
                 :key="index"
                 class="day-off-item"
               >
-                <div class="day-off-inputs">
-                  <div class="input-group">
-                    <label>日付</label>
+                <div class="day-off-content">
+                  <div class="day-off-field">
+                    <label class="field-label">日付</label>
                     <Calendar
                       v-model="request.date"
                       dateFormat="yy-mm-dd"
                       :showIcon="true"
+                      placeholder="日付を選択"
                     />
                   </div>
-                  <div class="input-group">
-                    <label>理由</label>
-                    <InputText v-model="request.reason" placeholder="理由を入力" />
+                  <div class="day-off-field">
+                    <label class="field-label">理由</label>
+                    <InputText 
+                      v-model="request.reason" 
+                      placeholder="理由を入力してください"
+                      class="reason-input"
+                    />
                   </div>
-                  <div class="input-group">
-                    <label>ステータス</label>
+                  <div class="day-off-field">
+                    <label class="field-label">ステータス</label>
                     <Dropdown
                       v-model="request.status"
                       :options="dayOffStatusOptions"
                       optionLabel="label"
                       optionValue="value"
+                      placeholder="ステータス"
                     />
                   </div>
-                  <div class="input-group">
+                  <div class="day-off-actions">
                     <Button
                       icon="pi pi-trash"
-                      class="p-button-danger p-button-rounded"
+                      class="p-button-danger p-button-text p-button-rounded"
                       @click="removeDayOffRequest(index)"
+                      title="削除"
                     />
                   </div>
                 </div>
@@ -846,7 +899,7 @@ export default {
   gap: 0.25rem;
 }
 
-.staff-dialog .p-dialog-content {
+.staff-dialog :deep(.p-dialog-content) {
   padding: 0;
 }
 
@@ -923,97 +976,265 @@ export default {
   cursor: pointer;
 }
 
+/* 希望シフトタブの改善されたスタイル */
 .day-preferences {
-  padding: 1rem;
+  padding: 1.5rem;
+  background-color: #f9fafb;
+  min-height: 400px;
 }
 
-.day-preferences h4 {
-  margin: 0 0 1rem 0;
-  color: #374151;
-  font-weight: 600;
+.preferences-header {
+  margin-bottom: 2rem;
+  text-align: center;
 }
 
-.preferences-grid {
+.preferences-header h4 {
+  margin: 0 0 0.5rem 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.preferences-description {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.preferences-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1rem;
+  margin-bottom: 2rem;
 }
 
-.day-preference {
+.day-preference-card {
+  background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: 12px;
+  padding: 1.25rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.day-header {
+.day-preference-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.day-preference-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.day-checkbox-wrapper {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.day-label {
-  font-weight: 600;
-  color: #374151;
-  cursor: pointer;
-}
-
-.time-inputs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
 }
 
-.time-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+.day-name {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1f2937;
+  cursor: pointer;
+  user-select: none;
 }
 
-.time-group label {
+.availability-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #fee2e2;
+  color: #991b1b;
+  transition: all 0.2s ease;
+}
+
+.availability-status.active {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.time-settings {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: end;
+  padding: 1rem;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.time-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.time-label {
   font-size: 0.875rem;
   font-weight: 500;
+  color: #4b5563;
+}
+
+.time-input {
+  width: 100%;
+}
+
+.time-separator {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #6b7280;
+  text-align: center;
+  padding-bottom: 0.25rem;
+}
+
+.unavailable-message {
+  padding: 1rem;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #991b1b;
+  font-size: 0.875rem;
+  text-align: center;
+  font-style: italic;
+}
+
+.preferences-note {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  margin-top: 1rem;
+}
+
+.note-icon {
+  color: #3b82f6;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.note-content {
+  flex: 1;
+}
+
+.note-content p {
+  margin: 0 0 0.5rem 0;
+  color: #1e40af;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.note-content ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #1e40af;
+}
+
+.note-content li {
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+/* 休み希望タブのスタイル */
+.day-off-requests {
+  padding: 1.5rem;
+}
+
+.day-off-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.day-off-header h4 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.no-requests {
+  text-align: center;
+  padding: 3rem 1rem;
   color: #6b7280;
 }
 
-.day-off-requests {
-  padding: 1rem;
-}
-
-.day-off-requests h4 {
-  margin: 0 0 1rem 0;
-  color: #374151;
-  font-weight: 600;
-}
-
-.day-off-controls {
+.no-requests-icon {
+  font-size: 3rem;
   margin-bottom: 1rem;
+  color: #d1d5db;
+}
+
+.no-requests p {
+  margin: 0.5rem 0;
+}
+
+.no-requests-sub {
+  font-size: 0.875rem;
 }
 
 .day-off-item {
   margin-bottom: 1rem;
-  padding: 1rem;
+  padding: 1.25rem;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 12px;
+  background: white;
+  transition: border-color 0.2s ease;
 }
 
-.day-off-inputs {
+.day-off-item:hover {
+  border-color: #3b82f6;
+}
+
+.day-off-content {
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr auto;
+  grid-template-columns: auto 2fr auto auto;
   gap: 1rem;
   align-items: end;
 }
 
-.input-group {
+.day-off-field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
-.input-group label {
+.field-label {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #6b7280;
+  color: #4b5563;
+}
+
+.reason-input {
+  min-width: 200px;
+}
+
+.day-off-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 1200px) {
+  .preferences-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
@@ -1036,17 +1257,59 @@ export default {
     grid-template-columns: 1fr;
   }
 
-  .preferences-grid {
+  .preferences-container {
     grid-template-columns: 1fr;
   }
 
-  .time-inputs {
-    grid-template-columns: 1fr;
-  }
-
-  .day-off-inputs {
+  .time-settings {
     grid-template-columns: 1fr;
     gap: 0.75rem;
+  }
+
+  .time-separator {
+    display: none;
+  }
+
+  .day-off-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .day-off-content {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .reason-input {
+    min-width: auto;
+  }
+
+  .preferences-note {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .staff-management {
+    padding: 0.5rem;
+  }
+
+  .day-preferences,
+  .day-off-requests {
+    padding: 1rem;
+  }
+
+  .day-preference-card {
+    padding: 1rem;
+  }
+
+  .preferences-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .preferences-header h4 {
+    font-size: 1.125rem;
   }
 }
 </style>

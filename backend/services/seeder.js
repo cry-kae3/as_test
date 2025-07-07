@@ -175,33 +175,43 @@ async function seedStaff() {
         console.log(`  ${assignment.staffName} (${assignment.employmentType}): 勤務可能[${assignment.workableStores.join(',')}] → AI生成[${assignment.aiGenerationStore}]`);
     });
 
-    // 希望シフトの設定
+    // 希望シフトの設定（修正版 - Boolean値を明確に設定）
     const staffFromDb = await Staff.findAll();
     const preferences = [];
 
     staffFromDb.forEach(s => {
+        console.log(`\n=== ${s.last_name} ${s.first_name} の希望シフト設定 ===`);
+
         if (s.employment_type === '正社員' || s.position === '店長') {
             // 正社員・店長：平日中心、土日は一部のみ勤務可能
             for (let day = 1; day <= 5; day++) {
                 preferences.push({
                     staff_id: s.id,
                     day_of_week: day,
-                    available: true,
+                    available: true, // 明確にtrueを設定
                     preferred_start_time: '09:00',
                     preferred_end_time: '18:00'
                 });
+                console.log(`  曜日${day}: available=true (平日勤務)`);
             }
             // 土日はランダムで勤務可能
+            const saturdayAvailable = Math.random() > 0.5;
+            const sundayAvailable = Math.random() > 0.6;
+
             preferences.push({
                 staff_id: s.id,
-                day_of_week: 6,
-                available: Math.random() > 0.5
+                day_of_week: 6, // 土曜日
+                available: saturdayAvailable // 明確にBoolean値を設定
             });
+            console.log(`  曜日6(土): available=${saturdayAvailable}`);
+
             preferences.push({
                 staff_id: s.id,
-                day_of_week: 0,
-                available: Math.random() > 0.6
+                day_of_week: 0, // 日曜日
+                available: sundayAvailable // 明確にBoolean値を設定
             });
+            console.log(`  曜日0(日): available=${sundayAvailable}`);
+
         } else {
             // パート・アルバイト：より柔軟な勤務パターン
             for (let day = 0; day < 7; day++) {
@@ -222,23 +232,45 @@ async function seedStaff() {
                     preferences.push({
                         staff_id: s.id,
                         day_of_week: day,
-                        available: true,
+                        available: true, // 明確にtrueを設定
                         preferred_start_time: `${String(startHour).padStart(2, '0')}:00`,
                         preferred_end_time: `${String(finalEndHour).padStart(2, '0')}:00`
                     });
+                    console.log(`  曜日${day}: available=true (${startHour}:00-${finalEndHour}:00)`);
                 } else {
                     preferences.push({
                         staff_id: s.id,
                         day_of_week: day,
-                        available: false
+                        available: false // 明確にfalseを設定
                     });
+                    console.log(`  曜日${day}: available=false`);
                 }
             }
         }
     });
 
+    console.log(`\n希望シフトデータを一括登録します（${preferences.length}件）...`);
+
+    // Boolean値の検証ログ
+    preferences.forEach((pref, index) => {
+        if (index < 10) { // 最初の10件のみログ出力
+            console.log(`検証 - Staff ${pref.staff_id}, Day ${pref.day_of_week}: available=${pref.available} (type: ${typeof pref.available})`);
+        }
+    });
+
     await StaffDayPreference.bulkCreate(preferences);
     console.log('スタッフの希望シフト登録が完了しました。');
+
+    // 登録後の検証
+    const savedPreferences = await StaffDayPreference.findAll({
+        where: { staff_id: [4, 5] }, // テスト対象のスタッフのみ
+        order: [['staff_id', 'ASC'], ['day_of_week', 'ASC']]
+    });
+
+    console.log('\n=== 登録後の検証（スタッフ4, 5のみ） ===');
+    savedPreferences.forEach(pref => {
+        console.log(`Staff ${pref.staff_id}, Day ${pref.day_of_week}: available=${pref.available} (type: ${typeof pref.available})`);
+    });
 }
 
 const seedDatabase = async () => {
