@@ -261,144 +261,6 @@ class ShiftGeneratorService {
         return otherStoreShifts;
     }
 
-    async generateShift(storeId, year, month) {
-        this.initializeSession(storeId, year, month);
-
-        try {
-            this.logProcess('STORE_FETCH', `店舗情報取得開始`, { storeId });
-            const store = await Store.findByPk(storeId);
-            if (!store) {
-                throw new Error('指定された店舗が見つかりません。');
-            }
-            this.logProcess('STORE_RESULT', `店舗情報取得完了`, { storeName: store.name });
-
-            this.logProcess('SYSTEM_SETTINGS_FETCH', `システム設定取得開始`);
-            const settings = await SystemSetting.findOne({ where: { user_id: store.owner_id } });
-            const closingDay = settings ? settings.closing_day : 25;
-            this.logProcess('SYSTEM_SETTINGS_RESULT', `システム設定取得完了`, { closingDay });
-
-            const period = this.getShiftPeriod(year, month, closingDay);
-
-            this.logProcess('STAFF_FETCH', `スタッフ情報取得開始`);
-            const staffs = await Staff.findAll({
-                include: [
-                    {
-                        model: Store,
-                        as: 'aiGenerationStores',
-                        where: { id: storeId },
-                        attributes: ['id', 'name'],
-                    },
-                    {
-                        model: Store,
-                        as: 'stores',
-                        attributes: ['id', 'name'],
-                        through: { attributes: [] },
-                        required: false
-                    },
-                    { model: StaffDayPreference, as: 'dayPreferences' },
-                    {
-                        model: StaffDayOffRequest,
-                        as: 'dayOffRequests',
-                        where: { date: { [Op.between]: [period.startDate.format('YYYY-MM-DD'), period.endDate.format('YYYY-MM-DD')] } },
-                        required: false
-                    }
-                ]
-            });
-
-            if (staffs.length === 0) {
-                throw new Error('この店舗にAI生成対象のスタッフがいません。');
-            }
-
-            this.logProcess('STAFF_RESULT', `スタッフ情報取得完了`, {
-                staffCount: staffs.length,
-                staffDetails: staffs.map(staff => ({
-                    id: staff.id,
-                    name: `${staff.last_name} ${staff.first_name}`,
-                    totalMinHours: staff.min_hours_per_month || 0,
-                    totalMaxHours: staff.max_hours_per_month || 160,
-                    dayPreferences: staff.dayPreferences?.length || 0,
-                    daysOff: staff.dayOffRequests?.length || 0
-                }))
-            });
-
-            const otherStoreShifts = await this.getOtherStoreShifts(staffs, storeId, year, month, period);
-
-            this.logProcess('STORE_SETTINGS_FETCH', `店舗設定取得開始`);
-            const storeClosedDays = await StoreClosedDay.findAll({ where: { store_id: storeId } });
-            const storeRequirements = await StoreStaffRequirement.findAll({ where: { store_id: storeId } });
-            this.logProcess('STORE_SETTINGS_RESULT', `店舗設定取得完了`, {
-                closedDaysCount: storeClosedDays.length,
-                requirementsCount: storeRequirements.length
-            });
-
-            // プロンプト生成（1回のみ）
-            const prompt = this.buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts);
-            this.logProcess('PROMPT_GENERATION', `AIプロンプト生成完了`, {
-                promptLength: prompt.length,
-                prompt: prompt  // プロンプト内容も含める
-            });
-
-            // Claude API呼び出し（1回のみ）
-            this.logProcess('AI_API_CALL', `Claude API呼び出し開始`);
-            const response = await this.callClaudeApi(prompt);
-            this.logProcess('AI_API_RESULT', `Claude APIレスポンス受信完了`, {
-                responseLength: JSON.stringify(response).length,
-                response: response  // レスポンス内容も含める
-            });
-
-            // レスポンス解析
-            this.logProcess('RESPONSE_PARSING', `レスポンス解析開始`);
-            const generatedShiftData = this.parseClaudeResponse(response);
-            this.logProcess('RESPONSE_PARSING_RESULT', `レスポンス解析完了`, {
-                parsedShifts: generatedShiftData?.shifts?.length || 0,
-                parsedData: generatedShiftData  // 解析されたシフトデータも含める
-            });
-
-            if (!generatedShiftData || !generatedShiftData.shifts || !Array.isArray(generatedShiftData.shifts)) {
-                throw new Error('生成されたシフトデータの構造が不正です');
-            }
-
-            // バリデーション（警告のみ、エラーでも続行）
-            this.logProcess('VALIDATION', `バリデーション実行中`);
-            const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, otherStoreShifts);
-            this.logProcess('VALIDATION_RESULT', `バリデーション完了`, {
-                isValid: validationResult.isValid,
-                violationCount: validationResult.violations?.length || 0,
-                warningCount: validationResult.warnings?.length || 0,
-                violations: validationResult.violations || [],  // 全ての違反内容
-                warnings: validationResult.warnings || []       // 全ての警告内容
-            });
-
-            // 制約違反があっても警告として処理し、そのまま保存
-            if (!validationResult.isValid) {
-                this.logProcess('VALIDATION_WARNING', `制約違反がありますが、データを保存します`, {
-                    violations: validationResult.violations?.slice(0, 5) || []
-                });
-            }
-
-            // シフト保存
-            this.logProcess('SAVE_SHIFT', `シフト保存開始`);
-            const result = await this.saveShift(generatedShiftData, storeId, year, month);
-            this.logProcess('SAVE_SHIFT_RESULT', `シフト保存完了`);
-
-            const finalResult = {
-                success: true,
-                shiftData: result,
-                validation: validationResult,
-                hasWarnings: !validationResult.isValid,
-                warningMessage: !validationResult.isValid ?
-                    `制約違反がありますが、シフトを生成しました。手動で調整してください。\n主な問題: ${validationResult.violations?.slice(0, 3).join(', ') || '不明'}` : null
-            };
-
-            this.finalizeSession('SUCCESS', finalResult);
-            return finalResult;
-
-        } catch (error) {
-            this.logError('GENERATE_SHIFT_ERROR', error);
-            this.finalizeSession('ERROR', null, error);
-            throw error;
-        }
-    }
 
 
     async validateGeneratedShift(shiftData, staffs, otherStoreShifts) {
@@ -540,7 +402,153 @@ class ShiftGeneratorService {
         return { isValid, violations, warnings };
     }
 
-    // backend/services/shiftGenerator.js の修正
+    async generateShift(storeId, year, month) {
+        this.initializeSession(storeId, year, month);
+
+        try {
+            this.logProcess('STORE_FETCH', `店舗情報取得開始`, { storeId });
+            const store = await Store.findByPk(storeId);
+            if (!store) {
+                throw new Error('指定された店舗が見つかりません。');
+            }
+            this.logProcess('STORE_RESULT', `店舗情報取得完了`, { storeName: store.name });
+
+            this.logProcess('SYSTEM_SETTINGS_FETCH', `システム設定取得開始`);
+            const settings = await SystemSetting.findOne({ where: { user_id: store.owner_id } });
+            const closingDay = settings ? settings.closing_day : 25;
+            this.logProcess('SYSTEM_SETTINGS_RESULT', `システム設定取得完了`, { closingDay });
+
+            const period = this.getShiftPeriod(year, month, closingDay);
+
+            this.logProcess('STAFF_FETCH', `スタッフ情報取得開始`);
+            const staffs = await Staff.findAll({
+                include: [
+                    {
+                        model: Store,
+                        as: 'aiGenerationStores',
+                        where: { id: storeId },
+                        attributes: ['id', 'name'],
+                    },
+                    {
+                        model: Store,
+                        as: 'stores',
+                        attributes: ['id', 'name'],
+                        through: { attributes: [] },
+                        required: false
+                    },
+                    { model: StaffDayPreference, as: 'dayPreferences' },
+                    {
+                        model: StaffDayOffRequest,
+                        as: 'dayOffRequests',
+                        where: { date: { [Op.between]: [period.startDate.format('YYYY-MM-DD'), period.endDate.format('YYYY-MM-DD')] } },
+                        required: false
+                    }
+                ]
+            });
+
+            if (staffs.length === 0) {
+                throw new Error('この店舗にAI生成対象のスタッフがいません。');
+            }
+
+            // 詳細なスタッフ情報をログ出力
+            this.logProcess('STAFF_RESULT', `スタッフ情報取得完了`, {
+                staffCount: staffs.length,
+                staffDetails: staffs.map(staff => ({
+                    id: staff.id,
+                    name: `${staff.last_name} ${staff.first_name}`,
+                    totalMinHours: staff.min_hours_per_month || 0,
+                    totalMaxHours: staff.max_hours_per_month || 160,
+                    dayPreferences: staff.dayPreferences?.length || 0,
+                    daysOff: staff.dayOffRequests?.length || 0,
+                    // 詳細な曜日設定を追加
+                    dayPreferencesDetail: staff.dayPreferences?.map(pref => ({
+                        day_of_week: pref.day_of_week,
+                        dayName: ['日', '月', '火', '水', '木', '金', '土'][pref.day_of_week],
+                        available: pref.available,
+                        preferred_start_time: pref.preferred_start_time,
+                        preferred_end_time: pref.preferred_end_time
+                    })) || []
+                }))
+            });
+
+            const otherStoreShifts = await this.getOtherStoreShifts(staffs, storeId, year, month, period);
+
+            this.logProcess('STORE_SETTINGS_FETCH', `店舗設定取得開始`);
+            const storeClosedDays = await StoreClosedDay.findAll({ where: { store_id: storeId } });
+            const storeRequirements = await StoreStaffRequirement.findAll({ where: { store_id: storeId } });
+            this.logProcess('STORE_SETTINGS_RESULT', `店舗設定取得完了`, {
+                closedDaysCount: storeClosedDays.length,
+                requirementsCount: storeRequirements.length
+            });
+
+            // プロンプト生成（1回のみ）
+            const prompt = this.buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts);
+            this.logProcess('PROMPT_GENERATION', `AIプロンプト生成完了`, {
+                promptLength: prompt.length,
+                prompt: prompt
+            });
+
+            // Claude API呼び出し（1回のみ）
+            this.logProcess('AI_API_CALL', `Claude API呼び出し開始`);
+            const response = await this.callClaudeApi(prompt);
+            this.logProcess('AI_API_RESULT', `Claude APIレスポンス受信完了`, {
+                responseLength: JSON.stringify(response).length,
+                response: response
+            });
+
+            // レスポンス解析
+            this.logProcess('RESPONSE_PARSING', `レスポンス解析開始`);
+            const generatedShiftData = this.parseClaudeResponse(response);
+            this.logProcess('RESPONSE_PARSING_RESULT', `レスポンス解析完了`, {
+                parsedShifts: generatedShiftData?.shifts?.length || 0,
+                parsedData: generatedShiftData
+            });
+
+            if (!generatedShiftData || !generatedShiftData.shifts || !Array.isArray(generatedShiftData.shifts)) {
+                throw new Error('生成されたシフトデータの構造が不正です');
+            }
+
+            // バリデーション（警告のみ、エラーでも続行）
+            this.logProcess('VALIDATION', `バリデーション実行中`);
+            const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, otherStoreShifts);
+            this.logProcess('VALIDATION_RESULT', `バリデーション完了`, {
+                isValid: validationResult.isValid,
+                violationCount: validationResult.violations?.length || 0,
+                warningCount: validationResult.warnings?.length || 0,
+                violations: validationResult.violations || [],
+                warnings: validationResult.warnings || []
+            });
+
+            // 制約違反があっても警告として処理し、そのまま保存
+            if (!validationResult.isValid) {
+                this.logProcess('VALIDATION_WARNING', `制約違反がありますが、データを保存します`, {
+                    violations: validationResult.violations?.slice(0, 5) || []
+                });
+            }
+
+            // シフト保存
+            this.logProcess('SAVE_SHIFT', `シフト保存開始`);
+            const result = await this.saveShift(generatedShiftData, storeId, year, month);
+            this.logProcess('SAVE_SHIFT_RESULT', `シフト保存完了`);
+
+            const finalResult = {
+                success: true,
+                shiftData: result,
+                validation: validationResult,
+                hasWarnings: !validationResult.isValid,
+                warningMessage: !validationResult.isValid ?
+                    `制約違反がありますが、シフトを生成しました。手動で調整してください。\n主な問題: ${validationResult.violations?.slice(0, 3).join(', ') || '不明'}` : null
+            };
+
+            this.finalizeSession('SUCCESS', finalResult);
+            return finalResult;
+
+        } catch (error) {
+            this.logError('GENERATE_SHIFT_ERROR', error);
+            this.finalizeSession('ERROR', null, error);
+            throw error;
+        }
+    }
 
     buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts) {
         // 期間内の全日付を生成
@@ -551,16 +559,44 @@ class ShiftGeneratorService {
             startDate.add(1, 'day');
         }
 
+        // スタッフ制約の詳細をログ出力
+        const staffConstraintDetails = staffs.map(staff => {
+            const unavailableDays = staff.dayPreferences?.filter(p => !p.available) || [];
+            const dayOffDates = staff.dayOffRequests?.filter(req =>
+                req.status === 'approved' || req.status === 'pending'
+            ).map(req => req.date) || [];
+
+            return {
+                staffId: staff.id,
+                staffName: `${staff.first_name} ${staff.last_name}`,
+                rawDayPreferences: staff.dayPreferences,
+                unavailableDays: unavailableDays.map(p => ({
+                    day_of_week: p.day_of_week,
+                    dayName: ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week],
+                    available: p.available
+                })),
+                unavailableDayNames: unavailableDays.map(p =>
+                    ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
+                ),
+                dayOffDates: dayOffDates,
+                otherShifts: otherStoreShifts[staff.id] || []
+            };
+        });
+
+        this.logProcess('STAFF_CONSTRAINT_DETAIL', `スタッフ制約詳細解析`, {
+            staffConstraints: staffConstraintDetails
+        });
+
         let prompt = `あなたはシフト管理システムです。以下の条件を参考にシフトを生成してください。
-
-## 期間情報
-- 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
-- 生成する日数: ${allDates.length}日間
-- 生成対象日付: ${allDates.join(', ')}
-
-## スタッフ情報
-
-`;
+    
+    ## 期間情報
+    - 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
+    - 生成する日数: ${allDates.length}日間
+    - 生成対象日付: ${allDates.join(', ')}
+    
+    ## スタッフ情報
+    
+    `;
 
         staffs.forEach(staff => {
             const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
@@ -572,14 +608,14 @@ class ShiftGeneratorService {
             const otherShifts = otherStoreShifts[staff.id] || [];
 
             prompt += `【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
-- 月間勤務時間: このスタッフの月間合計勤務時間は、必ず ${staff.min_hours_per_month || 0} 時間から ${staff.max_hours_per_month || 160} 時間の範囲に収めてください。この範囲から逸脱してはいけません。
-- 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間
-- 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
-- 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}`;
+    - 月間勤務時間: このスタッフの月間合計勤務時間は、必ず ${staff.min_hours_per_month || 0} 時間から ${staff.max_hours_per_month || 160} 時間の範囲に収めてください。この範囲から逸脱してはいけません。
+    - 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間
+    - 勤務不可曜日: ${unavailableDays.length > 0 ? unavailableDays.join(',') : 'なし'}
+    - 休み希望: ${dayOffDates.length > 0 ? dayOffDates.join(',') : 'なし'}`;
 
             if (otherShifts.length > 0) {
                 prompt += `
-- 他店舗勤務（重複不可）:`;
+    - 他店舗勤務（重複不可）:`;
                 otherShifts.forEach(shift => {
                     prompt += `\n  ${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name})`;
                 });
@@ -587,19 +623,33 @@ class ShiftGeneratorService {
             prompt += '\n';
         });
 
-        prompt += `
-## 重要ルール
-1. 各スタッフの月間合計勤務時間は、指定された「月間勤務時間」の範囲内に必ず収めること。これが最も重要なルールです。
-2. **期間内のすべての日付（${allDates.length}日間）について、適切なスタッフ配置を考慮してシフトを生成すること。**
-3. スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てること。
-4. 各日付の人員要件（もしあれば）を満たすことを優先する。
-5. 勤務不可曜日と休み希望日には絶対に割り当てない。
-6. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない。
-7. 他店舗で既に勤務がある日時には絶対に割り当てない（同じ時間帯に複数店舗で勤務することはできない）。
-8. **すべての日付に少なくとも1人以上のスタッフを配置するよう努めること。**
+        // プロンプトに反映された制約をログ出力
+        this.logProcess('PROMPT_STAFF_CONSTRAINTS', `プロンプトに反映されたスタッフ制約`, {
+            promptStaffConstraints: staffs.map(staff => {
+                const unavailableDays = staff.dayPreferences?.filter(p => !p.available).map(p =>
+                    ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
+                ) || [];
+                return {
+                    staffId: staff.id,
+                    staffName: `${staff.first_name} ${staff.last_name}`,
+                    promptUnavailableDays: unavailableDays
+                };
+            })
+        });
 
-## 営業時間と店舗要件
-- 営業時間: ${store.opening_time} - ${store.closing_time}`;
+        prompt += `
+    ## 重要ルール
+    1. 各スタッフの月間合計勤務時間は、指定された「月間勤務時間」の範囲内に必ず収めること。これが最も重要なルールです。
+    2. **期間内のすべての日付（${allDates.length}日間）について、適切なスタッフ配置を考慮してシフトを生成すること。**
+    3. スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てること。
+    4. 各日付の人員要件（もしあれば）を満たすことを優先する。
+    5. 勤務不可曜日と休み希望日には絶対に割り当てない。
+    6. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない。
+    7. 他店舗で既に勤務がある日時には絶対に割り当てない（同じ時間帯に複数店舗で勤務することはできない）。
+    8. **すべての日付に少なくとも1人以上のスタッフを配置するよう努めること。**
+    
+    ## 営業時間と店舗要件
+    - 営業時間: ${store.opening_time} - ${store.closing_time}`;
 
         // 店舗の人員要件を追加
         if (storeRequirements && storeRequirements.length > 0) {
@@ -626,35 +676,33 @@ class ShiftGeneratorService {
         }
 
         prompt += `
-
-## 出力形式
-以下のJSON形式で正確に出力してください。**期間内のすべての日付（${allDates.length}日間）について出力してください。**
-重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
-
-\`\`\`json
-{
-  "shifts": [
+    
+    ## 出力形式
+    以下のJSON形式で正確に出力してください。**期間内のすべての日付（${allDates.length}日間）について出力してください。**
+    重要: 全てのオブジェクトは必ず \`{\` と \`}\` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを \`{\` と \`}\` で囲む必要があります。
+    
+    \`\`\`json
     {
-      "date": "YYYY-MM-DD",
-      "assignments": [
+      "shifts": [
         {
-          "staff_id": 1,
-          "start_time": "09:00", 
-          "end_time": "17:00"
+          "date": "YYYY-MM-DD",
+          "assignments": [
+            {
+              "staff_id": 1,
+              "start_time": "09:00", 
+              "end_time": "17:00"
+            }
+          ]
         }
       ]
     }
-  ]
-}
-\`\`\`
-
-**注意: 必ず期間内のすべての日付（${period.startDate.format('YYYY-MM-DD')}から${period.endDate.format('YYYY-MM-DD')}まで）についてシフトを生成してください。定休日や勤務できる人がいない日でも、空の assignments 配列でdate要素を含めてください。**`;
+    \`\`\`
+    
+    **注意: 必ず期間内のすべての日付（${period.startDate.format('YYYY-MM-DD')}から${period.endDate.format('YYYY-MM-DD')}まで）についてシフトを生成してください。定休日や勤務できる人がいない日でも、空の assignments 配列でdate要素を含めてください。**`;
 
         return prompt;
     }
-
-    // Claude APIのモデル名をSonnet 4に更新
-    // Claude APIのモデル名をSonnet 4に更新
+    
     async callClaudeApi(prompt) {
         if (!this.claudeApiKey) {
             throw new Error('CLAUDE_API_KEY環境変数が設定されていません。.envファイルを確認してください。');
