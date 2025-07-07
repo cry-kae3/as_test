@@ -316,34 +316,34 @@
 
               <div class="preferences-container">
                 <div
-                  v-for="(day, index) in dayOptions"
+                  v-for="day in dayOptions"
                   :key="day.value"
                   class="day-preference-card"
                 >
                   <div class="day-preference-header">
                     <div class="day-checkbox-wrapper">
                       <Checkbox
-                        :id="`available-${index}`"
-                        v-model="formData.day_preferences[index].available"
+                        :id="`available-${day.value}`"
+                        v-model="getDayPreferenceByDayOfWeek(day.value).available"
                         :binary="true"
                       />
-                      <label :for="`available-${index}`" class="day-name">
+                      <label :for="`available-${day.value}`" class="day-name">
                         {{ day.label }}
                       </label>
                     </div>
-                    <div class="availability-status" :class="{ active: formData.day_preferences[index].available }">
-                      {{ formData.day_preferences[index].available ? '勤務可' : '勤務不可' }}
+                    <div class="availability-status" :class="{ active: getDayPreferenceByDayOfWeek(day.value).available }">
+                      {{ getDayPreferenceByDayOfWeek(day.value).available ? '勤務可' : '勤務不可' }}
                     </div>
                   </div>
 
                   <div
-                    v-if="formData.day_preferences[index].available"
+                    v-if="getDayPreferenceByDayOfWeek(day.value).available"
                     class="time-settings"
                   >
                     <div class="time-input-group">
                       <label class="time-label">開始時間</label>
                       <InputMask
-                        v-model="formData.day_preferences[index].preferred_start_time"
+                        v-model="getDayPreferenceByDayOfWeek(day.value).preferred_start_time"
                         mask="99:99"
                         placeholder="09:00"
                         class="time-input"
@@ -353,7 +353,7 @@
                     <div class="time-input-group">
                       <label class="time-label">終了時間</label>
                       <InputMask
-                        v-model="formData.day_preferences[index].preferred_end_time"
+                        v-model="getDayPreferenceByDayOfWeek(day.value).preferred_end_time"
                         mask="99:99"
                         placeholder="18:00"
                         class="time-input"
@@ -571,6 +571,17 @@ export default {
       }));
     };
 
+    // 曜日に基づいて希望シフトデータを取得する関数（修正点）
+    const getDayPreferenceByDayOfWeek = (dayOfWeek) => {
+      const preference = formData.day_preferences.find(pref => pref.day_of_week === dayOfWeek);
+      return preference || {
+        day_of_week: dayOfWeek,
+        available: true,
+        preferred_start_time: '',
+        preferred_end_time: ''
+      };
+    };
+
     const loadStaff = async () => {
       try {
         loading.value = true;
@@ -643,7 +654,6 @@ export default {
           max_consecutive_days: staffData.max_consecutive_days,
           store_ids: staffData.store_ids || [],
           ai_generation_store_ids: staffData.ai_generation_store_ids || [],
-          day_preferences: staffData.dayPreferences || [],
           day_off_requests: (staffData.dayOffRequests || []).map(req => ({
             date: req.date,
             reason: req.reason,
@@ -651,7 +661,22 @@ export default {
           }))
         });
 
-        if (formData.day_preferences.length === 0) {
+        // 修正点：day_of_weekでソートしてからマッピング
+        if (staffData.dayPreferences && staffData.dayPreferences.length > 0) {
+          // バックエンドからのデータをday_of_week順にソート
+          const sortedPreferences = [...staffData.dayPreferences].sort((a, b) => a.day_of_week - b.day_of_week);
+          
+          // 全曜日（0-6）のデータを確実に持つように初期化
+          formData.day_preferences = dayOptions.value.map(day => {
+            const existingPref = sortedPreferences.find(pref => pref.day_of_week === day.value);
+            return existingPref || {
+              day_of_week: day.value,
+              available: true,
+              preferred_start_time: '',
+              preferred_end_time: ''
+            };
+          });
+        } else {
           initializeDayPreferences();
         }
       } else {
@@ -830,7 +855,8 @@ export default {
       confirmDelete,
       formatHours,
       getPositionSeverity,
-      getEmploymentSeverity
+      getEmploymentSeverity,
+      getDayPreferenceByDayOfWeek
     };
   }
 };
