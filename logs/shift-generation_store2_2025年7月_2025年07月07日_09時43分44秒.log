@@ -1,0 +1,500 @@
+{
+  "sessionId": "shift-generation_store2_2025年7月_2025年07月07日_09時43分44秒",
+  "storeId": 2,
+  "year": 2025,
+  "month": 7,
+  "startTime": "2025-07-07 09:43:44",
+  "endTime": "2025-07-07 09:43:51",
+  "status": "SUCCESS",
+  "processes": [
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "SESSION_START",
+      "message": "シフト生成開始 - 店舗2 2025年7月",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "STORE_FETCH",
+      "message": "店舗情報取得開始",
+      "data": {
+        "storeId": 2
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "STORE_RESULT",
+      "message": "店舗情報取得完了",
+      "data": {
+        "storeName": "くるふ福井駅店"
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "SYSTEM_SETTINGS_FETCH",
+      "message": "システム設定取得開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "SYSTEM_SETTINGS_RESULT",
+      "message": "システム設定取得完了",
+      "data": {
+        "closingDay": 25
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "PERIOD_CALCULATION",
+      "message": "期間計算: 2025年7月（締め日: 25日）",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "PERIOD_RESULT",
+      "message": "期間: 2025-06-26 ～ 2025-07-25",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "STAFF_FETCH",
+      "message": "スタッフ情報取得開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "STAFF_RESULT",
+      "message": "スタッフ情報取得完了",
+      "data": {
+        "staffCount": 4,
+        "staffDetails": [
+          {
+            "id": 2,
+            "name": "山田 花子",
+            "totalMinHours": 40,
+            "totalMaxHours": 80,
+            "dayPreferences": 7,
+            "daysOff": 0
+          },
+          {
+            "id": 4,
+            "name": "鈴木 次郎",
+            "totalMinHours": 140,
+            "totalMaxHours": 160,
+            "dayPreferences": 7,
+            "daysOff": 0
+          },
+          {
+            "id": 5,
+            "name": "高橋 美咲",
+            "totalMinHours": 60,
+            "totalMaxHours": 100,
+            "dayPreferences": 7,
+            "daysOff": 0
+          },
+          {
+            "id": 6,
+            "name": "伊藤 雅人",
+            "totalMinHours": 30,
+            "totalMaxHours": 70,
+            "dayPreferences": 7,
+            "daysOff": 0
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "OTHER_STORE_SHIFTS",
+      "message": "他店舗シフト取得開始",
+      "data": {
+        "currentStoreId": 2,
+        "staffCount": 4
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "OTHER_STORE_SHIFTS_RESULT",
+      "message": "他店舗シフト取得完了",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "STORE_SETTINGS_FETCH",
+      "message": "店舗設定取得開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "STORE_SETTINGS_RESULT",
+      "message": "店舗設定取得完了",
+      "data": {
+        "closedDaysCount": 0,
+        "requirementsCount": 19
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "PROMPT_GENERATION",
+      "message": "AIプロンプト生成完了",
+      "data": {
+        "promptLength": 1219,
+        "prompt": "あなたはシフト管理システムです。以下の条件を参考にシフトを生成してください。\n\n## 期間情報\n- 対象期間: 2025-06-26 ～ 2025-07-25\n\n## スタッフ情報\n\n【花子 山田 (ID: 2)】\n- 月間勤務時間: このスタッフの月間合計勤務時間は、必ず 40 時間から 80 時間の範囲に収めてください。この範囲から逸脱してはいけません。\n- 1日最大勤務時間: 6時間\n- 勤務不可曜日: 火\n- 休み希望: なし\n【次郎 鈴木 (ID: 4)】\n- 月間勤務時間: このスタッフの月間合計勤務時間は、必ず 140 時間から 160 時間の範囲に収めてください。この範囲から逸脱してはいけません。\n- 1日最大勤務時間: 8時間\n- 勤務不可曜日: 日\n- 休み希望: なし\n【美咲 高橋 (ID: 5)】\n- 月間勤務時間: このスタッフの月間合計勤務時間は、必ず 60 時間から 100 時間の範囲に収めてください。この範囲から逸脱してはいけません。\n- 1日最大勤務時間: 7時間\n- 勤務不可曜日: なし\n- 休み希望: なし\n【雅人 伊藤 (ID: 6)】\n- 月間勤務時間: このスタッフの月間合計勤務時間は、必ず 30 時間から 70 時間の範囲に収めてください。この範囲から逸脱してはいけません。\n- 1日最大勤務時間: 5時間\n- 勤務不可曜日: 日\n- 休み希望: なし\n\n## 重要ルール\n1. 各スタッフの月間合計勤務時間は、指定された「月間勤務時間」の範囲内に必ず収めること。これが最も重要なルールです。\n2. スタッフをシフトに割り当てる際は、可能な限りそのスタッフの「1日最大勤務時間」に近い時間で割り当てること。\n3. 各日付の人員要件（もしあれば）を満たすことを優先する。\n4. 勤務不可曜日と休み希望日には絶対に割り当てない。\n5. 1日の勤務時間は絶対に「1日最大勤務時間」を超えない。\n6. 他店舗で既に勤務がある日時には絶対に割り当てない（同じ時間帯に複数店舗で勤務することはできない）。\n\n## 出力形式\n以下のJSON形式で正確に出力してください。余計な説明は不要です。\n重要: 全てのオブジェクトは必ず `{` と `}` で囲んでください。配列内の各要素がオブジェクトである場合、それぞれを `{` と `}` で囲む必要があります。\n\n```json\n{\n  \"shifts\": [\n    {\n      \"date\": \"YYYY-MM-DD\",\n      \"assignments\": [\n        {\n          \"staff_id\": 1,\n          \"start_time\": \"09:00\", \n          \"end_time\": \"17:00\"\n        }\n      ]\n    }\n  ]\n}\n```"
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:44",
+      "phase": "AI_API_CALL",
+      "message": "Claude API呼び出し開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "API_CALL_SUCCESS",
+      "message": "Claude API呼び出し成功",
+      "data": {
+        "responseTime": 6522,
+        "status": 200,
+        "contentLength": 1593
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "AI_API_RESULT",
+      "message": "Claude APIレスポンス受信完了",
+      "data": {
+        "responseLength": 1593,
+        "response": {
+          "id": "msg_01D4qwqxGpQL4kz4Bs1QwCQx",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-3-5-sonnet-20241022",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n  \"shifts\": [\n    {\n      \"date\": \"2025-06-26\",\n      \"assignments\": [\n        {\n          \"staff_id\": 2,\n          \"start_time\": \"09:00\",\n          \"end_time\": \"15:00\"\n        },\n        {\n          \"staff_id\": 4,\n          \"start_time\": \"09:00\",\n          \"end_time\": \"17:00\"\n        },\n        {\n          \"staff_id\": 5,\n          \"start_time\": \"10:00\",\n          \"end_time\": \"17:00\"\n        }\n      ]\n    },\n    {\n      \"date\": \"2025-06-27\",\n      \"assignments\": [\n        {\n          \"staff_id\": 4,\n          \"start_time\": \"09:00\",\n          \"end_time\": \"17:00\"\n        },\n        {\n          \"staff_id\": 6,\n          \"start_time\": \"10:00\",\n          \"end_time\": \"15:00\"\n        }\n      ]\n    },\n    {\n      \"date\": \"2025-06-28\",\n      \"assignments\": [\n        {\n          \"staff_id\": 2,\n          \"start_time\": \"09:00\",\n          \"end_time\": \"15:00\"\n        },\n        {\n          \"staff_id\": 4,\n          \"start_time\": \"09:00\",\n          \"end_time\": \"17:00\"\n        },\n        {\n          \"staff_id\": 5,\n          \"start_time\": \"10:00\",\n          \"end_time\": \"17:00\"\n        }\n      ]\n    }\n  ]\n}"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1034,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 419,
+            "service_tier": "standard"
+          }
+        }
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "RESPONSE_PARSING",
+      "message": "レスポンス解析開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "RESPONSE_PARSING_RESULT",
+      "message": "レスポンス解析完了",
+      "data": {
+        "parsedShifts": 3,
+        "parsedData": {
+          "shifts": [
+            {
+              "date": "2025-06-26",
+              "assignments": [
+                {
+                  "staff_id": 2,
+                  "start_time": "09:00",
+                  "end_time": "15:00"
+                },
+                {
+                  "staff_id": 4,
+                  "start_time": "09:00",
+                  "end_time": "17:00"
+                },
+                {
+                  "staff_id": 5,
+                  "start_time": "10:00",
+                  "end_time": "17:00"
+                }
+              ]
+            },
+            {
+              "date": "2025-06-27",
+              "assignments": [
+                {
+                  "staff_id": 4,
+                  "start_time": "09:00",
+                  "end_time": "17:00"
+                },
+                {
+                  "staff_id": 6,
+                  "start_time": "10:00",
+                  "end_time": "15:00"
+                }
+              ]
+            },
+            {
+              "date": "2025-06-28",
+              "assignments": [
+                {
+                  "staff_id": 2,
+                  "start_time": "09:00",
+                  "end_time": "15:00"
+                },
+                {
+                  "staff_id": 4,
+                  "start_time": "09:00",
+                  "end_time": "17:00"
+                },
+                {
+                  "staff_id": 5,
+                  "start_time": "10:00",
+                  "end_time": "17:00"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "VALIDATION",
+      "message": "バリデーション実行中",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "VALIDATION_START",
+      "message": "シフト検証開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "STAFF_HOURS_DETAIL",
+      "message": "スタッフ時間詳細",
+      "data": {
+        "staffHoursSummary": {
+          "2": {
+            "name": "花子 山田",
+            "minHours": 40,
+            "maxHours": 80,
+            "actualHours": 12,
+            "assignments": [
+              {
+                "date": "2025-06-26",
+                "start_time": "09:00",
+                "end_time": "15:00",
+                "hours": 6
+              },
+              {
+                "date": "2025-06-28",
+                "start_time": "09:00",
+                "end_time": "15:00",
+                "hours": 6
+              }
+            ]
+          },
+          "4": {
+            "name": "次郎 鈴木",
+            "minHours": 140,
+            "maxHours": 160,
+            "actualHours": 24,
+            "assignments": [
+              {
+                "date": "2025-06-26",
+                "start_time": "09:00",
+                "end_time": "17:00",
+                "hours": 8
+              },
+              {
+                "date": "2025-06-27",
+                "start_time": "09:00",
+                "end_time": "17:00",
+                "hours": 8
+              },
+              {
+                "date": "2025-06-28",
+                "start_time": "09:00",
+                "end_time": "17:00",
+                "hours": 8
+              }
+            ]
+          },
+          "5": {
+            "name": "美咲 高橋",
+            "minHours": 60,
+            "maxHours": 100,
+            "actualHours": 14,
+            "assignments": [
+              {
+                "date": "2025-06-26",
+                "start_time": "10:00",
+                "end_time": "17:00",
+                "hours": 7
+              },
+              {
+                "date": "2025-06-28",
+                "start_time": "10:00",
+                "end_time": "17:00",
+                "hours": 7
+              }
+            ]
+          },
+          "6": {
+            "name": "雅人 伊藤",
+            "minHours": 30,
+            "maxHours": 70,
+            "actualHours": 5,
+            "assignments": [
+              {
+                "date": "2025-06-27",
+                "start_time": "10:00",
+                "end_time": "15:00",
+                "hours": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "VALIDATION_COMPLETE",
+      "message": "検証完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 4,
+        "warningCount": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "VALIDATION_RESULT",
+      "message": "バリデーション完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 4,
+        "warningCount": 0,
+        "violations": [
+          "花子 山田: 月間最小勤務時間不足 (12.0h < 40h, 不足28.0h)",
+          "次郎 鈴木: 月間最小勤務時間不足 (24.0h < 140h, 不足116.0h)",
+          "美咲 高橋: 月間最小勤務時間不足 (14.0h < 60h, 不足46.0h)",
+          "雅人 伊藤: 月間最小勤務時間不足 (5.0h < 30h, 不足25.0h)"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "VALIDATION_WARNING",
+      "message": "制約違反がありますが、データを保存します",
+      "data": {
+        "violations": [
+          "花子 山田: 月間最小勤務時間不足 (12.0h < 40h, 不足28.0h)",
+          "次郎 鈴木: 月間最小勤務時間不足 (24.0h < 140h, 不足116.0h)",
+          "美咲 高橋: 月間最小勤務時間不足 (14.0h < 60h, 不足46.0h)",
+          "雅人 伊藤: 月間最小勤務時間不足 (5.0h < 30h, 不足25.0h)"
+        ]
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "SAVE_SHIFT",
+      "message": "シフト保存開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "SHIFT_ASSIGNMENTS_SAVED",
+      "message": "シフト割り当て保存完了",
+      "data": {
+        "assignmentCount": 8
+      }
+    },
+    {
+      "timestamp": "2025-07-07 09:43:51",
+      "phase": "SAVE_SHIFT_RESULT",
+      "message": "シフト保存完了",
+      "data": null
+    }
+  ],
+  "errors": [],
+  "result": {
+    "success": true,
+    "shiftData": {
+      "shifts": [
+        {
+          "date": "2025-06-26",
+          "assignments": [
+            {
+              "staff_id": 2,
+              "start_time": "09:00",
+              "end_time": "15:00"
+            },
+            {
+              "staff_id": 4,
+              "start_time": "09:00",
+              "end_time": "17:00"
+            },
+            {
+              "staff_id": 5,
+              "start_time": "10:00",
+              "end_time": "17:00"
+            }
+          ]
+        },
+        {
+          "date": "2025-06-27",
+          "assignments": [
+            {
+              "staff_id": 4,
+              "start_time": "09:00",
+              "end_time": "17:00"
+            },
+            {
+              "staff_id": 6,
+              "start_time": "10:00",
+              "end_time": "15:00"
+            }
+          ]
+        },
+        {
+          "date": "2025-06-28",
+          "assignments": [
+            {
+              "staff_id": 2,
+              "start_time": "09:00",
+              "end_time": "15:00"
+            },
+            {
+              "staff_id": 4,
+              "start_time": "09:00",
+              "end_time": "17:00"
+            },
+            {
+              "staff_id": 5,
+              "start_time": "10:00",
+              "end_time": "17:00"
+            }
+          ]
+        }
+      ]
+    },
+    "validation": {
+      "isValid": false,
+      "violations": [
+        "花子 山田: 月間最小勤務時間不足 (12.0h < 40h, 不足28.0h)",
+        "次郎 鈴木: 月間最小勤務時間不足 (24.0h < 140h, 不足116.0h)",
+        "美咲 高橋: 月間最小勤務時間不足 (14.0h < 60h, 不足46.0h)",
+        "雅人 伊藤: 月間最小勤務時間不足 (5.0h < 30h, 不足25.0h)"
+      ],
+      "warnings": []
+    },
+    "hasWarnings": true,
+    "warningMessage": "制約違反がありますが、シフトを生成しました。手動で調整してください。\n主な問題: 花子 山田: 月間最小勤務時間不足 (12.0h < 40h, 不足28.0h), 次郎 鈴木: 月間最小勤務時間不足 (24.0h < 140h, 不足116.0h), 美咲 高橋: 月間最小勤務時間不足 (14.0h < 60h, 不足46.0h)"
+  }
+}
