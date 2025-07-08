@@ -217,12 +217,20 @@
                       )
                     }}
                   </div>
+                  <div class="work-hours-display">
+                    {{
+                      formatHours(
+                        calculateWorkHours(getShiftForStaff(day.date, staff.id))
+                      )
+                    }}
+                  </div>
                   <div
                     v-if="
                       getShiftForStaff(day.date, staff.id).break_start_time
                     "
                     class="break-time-indicator"
                   >
+                    <span class="break-label">休憩</span>
                     <span>
                       {{
                         formatTime(
@@ -241,9 +249,9 @@
                   </div>
                   <div
                     v-else
-                    class="break-time-placeholder"
+                    class="break-time-indicator no-break"
                   >
-                    <!-- 休憩なしの場合のプレースホルダー -->
+                    <span>休憩なし</span>
                   </div>
                   <div
                     v-if="hasShiftViolation(day.date, staff.id)"
@@ -328,6 +336,7 @@
       formatTime: Function,
       formatHours: Function,
       isPastDate: Function,
+      calculateDayHours: Function,
     },
     emits: [
       'select-date',
@@ -343,6 +352,28 @@
       },
       quickDeleteShift(shift) {
         this.$emit('quick-delete-shift', shift);
+      },
+      calculateWorkHours(shift) {
+        if (!shift) return 0;
+        
+        // calculateDayHoursが渡されていれば使用、なければ内部で計算
+        if (this.calculateDayHours && typeof this.calculateDayHours === 'function') {
+          return this.calculateDayHours(shift);
+        }
+        
+        // 内部計算ロジック
+        const startTime = new Date(`2000-01-01T${shift.start_time}`);
+        const endTime = new Date(`2000-01-01T${shift.end_time}`);
+        let workMillis = endTime - startTime;
+        
+        if (shift.break_start_time && shift.break_end_time) {
+          const breakStart = new Date(`2000-01-01T${shift.break_start_time}`);
+          const breakEnd = new Date(`2000-01-01T${shift.break_end_time}`);
+          const breakMillis = breakEnd - breakStart;
+          workMillis -= breakMillis;
+        }
+        
+        return Math.round((workMillis / (1000 * 60 * 60)) * 100) / 100;
       },
     },
   };
@@ -480,7 +511,6 @@
     background: #d1d5db !important;
   }
   
-  // 人員不足がある日付のスタイル追加
   .date-cell-header.has-staffing-shortage {
     background: #fef3c7 !important;
   }
@@ -533,7 +563,6 @@
     cursor: pointer;
   }
   
-  // 人員不足専用のスタイル
   .warning-indicator.has-staffing-shortage {
     background: #fbbf24;
     color: #78350f;
@@ -787,7 +816,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.2rem;
+    gap: 0.1rem;
     font-weight: 600;
     font-size: 0.75rem;
     min-width: 75px;
@@ -839,37 +868,42 @@
     font-size: 10px !important;
   }
   
+  .work-hours-display {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    margin: 0.15rem 0;
+  }
+  
   .break-time-indicator {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: rgba(255, 255, 255, 0.95);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.15rem;
-    margin-top: 0.4rem;
-    padding: 0.25rem 0.35rem;
+    gap: 0.1rem;
+    margin-top: 0.2rem;
+    padding: 0.15rem 0.25rem;
     background: rgba(255, 255, 255, 0.25);
     border-radius: 4px;
     font-weight: 500;
     width: 100%;
-    line-height: 1.3;
+    line-height: 1.2;
   }
   
-  .break-time-indicator .pi {
-    display: none;
+  .break-time-indicator.no-break {
+    background: rgba(255, 255, 255, 0.15);
+    font-style: italic;
+    font-size: 0.6rem;
   }
   
-  .break-time-indicator::before {
-    content: "休憩";
-    font-size: 0.65rem;
+  .break-label {
+    font-size: 0.6rem;
     font-weight: 700;
-    opacity: 0.95;
-    letter-spacing: 0.05em;
-  }
-  
-  .break-time-placeholder {
-    height: 2.2rem;
-    visibility: hidden;
+    opacity: 0.9;
   }
   
   .shift-start,
