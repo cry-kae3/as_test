@@ -1089,218 +1089,141 @@ class ShiftGeneratorService {
     }
 
     buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts, attempt = 1, systemSettings = null) {
-        // 期間内の全日付を生成
+        // 期間内の全日付を生成（曜日情報付き）
         const allDates = [];
+        const dateToWeekdayMap = {};
+        const weekdayNames = ['日', '月', '火', '水', '木', '金', '土'];
+
         const startDate = period.startDate.clone();
         while (startDate.isSameOrBefore(period.endDate)) {
-            allDates.push(startDate.format('YYYY-MM-DD'));
+            const dateStr = startDate.format('YYYY-MM-DD');
+            const dayOfWeek = startDate.day();
+            allDates.push(dateStr);
+            dateToWeekdayMap[dateStr] = {
+                dayOfWeek: dayOfWeek,
+                dayName: weekdayNames[dayOfWeek]
+            };
             startDate.add(1, 'day');
         }
 
         const minDailyHours = systemSettings?.min_daily_hours || 4.0;
 
-        let prompt = `あなたはシフト管理システムです。以下の条件を厳密に守ってシフトを生成してください。
+        // 各日付に対して勤務可能なスタッフをマッピング
+        const dateStaffAvailability = {};
 
-## 🚨 最重要ルール（絶対に違反してはいけません）
-1. **勤務不可曜日には絶対にシフトを入れない** - これは最優先の制約です
-2. **休み希望日には絶対にシフトを入れない** - 例外は一切認められません
-3. **他店舗勤務と重複する時間帯には絶対にシフトを入れない**
-4. **月間勤務時間の上限を絶対に超えない**
-5. **1日の最低勤務時間（${minDailyHours}時間）を必ず守る**
-6. **日本の労働法に従った休憩時間を必ず設定する**
-   - 6時間以上8時間未満：45分以上の休憩
-   - 8時間以上：60分以上の休憩
+        allDates.forEach(date => {
+            const weekdayInfo = dateToWeekdayMap[date];
+            dateStaffAvailability[date] = {
+                weekday: weekdayInfo.dayName,
+                availableStaff: []
+            };
 
-## 期間情報
-- 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
-- 生成する日数: ${allDates.length}日間
-- 生成対象日付: ${allDates.join(', ')}
+            staffs.forEach(staff => {
+                // 勤務不可曜日チェック
+                const dayPreference = staff.dayPreferences?.find(p => p.day_of_week === weekdayInfo.dayOfWeek);
+                const isAvailable = dayPreference ? Boolean(dayPreference.available) : true;
 
-## 各スタッフの月間時間制約（絶対遵守）
-${staffs.map(s => 
-  `${s.first_name} ${s.last_name}: ${s.min_hours_per_month || 0}時間以上 ${s.max_hours_per_month || 160}時間以下`
-).join('\n')}
+                // 休み希望チェック
+                const hasDayOff = staff.dayOffRequests?.some(req =>
+                    req.date === date && (req.status === 'approved' || req.status === 'pending')
+                );
 
-**重要**: 上記の時間制約を1時間でも超過/不足させてはいけません。
+                // 他店舗シフトチェック
+                const otherShifts = otherStoreShifts[staff.id] || [];
+                const hasOtherShift = otherShifts.some(shift => shift.date === date);
 
-## システム設定
-- 1日最低勤務時間: ${minDailyHours}時間（これ以下の勤務時間は禁止）
-- 休憩時間は労働基準法に基づき自動設定
-
-## スタッフ制約（厳密に遵守すること）
-
-`;
-
-        staffs.forEach(staff => {
-            const unavailableDays = staff.dayPreferences?.filter(p => {
-                const isAvailable = Boolean(p.available);
-                return !isAvailable;
-            }).map(p => {
-                const dayName = ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week];
-                return dayName;
-            }) || [];
-
-            const dayOffDates = staff.dayOffRequests?.filter(req =>
-                req.status === 'approved' || req.status === 'pending'
-            ).map(req => req.date) || [];
-            const otherShifts = otherStoreShifts[staff.id] || [];
-
-            prompt += `【${staff.first_name} ${staff.last_name} (ID: ${staff.id})】
-🚨 **絶対制約**:`;
-
-            if (unavailableDays.length > 0) {
-                prompt += `
-   - 勤務不可曜日: ${unavailableDays.join(',')} ← この曜日には絶対にシフトを入れてはいけません`;
-            }
-
-            if (dayOffDates.length > 0) {
-                prompt += `
-   - 休み希望日: ${dayOffDates.join(',')} ← これらの日には絶対にシフトを入れてはいけません`;
-            }
-
-            if (otherShifts.length > 0) {
-                prompt += `
-   - 他店舗勤務（重複禁止）:`;
-                otherShifts.forEach(shift => {
-                    prompt += `
-     ${shift.date}: ${shift.start_time}-${shift.end_time} (${shift.store_name}) ← この時間帯は絶対に使用禁止`;
-                });
-            }
-
-            // 🔥 新機能: スタッフの希望時間を表示
-            const preferredTimes = staff.dayPreferences?.filter(p => 
-                Boolean(p.available) && p.preferred_start_time && p.preferred_end_time
-            ) || [];
-
-            if (preferredTimes.length > 0) {
-                prompt += `
-   - 希望勤務時間（可能な限り優先して使用）:`;
-                preferredTimes.forEach(pref => {
-                    const dayName = ['日', '月', '火', '水', '木', '金', '土'][pref.day_of_week];
-                    prompt += `
-     ${dayName}曜日: ${pref.preferred_start_time}-${pref.preferred_end_time} ← 特別な理由がない限り、この時間で開始してください`;
-                });
-            }
-
-            prompt += `
-
-📋 **勤務条件**:
-   - 月間勤務時間: ${staff.min_hours_per_month || 0}時間以上 ${staff.max_hours_per_month || 160}時間以下（厳守）
-   - 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間以下（厳守）
-   - 1日最低勤務時間: ${minDailyHours}時間以上（厳守）
-   - 可能な限り月間最小勤務時間に近づけること
-
-`;
+                if (isAvailable && !hasDayOff && !hasOtherShift) {
+                    const staffInfo = {
+                        id: staff.id,
+                        name: `${staff.first_name} ${staff.last_name}`,
+                        preferredTime: dayPreference?.preferred_start_time && dayPreference?.preferred_end_time
+                            ? `${dayPreference.preferred_start_time}-${dayPreference.preferred_end_time}`
+                            : null
+                    };
+                    dateStaffAvailability[date].availableStaff.push(staffInfo);
+                }
+            });
         });
 
-        // 🔥 再生成時の追加指示
-        if (attempt > 1) {
+        let prompt = `あなたはシフト管理システムです。以下の条件を厳密に守ってシフトを生成してください。
+    
+    ## 🚨 絶対に守るべきルール
+    1. 各日付に指定された「勤務可能スタッフ」以外は絶対に配置しない
+    2. 月間勤務時間の範囲を絶対に守る
+    3. 1日最低${minDailyHours}時間以上の勤務を必須とする
+    4. 労働基準法の休憩時間を必ず設定する（6時間以上45分、8時間以上60分）
+    
+    ## 期間情報
+    - 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
+    - 生成日数: ${allDates.length}日間
+    
+    ## スタッフ勤務時間制約（厳守）
+    ${staffs.map(s => {
+            const totalCurrent = 0; // 現在の累計時間（新規生成の場合は0）
+            const minHours = s.min_hours_per_month || 0;
+            const maxHours = s.max_hours_per_month || 160;
+            const neededMin = Math.max(0, minHours - totalCurrent);
+            const availableMax = Math.max(0, maxHours - totalCurrent);
+
+            return `${s.first_name} ${s.last_name} (ID:${s.id}): 
+       - 月間: 最小${minHours}時間、最大${maxHours}時間
+       - 残り必要時間: ${neededMin}時間以上
+       - 残り配置可能時間: ${availableMax}時間以下
+       - 1日最大: ${s.max_hours_per_day || 8}時間`;
+        }).join('\n')}
+    
+    ## 🗓️ 日付別勤務可能スタッフ（これ以外のスタッフは絶対に配置禁止）
+    
+    `;
+
+        // 日付ごとに勤務可能スタッフを明記
+        Object.entries(dateStaffAvailability).forEach(([date, info]) => {
             prompt += `
+    【${date} (${info.weekday}曜日)】
+    勤務可能スタッフ: `;
 
-## 🔄 再生成指示（試行${attempt}回目）
-前回の生成で制約違反が発生しました。今回は以下を**より厳密に**守ってください：
+            if (info.availableStaff.length === 0) {
+                prompt += `なし（この日はシフトを空にしてください）`;
+            } else {
+                prompt += `\n${info.availableStaff.map(s =>
+                    `  - ${s.name} (ID:${s.id})${s.preferredTime ? ` 希望時間:${s.preferredTime}` : ''}`
+                ).join('\n')}`;
+            }
+            prompt += '\n';
+        });
 
-1. **1日最低勤務時間の厳守**
-   - ${minDailyHours}時間未満の勤務は絶対に禁止
-   - 労働基準法の休憩時間も含めて計算してください
-
-2. **休憩時間の自動設定**
-   - 6時間以上8時間未満の勤務：break_start_time: "12:00", break_end_time: "12:45"
-   - 8時間以上の勤務：break_start_time: "12:00", break_end_time: "13:00"
-
-3. **スタッフ希望時間の優先**
-   - スタッフが希望時間を設定している場合、可能な限りその開始時間を使用
-   - 人員要件を満たすためにやむを得ない場合のみ変更可
-
-4. **月間勤務時間の厳密な管理**
-   - 各スタッフの割り当て前に、必ず月間累計時間をチェック
-   - 最大時間に近づいたら、それ以上の割り当てを停止
-   - 最小時間に満たない場合は、勤務可能日に追加配置
-
-5. **制約チェックの優先順位**
-   - 第1優先：勤務不可曜日・休み希望の絶対遵守
-   - 第2優先：月間最大勤務時間の絶対遵守
-   - 第3優先：1日最低勤務時間の絶対遵守
-   - 第4優先：労働法の休憩時間の絶対遵守
-   - 第5優先：スタッフ希望時間の可能な限りの尊重
-   - 第6優先：月間最小勤務時間の可能な限りの達成
-   - 第7優先：店舗の人員要件（満たせない日があっても構いません）`;
-        }
-
+        // 営業時間と要件
         prompt += `
-## 🎯 シフト生成の優先順位（上から順に重要）
-1. **絶対制約の遵守** - 勤務不可曜日・休み希望・他店舗重複の回避
-2. **月間勤務時間の範囲内での配置** - 最小時間の確保を優先
-3. **1日最低勤務時間の遵守** - ${minDailyHours}時間以上必須
-4. **労働法の休憩時間設定** - 6時間以上で必須
-5. **スタッフ希望時間の尊重** - 可能な限り希望開始時間を使用
-6. **人員要件の満足**（可能な範囲で）
-7. **全日程への配置**（制約に違反しない範囲で）
-
-## 営業時間と店舗要件
-- 営業時間: ${store.opening_time} - ${store.closing_time}`;
-
-        // 店舗の人員要件を追加
-        if (storeRequirements && storeRequirements.length > 0) {
-            prompt += '\n- 人員要件:';
-            storeRequirements.forEach(req => {
-                if (req.day_of_week !== null) {
-                    const dayName = ['日', '月', '火', '水', '木', '金', '土'][req.day_of_week];
-                    prompt += `\n  ${dayName}曜日 ${req.start_time}-${req.end_time}: ${req.required_staff_count}人`;
-                }
-            });
-        }
-
-        // 定休日情報を追加
-        if (storeClosedDays && storeClosedDays.length > 0) {
-            prompt += '\n- 定休日:';
-            storeClosedDays.forEach(closedDay => {
-                if (closedDay.day_of_week !== null) {
-                    const dayName = ['日', '月', '火', '水', '木', '金', '土'][closedDay.day_of_week];
-                    prompt += `\n  ${dayName}曜日`;
-                } else if (closedDay.specific_date) {
-                    prompt += `\n  ${closedDay.specific_date}`;
-                }
-            });
-        }
-
-        prompt += `
-
-## ⚠️ 重要な注意事項
-- 制約に違反するくらいなら、その日はシフトを空けてください
-- 人員要件を満たせない日があっても構いません
-- 全日程にスタッフを配置する必要はありません
-- **制約違反は絶対に避けてください**
-- **1日${minDailyHours}時間未満のシフトは絶対に作成しないでください**
-
-## 出力形式
-以下のJSON形式で正確に出力してください。制約に違反する配置は一切含めないでください。
-
-\`\`\`json
-{
-  "shifts": [
+    ## 営業時間
+    - ${store.opening_time} - ${store.closing_time}
+    
+    ## 出力形式
+    以下のJSON形式で出力してください。上記の「勤務可能スタッフ」に記載されていないスタッフは絶対に含めないでください。
+    
+    \`\`\`json
     {
-      "date": "YYYY-MM-DD",
-      "assignments": [
+      "shifts": [
         {
-          "staff_id": 1,
-          "start_time": "09:00", 
-          "end_time": "17:00",
-          "break_start_time": "12:00",
-          "break_end_time": "12:45"
+          "date": "YYYY-MM-DD",
+          "assignments": [
+            {
+              "staff_id": 番号,
+              "start_time": "HH:MM",
+              "end_time": "HH:MM",
+              "break_start_time": "HH:MM",
+              "break_end_time": "HH:MM"
+            }
+          ]
         }
       ]
     }
-  ]
-}
-\`\`\`
-
-**重要事項**:
-- 勤務不可曜日や休み希望日にシフトを配置することは絶対に禁止です
-- 1日${minDailyHours}時間未満の勤務は絶対に禁止です
-- 6時間以上の勤務には必ず休憩時間を設定してください
-- 制約を守れない場合は、その日のassignmentsを空配列にしてください
-- スタッフの希望開始時間がある場合は、可能な限りその時間を使用してください`;
+    \`\`\`
+    
+    重要: 
+    - 各日付の「勤務可能スタッフ」リストに載っていないスタッフは絶対に配置しない
+    - 勤務可能スタッフがいない日は、assignmentsを空配列[]にする
+    - ${minDailyHours}時間未満の勤務は禁止
+    - 希望時間がある場合は可能な限り従う`;
 
         return prompt;
     }

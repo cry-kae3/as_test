@@ -109,10 +109,14 @@
               :key="`all-summary-${staff.id}`"
               class="all-staff-row"
               :class="{
-                'has-warnings': hasStaffWarningsForAllSystemStaff(staff.id),
+                'has-warnings': hasStaffWarningsForAllSystemStaff(staff, 0),
                 'hours-violation': isHoursOutOfRangeForAllSystemStaff(
-                  staff.id
-                ),
+                  staff,
+                  0
+                ).isUnder || isHoursOutOfRangeForAllSystemStaff(
+                  staff,
+                  0
+                ).isOver,
               }"
             >
               <!-- スタッフ名 -->
@@ -131,9 +135,7 @@
               <td class="store-hours-cell">
                 <div class="store-hours-list">
                   <div
-                    v-for="breakdown in getAllStoreHoursBreakdownForAllStaff(
-                      staff.id
-                    )"
+                    v-for="breakdown in getStoreBreakdownForStaff(staff.id)"
                     :key="breakdown.storeId"
                     class="store-hours-item"
                   >
@@ -146,8 +148,7 @@
                   </div>
                   <div
                     v-if="
-                      getAllStoreHoursBreakdownForAllStaff(staff.id)
-                        .length === 0
+                      getStoreBreakdownForStaff(staff.id).length === 0
                     "
                     class="no-hours"
                   >
@@ -162,13 +163,17 @@
                   class="total-hours-value-table"
                   :class="{
                     'out-of-range': isHoursOutOfRangeForAllSystemStaff(
-                      staff.id
-                    ),
+                      staff,
+                      0
+                    ).isUnder || isHoursOutOfRangeForAllSystemStaff(
+                      staff,
+                      0
+                    ).isOver,
                   }"
                 >
                   {{
                     formatHours(
-                      calculateTotalHoursForAllSystemStaff(staff.id)
+                      calculateTotalHoursForAllSystemStaff(staff.id, 0).totalHours
                     )
                   }}
                 </span>
@@ -186,13 +191,13 @@
                   <div
                     :class="[
                       'status-indicator',
-                      getStaffStatusInfo(staff.id).class,
+                      getStatusClass(staff),
                     ]"
-                    :title="getStaffStatusInfo(staff.id).title"
+                    :title="getStatusTitle(staff)"
                   >
-                    <i :class="getStaffStatusInfo(staff.id).icon"></i>
+                    <i :class="getStatusIcon(staff)"></i>
                     <span class="status-text">{{
-                      getStaffStatusInfo(staff.id).text
+                      getStatusText(staff)
                     }}</span>
                   </div>
                 </div>
@@ -271,6 +276,22 @@
         { label: "勤務店舗数", value: "storeCount" },
         { label: "ステータス", value: "status" },
       ];
+
+      // 全店舗の時間内訳を取得
+      const getStoreBreakdownForStaff = (staffId) => {
+        const allBreakdowns = props.getAllStoreHoursBreakdownForAllStaff();
+        const staffBreakdown = allBreakdowns[staffId];
+        
+        if (!staffBreakdown || !staffBreakdown.stores) {
+          return [];
+        }
+
+        return staffBreakdown.stores.map(store => ({
+          storeId: store.id,
+          storeName: store.name,
+          hours: store.hours
+        }));
+      };
   
       // フィルタリング・ソート処理
       const filteredAndSortedAllStaff = computed(() => {
@@ -290,17 +311,17 @@
         if (allStaffTableFilters.searchStore.trim()) {
           const searchTerm = allStaffTableFilters.searchStore.toLowerCase();
           filtered = filtered.filter((staff) => {
-            const storeNames = props.getAllStoreHoursBreakdownForAllStaff(staff.id).map(
-              (breakdown) => breakdown.storeName.toLowerCase()
+            const breakdown = getStoreBreakdownForStaff(staff.id);
+            return breakdown.some((item) => 
+              item.storeName.toLowerCase().includes(searchTerm)
             );
-            return storeNames.some((name) => name.includes(searchTerm));
           });
         }
   
         // ステータス絞込み
         if (allStaffTableFilters.statusFilter !== "all") {
           filtered = filtered.filter((staff) => {
-            const status = props.getStaffStatus(staff.id);
+            const status = getFilterStatus(staff);
             return status === allStaffTableFilters.statusFilter;
           });
         }
@@ -315,16 +336,16 @@
               bValue = `${b.last_name} ${b.first_name}`;
               break;
             case "totalHours":
-              aValue = props.calculateTotalHoursForAllSystemStaff(a.id);
-              bValue = props.calculateTotalHoursForAllSystemStaff(b.id);
+              aValue = props.calculateTotalHoursForAllSystemStaff(a.id, 0).totalHours;
+              bValue = props.calculateTotalHoursForAllSystemStaff(b.id, 0).totalHours;
               break;
             case "storeCount":
-              aValue = props.getAllStoreHoursBreakdownForAllStaff(a.id).length;
-              bValue = props.getAllStoreHoursBreakdownForAllStaff(b.id).length;
+              aValue = getStoreBreakdownForStaff(a.id).length;
+              bValue = getStoreBreakdownForStaff(b.id).length;
               break;
             case "status":
-              aValue = getStaffStatusPriority(a.id);
-              bValue = getStaffStatusPriority(b.id);
+              aValue = getStaffStatusPriority(a);
+              bValue = getStaffStatusPriority(b);
               break;
             default:
               return 0;
@@ -341,11 +362,18 @@
   
         return filtered;
       });
+
+      // ステータスを取得
+      const getFilterStatus = (staff) => {
+        const status = props.getStaffStatus(staff, 0);
+        if (status.type === 'error') return 'violation';
+        if (status.type === 'warning') return 'warning';
+        return 'normal';
+      };
   
       // ステータス優先度取得（ソート用）
-      const getStaffStatusPriority = (staffId) => {
-        const status = props.getStaffStatus(staffId);
-  
+      const getStaffStatusPriority = (staff) => {
+        const status = getFilterStatus(staff);
         switch (status) {
           case "violation":
             return 3; // 違反（最優先）
@@ -356,6 +384,41 @@
           default:
             return 1;
         }
+      };
+
+      // ステータス表示用の関数
+      const getStatusClass = (staff) => {
+        const statusInfo = props.getStaffStatusInfo(staff, 0);
+        switch (statusInfo.type) {
+          case 'error':
+            return 'status-violation';
+          case 'warning':
+            return 'status-warning';
+          default:
+            return 'status-ok';
+        }
+      };
+
+      const getStatusIcon = (staff) => {
+        const statusInfo = props.getStaffStatusInfo(staff, 0);
+        switch (statusInfo.type) {
+          case 'error':
+            return 'pi pi-times-circle';
+          case 'warning':
+            return 'pi pi-exclamation-triangle';
+          default:
+            return 'pi pi-check-circle';
+        }
+      };
+
+      const getStatusText = (staff) => {
+        const statusInfo = props.getStaffStatusInfo(staff, 0);
+        return statusInfo.label;
+      };
+
+      const getStatusTitle = (staff) => {
+        const statusInfo = props.getStaffStatusInfo(staff, 0);
+        return statusInfo.description;
       };
   
       // ソート切り替え
@@ -400,6 +463,11 @@
         toggleSort,
         resetAllStaffFilters,
         getSortIcon,
+        getStoreBreakdownForStaff,
+        getStatusClass,
+        getStatusIcon,
+        getStatusText,
+        getStatusTitle,
       };
     },
   };
