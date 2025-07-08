@@ -20,13 +20,16 @@
                 <div
                   v-if="hasDateWarnings(day.date)"
                   class="warning-indicator"
-                  :data-warning-count="getDateWarnings(day.date).length"
+                  :data-warning-count="getDateWarnings(day.date).filter(w => w.type === 'staffing_shortage').length || ''"
+                  :class="{
+                    'has-staffing-shortage': hasDateStaffingShortage(day.date)
+                  }"
                 >
                   <i class="pi pi-exclamation-triangle"></i>
                   <div class="warning-tooltip">
                     <div
                       v-for="warning in getDateWarnings(day.date)"
-                      :key="warning.type"
+                      :key="warning.type + warning.message"
                       class="warning-tooltip-item"
                       :class="warning.type"
                     >
@@ -44,6 +47,7 @@
                   'is-today': day.isToday,
                   'is-selected': selectedDate === day.date,
                   'has-warnings': hasDateWarnings(day.date),
+                  'has-staffing-shortage': hasDateStaffingShortage(day.date),
                   'is-store-closed': day.isStoreClosed,
                 }"
                 @click="selectDate(day.date)"
@@ -219,7 +223,6 @@
                     "
                     class="break-time-indicator"
                   >
-                    <i class="pi pi-coffee"></i>
                     <span>
                       {{
                         formatTime(
@@ -235,6 +238,12 @@
                         )
                       }}
                     </span>
+                  </div>
+                  <div
+                    v-else
+                    class="break-time-placeholder"
+                  >
+                    <!-- 休憩なしの場合のプレースホルダー -->
                   </div>
                   <div
                     v-if="hasShiftViolation(day.date, staff.id)"
@@ -310,6 +319,7 @@
       getStaffWarningsAllStores: Function,
       hasDateWarnings: Function,
       getDateWarnings: Function,
+      hasDateStaffingShortage: Function,
       hasShiftViolation: Function,
       getShiftViolations: Function,
       canStaffWorkOnDate: Function,
@@ -403,8 +413,8 @@
   .date-cell-wrapper {
     display: flex;
     flex-direction: column;
-    min-width: 80px;
-    width: 80px;
+    min-width: 90px;
+    width: 90px;
     border-right: 1px solid #e5e7eb;
     border-bottom: 2px solid #e5e7eb;
     flex-shrink: 0;
@@ -470,6 +480,16 @@
     background: #d1d5db !important;
   }
   
+  // 人員不足がある日付のスタイル追加
+  .date-cell-header.has-staffing-shortage {
+    background: #fef3c7 !important;
+  }
+  
+  .date-cell-header.has-staffing-shortage .date-number {
+    color: #78350f !important;
+    font-weight: 700;
+  }
+  
   .date-number {
     font-size: 1.1rem;
     font-weight: 600;
@@ -511,6 +531,12 @@
     color: #78350f;
     position: relative;
     cursor: pointer;
+  }
+  
+  // 人員不足専用のスタイル
+  .warning-indicator.has-staffing-shortage {
+    background: #fbbf24;
+    color: #78350f;
   }
   
   .warning-indicator::before {
@@ -558,11 +584,12 @@
   .warning-tooltip-item.staffing_shortage {
     background: #fef3c7;
     color: #78350f;
+    font-weight: 600;
   }
   
   .warning-tooltip-item.staff_violation {
-    background: #fee2e2;
-    color: #7f1d1d;
+    background: #fef3c7;
+    color: #78350f;
   }
   
   .calendar-body {
@@ -696,9 +723,10 @@
   }
   
   .shift-cell {
-    min-width: 80px;
-    width: 80px;
-    min-height: 70px;
+    min-width: 90px;
+    width: 90px;
+    min-height: 130px;
+    padding: 5px;
     border-right: 1px solid #e5e7eb;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
@@ -754,18 +782,22 @@
   .shift-time-card {
     background: #10b981;
     color: white;
-    padding: 0.5rem 0.375rem;
+    padding: 0.25rem 0.5rem;
     border-radius: 6px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.125rem;
+    gap: 0.2rem;
     font-weight: 600;
     font-size: 0.75rem;
-    min-width: 60px;
+    min-width: 75px;
+    width: 100%;
+    max-width: 80px;
+    height: 120px;
     transition: all 0.2s;
     position: relative;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    justify-content: flex-start;
   }
   
   .shift-time-card:hover {
@@ -808,31 +840,48 @@
   }
   
   .break-time-indicator {
-    font-size: 0.65rem;
-    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.95);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.25rem;
-    margin-top: 0.25rem;
-    padding: 0.125rem 0.25rem;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 3px;
+    gap: 0.15rem;
+    margin-top: 0.4rem;
+    padding: 0.25rem 0.35rem;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
     font-weight: 500;
+    width: 100%;
+    line-height: 1.3;
   }
   
   .break-time-indicator .pi {
-    font-size: 0.6rem;
+    display: none;
+  }
+  
+  .break-time-indicator::before {
+    content: "休憩";
+    font-size: 0.65rem;
+    font-weight: 700;
+    opacity: 0.95;
+    letter-spacing: 0.05em;
+  }
+  
+  .break-time-placeholder {
+    height: 2.2rem;
+    visibility: hidden;
   }
   
   .shift-start,
   .shift-end {
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
   }
   
   .shift-separator {
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     opacity: 0.8;
+    line-height: 0.8;
   }
   
   .violation-icon {
@@ -959,8 +1008,17 @@
   
     .date-cell-wrapper,
     .shift-cell {
+      min-width: 80px;
+      width: 80px;
+    }
+    
+    .shift-cell {
+      padding: 3px;
+    }
+    
+    .shift-time-card {
       min-width: 70px;
-      width: 70px;
+      max-width: 74px;
     }
   }
   </style>

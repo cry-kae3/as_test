@@ -56,16 +56,17 @@
               class="hour-requirements"
             >
               <div
-                v-for="req in getHourRequirements(selectedDate, hour)"
-                :key="`${req.start_time}-${req.end_time}`"
+                v-for="req in getHourlyStaffingInfo(selectedDate, hour)"
+                :key="`${req.requirement.start_time}-${req.requirement.end_time}`"
                 class="hour-requirement-badge"
                 :class="{
-                  shortage: hasRequirementShortage(selectedDate, req),
+                  shortage: req.hasShortage,
+                  satisfied: !req.hasShortage
                 }"
+                :title="`${formatTime(req.requirement.start_time)}-${formatTime(req.requirement.end_time)}: ${req.assignedCount}/${req.requiredCount}名`"
               >
-                {{ getAssignedStaffCount(selectedDate, req) }}/{{
-                  req.required_staff_count
-                }}
+                <span class="staffing-count">{{ req.assignedCount }}/{{ req.requiredCount }}</span>
+                <i v-if="req.hasShortage" class="pi pi-exclamation-triangle shortage-icon"></i>
               </div>
             </div>
           </div>
@@ -181,6 +182,9 @@
                   :key="`grid-${hour}`"
                   class="gantt-hour-line"
                   :style="getTimeHeaderStyle()"
+                  :class="{
+                    'has-shortage': hasHourlyShortage(selectedDate, hour)
+                  }"
                 ></div>
               </div>
 
@@ -291,6 +295,7 @@ export default {
     getHourRequirements: Function,
     hasRequirementShortage: Function,
     getAssignedStaffCount: Function,
+    getHourlyStaffingInfo: Function,
     hasShiftViolation: Function,
     canStaffWorkOnDate: Function,
     formatSelectedDateDisplay: Function,
@@ -416,6 +421,11 @@ export default {
     parseTimeToFloat(timeStr) {
       const [hours, minutes] = timeStr.split(":").map(Number);
       return hours + minutes / 60;
+    },
+    hasHourlyShortage(date, hour) {
+      if (!this.getHourlyStaffingInfo) return false;
+      const staffingInfo = this.getHourlyStaffingInfo(date, hour);
+      return staffingInfo.some(info => info.hasShortage);
     },
   },
 };
@@ -565,13 +575,43 @@ export default {
   font-size: 0.65rem;
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s;
+}
+
+.hour-requirement-badge.satisfied {
   background: #10b981;
   color: white;
-  font-weight: 600;
 }
 
 .hour-requirement-badge.shortage {
-  background: #ef4444;
+  background: #fbbf24;
+  color: #78350f;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.staffing-count {
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+.shortage-icon {
+  font-size: 0.6rem;
 }
 
 .gantt-body {
@@ -716,6 +756,11 @@ export default {
   height: 100%;
   flex-shrink: 0;
   position: relative;
+  transition: background-color 0.2s;
+}
+
+.gantt-hour-line.has-shortage {
+  background-color: rgba(251, 191, 36, 0.1);
 }
 
 .gantt-hour-line::after {

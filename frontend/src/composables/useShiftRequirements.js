@@ -67,8 +67,37 @@ export function useShiftRequirements() {
             const shiftStartTime = parseTimeToFloat(assignment.start_time);
             const shiftEndTime = parseTimeToFloat(assignment.end_time);
 
-            return shiftStartTime < reqEndTime && shiftEndTime > reqStartTime;
+            // 休憩時間を考慮した実働判定
+            let isWorkingDuringRequirement = false;
+
+            // シフトと要件時間帯が重複しているかチェック
+            if (shiftStartTime < reqEndTime && shiftEndTime > reqStartTime) {
+                // 休憩時間がある場合
+                if (assignment.break_start_time && assignment.break_end_time) {
+                    const breakStartTime = parseTimeToFloat(assignment.break_start_time);
+                    const breakEndTime = parseTimeToFloat(assignment.break_end_time);
+
+                    // 休憩時間と要件時間帯が完全に重複している場合は除外
+                    if (breakStartTime <= reqStartTime && breakEndTime >= reqEndTime) {
+                        isWorkingDuringRequirement = false;
+                    } else {
+                        // 部分的に勤務している場合はカウント
+                        isWorkingDuringRequirement = true;
+                    }
+                } else {
+                    // 休憩時間がない場合はカウント
+                    isWorkingDuringRequirement = true;
+                }
+            }
+
+            return isWorkingDuringRequirement;
         }).length;
+    };
+
+    // 日付に人員不足があるかチェック（新規追加）
+    const hasDateStaffingShortage = (date, storeRequirements, shifts) => {
+        const requirements = getDailyRequirements(date, storeRequirements);
+        return requirements.some((req) => hasStaffingShortage(date, req, shifts));
     };
 
     // 日付警告があるかチェック
@@ -100,6 +129,10 @@ export function useShiftRequirements() {
                     message: `${formatTime(req.start_time)}-${formatTime(
                         req.end_time
                     )}: 人員不足 (${assigned}/${req.required_staff_count}名)`,
+                    severity: "error",
+                    assignedCount: assigned,
+                    requiredCount: req.required_staff_count,
+                    requirement: req
                 });
             }
         });
@@ -112,6 +145,7 @@ export function useShiftRequirements() {
                         type: "staff_violation",
                         icon: "pi pi-exclamation-triangle",
                         message: `${staff.last_name} ${staff.first_name}: 勤務条件違反`,
+                        severity: "warning"
                     });
                 }
             });
@@ -136,6 +170,28 @@ export function useShiftRequirements() {
         );
     };
 
+    // 時間帯別の人員情報を取得（新規追加）
+    const getHourlyStaffingInfo = (date, hour, storeRequirements, shifts) => {
+        const requirements = getHourRequirements(date, hour, storeRequirements);
+        const staffingInfo = [];
+
+        requirements.forEach((req) => {
+            const assignedCount = getAssignedStaffCount(date, req, shifts);
+            const requiredCount = req.required_staff_count;
+            const hasShortage = assignedCount < requiredCount;
+
+            staffingInfo.push({
+                requirement: req,
+                assignedCount,
+                requiredCount,
+                hasShortage,
+                shortageCount: requiredCount - assignedCount
+            });
+        });
+
+        return staffingInfo;
+    };
+
     // 時間を浮動小数点数にパース
     const parseTimeToFloat = (timeStr) => {
         const [hours, minutes] = timeStr.split(":").map(Number);
@@ -153,6 +209,8 @@ export function useShiftRequirements() {
         hasDateWarnings,
         getDateWarnings,
         getDailyShiftStaff,
+        hasDateStaffingShortage,
+        getHourlyStaffingInfo,
         parseTimeToFloat,
     };
 }

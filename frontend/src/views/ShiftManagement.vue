@@ -137,6 +137,7 @@
           :getStaffWarningsAllStores="getStaffWarningsAllStores"
           :hasDateWarnings="hasDateWarnings"
           :getDateWarnings="getDateWarnings"
+          :hasDateStaffingShortage="hasDateStaffingShortage"
           :hasShiftViolation="hasShiftViolation"
           :getShiftViolations="getShiftViolations"
           :canStaffWorkOnDate="canStaffWorkOnDate"
@@ -174,6 +175,7 @@
             :getHourRequirements="getHourRequirements"
             :hasRequirementShortage="hasRequirementShortage"
             :getAssignedStaffCount="getAssignedStaffCount"
+            :getHourlyStaffingInfo="getHourlyStaffingInfo"
             :hasShiftViolation="hasShiftViolation"
             :canStaffWorkOnDate="canStaffWorkOnDate"
             :formatSelectedDateDisplay="formatSelectedDateDisplay"
@@ -435,13 +437,7 @@ export default {
     } = allStoreManagement;
 
     // useShiftRequirementsに必要な引数を渡す
-    const shiftRequirements = useShiftRequirements(
-      storeRequirements,
-      shifts,
-      staffList,
-      hasShiftViolation,
-      formatTime
-    );
+    const shiftRequirements = useShiftRequirements();
 
     const {
       getDailyRequirements,
@@ -453,6 +449,8 @@ export default {
       hasDateWarnings,
       getDateWarnings,
       getDailyShiftStaff,
+      hasDateStaffingShortage,
+      getHourlyStaffingInfo,
     } = shiftRequirements;
 
     const {
@@ -485,6 +483,26 @@ export default {
 
     // ローディング状態の統合
     const loading = computed(() => managementLoading.value || actionsLoading.value);
+
+    // ラッパー関数を作成してpropsを渡す
+    const wrappedGetDailyRequirements = (date) => getDailyRequirements(date, storeRequirements.value);
+    const wrappedHasHourRequirements = (date, hour) => hasHourRequirements(date, hour, storeRequirements.value);
+    const wrappedGetHourRequirements = (date, hour) => getHourRequirements(date, hour, storeRequirements.value);
+    const wrappedHasRequirementShortage = (date, requirement) => hasRequirementShortage(date, requirement, shifts.value);
+    const wrappedHasStaffingShortage = (date, requirement) => hasStaffingShortage(date, requirement, shifts.value);
+    const wrappedGetAssignedStaffCount = (date, requirement) => getAssignedStaffCount(date, requirement, shifts.value);
+    const wrappedHasDateWarnings = (date) => hasDateWarnings(date, storeRequirements.value, shifts.value, staffList.value, hasShiftViolation);
+    const wrappedGetDateWarnings = (date) => getDateWarnings(date, storeRequirements.value, shifts.value, staffList.value, hasShiftViolation, formatTime);
+    const wrappedGetDailyShiftStaff = (date) => getDailyShiftStaff(date, staffList.value, shifts.value);
+    const wrappedHasDateStaffingShortage = (date) => hasDateStaffingShortage(date, storeRequirements.value, shifts.value);
+    const wrappedGetHourlyStaffingInfo = (date, hour) => getHourlyStaffingInfo(date, hour, storeRequirements.value, shifts.value);
+
+    // 他店舗関連のラッパー関数
+    const wrappedGetOtherStoreHoursBreakdown = (staffId) => getOtherStoreHoursBreakdown(staffId, staffList.value, selectedStore.value);
+    const wrappedCalculateTotalHoursAllStores = (staffId) => calculateTotalHoursAllStores(staffId, shifts.value, staffList.value, selectedStore.value, calculateTotalHours);
+    const wrappedIsHoursOutOfRangeAllStores = (staffId) => isHoursOutOfRangeAllStores(staffId, staffList.value, shifts.value, selectedStore.value, calculateTotalHours);
+    const wrappedHasStaffWarningsAllStores = (staffId) => hasStaffWarningsAllStores(staffId, staffList.value, shifts.value, selectedStore.value, calculateTotalHours);
+    const wrappedGetStaffWarningsAllStores = (staffId) => getStaffWarningsAllStores(staffId, staffList.value, shifts.value, selectedStore.value, calculateTotalHours);
 
     // データ読み込み関数
     const loadShiftData = async () => {
@@ -678,10 +696,10 @@ export default {
         currentYear.value,
         currentMonth.value,
         staffList.value,
-        hasStaffWarningsAllStores,
-        getStaffWarningsAllStores,
-        hasDateWarnings,
-        getDateWarnings,
+        wrappedHasStaffWarningsAllStores,
+        wrappedGetStaffWarningsAllStores,
+        wrappedHasDateWarnings,
+        wrappedGetDateWarnings,
         daysInMonth.value,
         formatHours,
         loadShiftData
@@ -708,10 +726,10 @@ export default {
           currentYear.value,
           currentMonth.value,
           staffList.value,
-          hasStaffWarningsAllStores,
-          getStaffWarningsAllStores,
-          hasDateWarnings,
-          getDateWarnings,
+          wrappedHasStaffWarningsAllStores,
+          wrappedGetStaffWarningsAllStores,
+          wrappedHasDateWarnings,
+          wrappedGetDateWarnings,
           daysInMonth.value,
           formatHours,
           loadShiftData
@@ -770,7 +788,7 @@ const handleDeleteShift = async () => {
         formatTime,
         formatHours,
         calculateTotalHours,
-        calculateTotalHoursAllStores
+        wrappedCalculateTotalHoursAllStores
       );
     };
 
@@ -920,31 +938,33 @@ const handleDeleteShift = async () => {
       getWorkAvailabilityTooltip,
       getWorkUnavailabilityReason,
 
-      // allStoreShiftManagementから
+      // allStoreShiftManagementから（ラッパー関数）
       allSystemStaff,
       getAllStoreHoursBreakdownForAllStaff,
       calculateTotalHoursForAllSystemStaff,
       isHoursOutOfRangeForAllSystemStaff,
       hasStaffWarningsForAllSystemStaff,
       getStaffWarningsForAllSystemStaff,
-      getOtherStoreHoursBreakdown,
-      calculateTotalHoursAllStores,
-      isHoursOutOfRangeAllStores,
-      hasStaffWarningsAllStores,
-      getStaffWarningsAllStores,
+      getOtherStoreHoursBreakdown: wrappedGetOtherStoreHoursBreakdown,
+      calculateTotalHoursAllStores: wrappedCalculateTotalHoursAllStores,
+      isHoursOutOfRangeAllStores: wrappedIsHoursOutOfRangeAllStores,
+      hasStaffWarningsAllStores: wrappedHasStaffWarningsAllStores,
+      getStaffWarningsAllStores: wrappedGetStaffWarningsAllStores,
       getStaffStatus,
       getStaffStatusInfo,
 
-      // shiftRequirementsから
-      getDailyRequirements,
-      hasHourRequirements,
-      getHourRequirements,
-      hasRequirementShortage,
-      hasStaffingShortage,
-      getAssignedStaffCount,
-      hasDateWarnings,
-      getDateWarnings,
-      getDailyShiftStaff,
+      // shiftRequirementsから（ラッパー関数）
+      getDailyRequirements: wrappedGetDailyRequirements,
+      hasHourRequirements: wrappedHasHourRequirements,
+      getHourRequirements: wrappedGetHourRequirements,
+      hasRequirementShortage: wrappedHasRequirementShortage,
+      hasStaffingShortage: wrappedHasStaffingShortage,
+      getAssignedStaffCount: wrappedGetAssignedStaffCount,
+      hasDateWarnings: wrappedHasDateWarnings,
+      getDateWarnings: wrappedGetDateWarnings,
+      getDailyShiftStaff: wrappedGetDailyShiftStaff,
+      hasDateStaffingShortage: wrappedHasDateStaffingShortage,
+      getHourlyStaffingInfo: wrappedGetHourlyStaffingInfo,
 
       // shiftEditorから
       shiftEditorDialog,
