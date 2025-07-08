@@ -141,6 +141,52 @@ class ShiftGeneratorService {
         return end.diff(start, 'minutes');
     }
 
+    // 🔥 新機能: 日本の労働法に基づく休憩時間を計算
+    calculateRequiredBreakTime(workHours) {
+        if (workHours >= 8) {
+            return { start: "12:00", end: "13:00", minutes: 60 }; // 8時間以上：1時間休憩
+        } else if (workHours >= 6) {
+            return { start: "12:00", end: "12:45", minutes: 45 }; // 6時間以上：45分休憩
+        }
+        return null; // 6時間未満：休憩不要
+    }
+
+    // 🔥 新機能: 勤務時間に応じた終了時間を計算（休憩込み）
+    calculateEndTimeWithBreak(startTime, workHours) {
+        const start = moment(startTime, 'HH:mm');
+        const breakTime = this.calculateRequiredBreakTime(workHours);
+        
+        if (breakTime) {
+            // 休憩時間を含めて終了時間を計算
+            const end = start.clone().add(workHours, 'hours').add(breakTime.minutes, 'minutes');
+            return {
+                endTime: end.format('HH:mm'),
+                breakStart: breakTime.start,
+                breakEnd: breakTime.end
+            };
+        } else {
+            // 休憩なし
+            const end = start.clone().add(workHours, 'hours');
+            return {
+                endTime: end.format('HH:mm'),
+                breakStart: null,
+                breakEnd: null
+            };
+        }
+    }
+
+    // 🔥 新機能: スタッフの希望時間を取得
+    getStaffPreferredTime(staff, dayOfWeek) {
+        const dayPreference = staff.dayPreferences?.find(p => p.day_of_week === dayOfWeek);
+        if (dayPreference && dayPreference.preferred_start_time && dayPreference.preferred_end_time) {
+            return {
+                startTime: dayPreference.preferred_start_time,
+                endTime: dayPreference.preferred_end_time
+            };
+        }
+        return null;
+    }
+
     async getStaffTotalHoursAllStores(staffIds, year, month) {
         try {
             this.logProcess('STAFF_HOURS_CALCULATION', `全店舗スタッフ時間計算開始`, { staffIds, year, month });
@@ -168,7 +214,13 @@ class ShiftGeneratorService {
                     const staffId = assignment.staff_id;
                     if (staffHours[staffId]) {
                         const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
-                        staffHours[staffId].totalMinutes += workMinutes;
+                        // 🔥 修正: 休憩時間を差し引く
+                        const breakMinutes = assignment.break_start_time && assignment.break_end_time 
+                            ? this.calculateWorkMinutes(assignment.break_start_time, assignment.break_end_time)
+                            : 0;
+                        const actualWorkMinutes = workMinutes - breakMinutes;
+                        
+                        staffHours[staffId].totalMinutes += actualWorkMinutes;
                         if (!staffHours[staffId].staffName && assignment.Staff) {
                             staffHours[staffId].staffName = `${assignment.Staff.last_name} ${assignment.Staff.first_name}`;
                         }
@@ -240,6 +292,8 @@ class ShiftGeneratorService {
                             date: assignment.date,
                             start_time: assignment.start_time,
                             end_time: assignment.end_time,
+                            break_start_time: assignment.break_start_time,
+                            break_end_time: assignment.break_end_time,
                             store_id: shift.store_id,
                             store_name: shift.Store ? shift.Store.name : `店舗${shift.store_id}`
                         });
@@ -366,7 +420,7 @@ class ShiftGeneratorService {
         }
     }
 
-    async validateGeneratedShift(shiftData, staffs, otherStoreShifts) {
+    async validateGeneratedShift(shiftData, staffs, otherStoreShifts, systemSettings = null) {
         this.logProcess('VALIDATION_START', `シフト検証開始`);
         const violations = [];
         const warnings = [];
@@ -378,6 +432,7 @@ class ShiftGeneratorService {
         }
 
         const validStaffIds = staffs.map(s => s.id);
+        const minDailyHours = systemSettings?.min_daily_hours || 4.0;
 
         for (const dayShift of shiftData.shifts) {
             const date = dayShift.date;
@@ -432,11 +487,28 @@ class ShiftGeneratorService {
                 }
 
                 const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
-                const workHours = workMinutes / 60;
+                const breakMinutes = assignment.break_start_time && assignment.break_end_time 
+                    ? this.calculateWorkMinutes(assignment.break_start_time, assignment.break_end_time)
+                    : 0;
+                const actualWorkMinutes = workMinutes - breakMinutes;
+                const workHours = actualWorkMinutes / 60;
                 const maxDailyHours = staff.max_hours_per_day || 8;
+
+                // 🔥 新機能: 最低勤務時間チェック
+                if (workHours < minDailyHours) {
+                    violations.push(`${staff.first_name} ${staff.last_name} (${date}): 1日最低勤務時間不足 (${workHours.toFixed(1)}h < ${minDailyHours}h)`);
+                }
 
                 if (workHours > maxDailyHours) {
                     violations.push(`${staff.first_name} ${staff.last_name} (${date}): 1日勤務時間超過 (${workHours.toFixed(1)}h > ${maxDailyHours}h)`);
+                }
+
+                // 🔥 新機能: 労働法の休憩時間チェック
+                const requiredBreak = this.calculateRequiredBreakTime(workHours);
+                if (requiredBreak && (!assignment.break_start_time || !assignment.break_end_time)) {
+                    violations.push(`${staff.first_name} ${staff.last_name} (${date}): ${workHours >= 8 ? '8時間以上' : '6時間以上'}の勤務には休憩が必要です`);
+                } else if (requiredBreak && breakMinutes < requiredBreak.minutes) {
+                    violations.push(`${staff.first_name} ${staff.last_name} (${date}): 休憩時間不足 (${breakMinutes}分 < ${requiredBreak.minutes}分)`);
                 }
 
                 if (!staffWorkHours[staffId]) {
@@ -449,11 +521,13 @@ class ShiftGeneratorService {
                         assignments: []
                     };
                 }
-                staffWorkHours[staffId] += workMinutes;
+                staffWorkHours[staffId] += actualWorkMinutes;
                 staffHoursSummary[staffId].assignments.push({
                     date: date,
                     start_time: assignment.start_time,
                     end_time: assignment.end_time,
+                    break_start_time: assignment.break_start_time,
+                    break_end_time: assignment.break_end_time,
                     hours: workHours
                 });
             }
@@ -500,6 +574,295 @@ class ShiftGeneratorService {
         return { isValid, violations, warnings };
     }
 
+    getCriticalViolations(validationResult) {
+        if (!validationResult?.violations) return [];
+        
+        return validationResult.violations.filter(violation => {
+            // 月間最大勤務時間超過は重大
+            if (violation.includes('月間最大勤務時間超過')) return true;
+            // 休み希望違反は重大
+            if (violation.includes('休み希望日') || violation.includes('勤務不可')) return true;
+            // 他店舗重複は重大
+            if (violation.includes('他店舗') && violation.includes('重複')) return true;
+            // 最低勤務時間不足は重大
+            if (violation.includes('1日最低勤務時間不足')) return true;
+            // 休憩時間不足は重大
+            if (violation.includes('休憩が必要です') || violation.includes('休憩時間不足')) return true;
+            
+            return false;
+        });
+    }
+
+    calculateShiftScore(validationResult, shiftData, staffs) {
+        let score = 1000; // ベーススコア
+        
+        if (!validationResult) return 0;
+        
+        // 制約違反ペナルティ
+        const violations = validationResult.violations || [];
+        score -= violations.length * 100;
+        
+        // 重大な違反には追加ペナルティ
+        const criticalViolations = this.getCriticalViolations(validationResult);
+        score -= criticalViolations.length * 500;
+        
+        // カバレッジボーナス（より多くの日にシフトが組まれている）
+        const totalAssignments = shiftData.shifts?.reduce((sum, day) => 
+            sum + (day.assignments?.length || 0), 0) || 0;
+        score += totalAssignments * 10;
+        
+        // スタッフの最小勤務時間充足ボーナス
+        staffs.forEach(staff => {
+            const staffAssignments = this.getStaffAssignments(shiftData, staff.id);
+            const totalHours = this.calculateStaffTotalHours(staffAssignments);
+            const minHours = staff.min_hours_per_month || 0;
+            
+            if (totalHours >= minHours) {
+                score += 50; // 最小時間達成ボーナス
+            }
+        });
+        
+        return Math.max(0, score);
+    }
+
+    getStaffTotalHours(shiftData, staffId) {
+        if (!shiftData?.shifts) return 0;
+        
+        let totalMinutes = 0;
+        shiftData.shifts.forEach(day => {
+            if (day.assignments) {
+                day.assignments.forEach(assignment => {
+                    if (assignment.staff_id === staffId) {
+                        const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
+                        const breakMinutes = assignment.break_start_time && assignment.break_end_time 
+                            ? this.calculateWorkMinutes(assignment.break_start_time, assignment.break_end_time)
+                            : 0;
+                        totalMinutes += (workMinutes - breakMinutes);
+                    }
+                });
+            }
+        });
+        
+        return totalMinutes / 60;
+    }
+
+    getStaffAssignments(shiftData, staffId) {
+        const assignments = [];
+        if (!shiftData?.shifts) return assignments;
+        
+        shiftData.shifts.forEach(day => {
+            if (day.assignments) {
+                day.assignments.forEach(assignment => {
+                    if (assignment.staff_id === staffId) {
+                        const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
+                        const breakMinutes = assignment.break_start_time && assignment.break_end_time 
+                            ? this.calculateWorkMinutes(assignment.break_start_time, assignment.break_end_time)
+                            : 0;
+                        const actualWorkMinutes = workMinutes - breakMinutes;
+                        
+                        assignments.push({
+                            date: day.date,
+                            start_time: assignment.start_time,
+                            end_time: assignment.end_time,
+                            break_start_time: assignment.break_start_time,
+                            break_end_time: assignment.break_end_time,
+                            hours: actualWorkMinutes / 60
+                        });
+                    }
+                });
+            }
+        });
+        
+        return assignments;
+    }
+
+    calculateStaffTotalHours(assignments) {
+        return assignments.reduce((total, assignment) => total + assignment.hours, 0);
+    }
+
+    hasFixableViolations(validationResult) {
+        if (!validationResult?.violations) return false;
+        
+        return validationResult.violations.some(violation => {
+            // 月間時間関連は修正可能
+            if (violation.includes('月間最小勤務時間不足')) return true;
+            if (violation.includes('月間最大勤務時間超過')) return true;
+            
+            return false;
+        });
+    }
+
+    async attemptConstraintFix(shiftData, validationResult, staffs, otherStoreShifts) {
+        this.logProcess('CONSTRAINT_FIX_START', '制約違反の修正開始');
+        
+        const fixedShiftData = JSON.parse(JSON.stringify(shiftData)); // ディープコピー
+        
+        // 月間勤務時間の修正
+        const timeViolations = validationResult.violations.filter(v => 
+            v.includes('月間最小勤務時間不足') || v.includes('月間最大勤務時間超過')
+        );
+        
+        for (const violation of timeViolations) {
+            const staffMatch = violation.match(/^([^:]+):/);
+            if (!staffMatch) continue;
+            
+            const staffName = staffMatch[1];
+            const staff = staffs.find(s => `${s.first_name} ${s.last_name}` === staffName);
+            if (!staff) continue;
+            
+            if (violation.includes('月間最大勤務時間超過')) {
+                // 勤務時間を削減
+                this.reduceStaffHours(fixedShiftData, staff, staffs);
+            } else if (violation.includes('月間最小勤務時間不足')) {
+                // 勤務時間を増加
+                this.increaseStaffHours(fixedShiftData, staff, staffs, otherStoreShifts);
+            }
+        }
+        
+        this.logProcess('CONSTRAINT_FIX_COMPLETE', '制約違反の修正完了');
+        return fixedShiftData;
+    }
+
+    reduceStaffHours(shiftData, staff, staffs) {
+        const staffAssignments = [];
+        
+        // スタッフの全割り当てを収集
+        shiftData.shifts.forEach((day, dayIndex) => {
+            if (day.assignments) {
+                day.assignments.forEach((assignment, assignIndex) => {
+                    if (assignment.staff_id === staff.id) {
+                        const workMinutes = this.calculateWorkMinutes(assignment.start_time, assignment.end_time);
+                        const breakMinutes = assignment.break_start_time && assignment.break_end_time 
+                            ? this.calculateWorkMinutes(assignment.break_start_time, assignment.break_end_time)
+                            : 0;
+                        const actualWorkMinutes = workMinutes - breakMinutes;
+                        
+                        staffAssignments.push({
+                            dayIndex,
+                            assignIndex,
+                            assignment,
+                            date: day.date,
+                            hours: actualWorkMinutes / 60
+                        });
+                    }
+                });
+            }
+        });
+        
+        // 勤務時間の短い順にソート
+        staffAssignments.sort((a, b) => a.hours - b.hours);
+        
+        // 必要に応じて割り当てを削除
+        const maxHours = staff.max_hours_per_month || 160;
+        let currentTotal = staffAssignments.reduce((sum, sa) => sum + sa.hours, 0);
+        
+        while (currentTotal > maxHours && staffAssignments.length > 0) {
+            const toRemove = staffAssignments.pop();
+            shiftData.shifts[toRemove.dayIndex].assignments.splice(toRemove.assignIndex, 1);
+            currentTotal -= toRemove.hours;
+            
+            // インデックスを調整
+            staffAssignments.forEach(sa => {
+                if (sa.dayIndex === toRemove.dayIndex && sa.assignIndex > toRemove.assignIndex) {
+                    sa.assignIndex--;
+                }
+            });
+        }
+    }
+
+    increaseStaffHours(shiftData, staff, staffs, otherStoreShifts, systemSettings = null) {
+        const minHours = staff.min_hours_per_month || 0;
+        const maxHours = staff.max_hours_per_month || 160;
+        const minDailyHours = systemSettings?.min_daily_hours || 4.0;
+        
+        const currentTotal = this.getStaffTotalHours(shiftData, staff.id);
+        const neededHours = minHours - currentTotal;
+        
+        if (neededHours <= 0) return;
+        
+        // 勤務可能な日を探して追加
+        const availableDays = this.findAvailableDaysForStaff(shiftData, staff, otherStoreShifts);
+        
+        let addedHours = 0;
+        for (const availableDay of availableDays) {
+            if (addedHours >= neededHours) break;
+            
+            const suggestedHours = Math.max(
+                minDailyHours,
+                Math.min(
+                    neededHours - addedHours,
+                    staff.max_hours_per_day || 8
+                )
+            );
+            
+            // スタッフの希望時間を取得
+            const preferredTime = this.getStaffPreferredTime(staff, availableDay.dayOfWeek);
+            let startTime, endTime, breakStart = null, breakEnd = null;
+            
+            if (preferredTime) {
+                startTime = preferredTime.startTime;
+                const workTime = this.calculateEndTimeWithBreak(startTime, suggestedHours);
+                endTime = workTime.endTime;
+                breakStart = workTime.breakStart;
+                breakEnd = workTime.breakEnd;
+            } else {
+                startTime = "10:00";
+                const workTime = this.calculateEndTimeWithBreak(startTime, suggestedHours);
+                endTime = workTime.endTime;
+                breakStart = workTime.breakStart;
+                breakEnd = workTime.breakEnd;
+            }
+            
+            const newAssignment = {
+                staff_id: staff.id,
+                start_time: startTime,
+                end_time: endTime,
+                break_start_time: breakStart,
+                break_end_time: breakEnd
+            };
+            
+            const dayShift = shiftData.shifts.find(d => d.date === availableDay.date);
+            if (dayShift) {
+                if (!dayShift.assignments) dayShift.assignments = [];
+                dayShift.assignments.push(newAssignment);
+                addedHours += suggestedHours;
+            }
+        }
+    }
+
+    findAvailableDaysForStaff(shiftData, staff, otherStoreShifts) {
+        const availableDays = [];
+        const otherShifts = otherStoreShifts[staff.id] || [];
+        
+        // 全ての日付をチェック
+        shiftData.shifts.forEach(day => {
+            const date = day.date;
+            const dayOfWeek = new Date(date).getDay();
+            
+            // 既に割り当てがある場合はスキップ
+            const hasAssignment = day.assignments?.some(a => a.staff_id === staff.id);
+            if (hasAssignment) return;
+            
+            // 他店舗でのシフトがある場合はスキップ
+            const hasOtherShift = otherShifts.some(s => s.date === date);
+            if (hasOtherShift) return;
+            
+            // 勤務不可曜日チェック
+            const dayPreference = staff.dayPreferences?.find(p => p.day_of_week === dayOfWeek);
+            if (dayPreference && !dayPreference.available) return;
+            
+            // 休み希望チェック
+            const hasDayOff = staff.dayOffRequests?.some(req => 
+                req.date === date && (req.status === 'approved' || req.status === 'pending')
+            );
+            if (hasDayOff) return;
+            
+            availableDays.push({ date, dayOfWeek });
+        });
+        
+        return availableDays;
+    }
+
     async generateShift(storeId, year, month) {
         this.initializeSession(storeId, year, month);
 
@@ -514,7 +877,8 @@ class ShiftGeneratorService {
             this.logProcess('SYSTEM_SETTINGS_FETCH', `システム設定取得開始`);
             const settings = await SystemSetting.findOne({ where: { user_id: store.owner_id } });
             const closingDay = settings ? settings.closing_day : 25;
-            this.logProcess('SYSTEM_SETTINGS_RESULT', `システム設定取得完了`, { closingDay });
+            const systemSettings = settings ? settings : { min_daily_hours: 4.0 };
+            this.logProcess('SYSTEM_SETTINGS_RESULT', `システム設定取得完了`, { closingDay, minDailyHours: systemSettings.min_daily_hours });
 
             const period = this.getShiftPeriod(year, month, closingDay);
 
@@ -556,58 +920,166 @@ class ShiftGeneratorService {
                 requirementsCount: storeRequirements.length
             });
 
-            const prompt = this.buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts);
-            this.logProcess('PROMPT_GENERATION', `AIプロンプト生成完了`, {
-                promptLength: prompt.length
-            });
+            const MAX_RETRY_ATTEMPTS = 3; // 最大再試行回数
+            let attempt = 0;
+            let bestResult = null;
+            let bestValidation = null;
 
-            this.logProcess('AI_API_CALL', `Claude API呼び出し開始`);
-            const response = await this.callClaudeApi(prompt);
-            this.logProcess('AI_API_RESULT', `Claude APIレスポンス受信完了`, {
-                responseLength: JSON.stringify(response).length
-            });
+            while (attempt < MAX_RETRY_ATTEMPTS) {
+                attempt++;
+                this.logProcess('GENERATION_ATTEMPT', `シフト生成試行 ${attempt}/${MAX_RETRY_ATTEMPTS}`);
 
-            this.logProcess('RESPONSE_PARSING', `レスポンス解析開始`);
-            const generatedShiftData = this.parseClaudeResponse(response);
-            this.logProcess('RESPONSE_PARSING_RESULT', `レスポンス解析完了`, {
-                parsedShifts: generatedShiftData?.shifts?.length || 0
-            });
-
-            if (!generatedShiftData || !generatedShiftData.shifts || !Array.isArray(generatedShiftData.shifts)) {
-                throw new Error('生成されたシフトデータの構造が不正です');
-            }
-
-            this.logProcess('VALIDATION', `バリデーション実行中`);
-            const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, otherStoreShifts);
-            this.logProcess('VALIDATION_RESULT', `バリデーション完了`, {
-                isValid: validationResult.isValid,
-                violationCount: validationResult.violations?.length || 0,
-                warningCount: validationResult.warnings?.length || 0,
-                violations: validationResult.violations || [],
-                warnings: validationResult.warnings || []
-            });
-
-            if (!validationResult.isValid) {
-                this.logProcess('VALIDATION_WARNING', `制約違反がありますが、データを保存します`, {
-                    violations: validationResult.violations?.slice(0, 5) || []
+                // AIプロンプト生成（試行回数に応じて調整）
+                const prompt = this.buildPrompt(
+                    store, staffs, storeClosedDays, storeRequirements, 
+                    year, month, period, otherStoreShifts, attempt, systemSettings
+                );
+                this.logProcess('PROMPT_GENERATION', `AIプロンプト生成完了`, {
+                    promptLength: prompt.length
                 });
+
+                // Claude API呼び出し
+                this.logProcess('AI_API_CALL', `Claude API呼び出し開始`);
+                const response = await this.callClaudeApi(prompt);
+                this.logProcess('AI_API_RESULT', `Claude APIレスポンス受信完了`, {
+                    responseLength: JSON.stringify(response).length
+                });
+
+                // レスポンス解析
+                this.logProcess('RESPONSE_PARSING', `レスポンス解析開始`);
+                const generatedShiftData = this.parseClaudeResponse(response);
+
+                if (!generatedShiftData?.shifts) {
+                    this.logProcess('PARSE_ERROR', `試行${attempt}: データ解析失敗`);
+                    continue;
+                }
+
+                this.logProcess('RESPONSE_PARSING_RESULT', `レスポンス解析完了`, {
+                    parsedShifts: generatedShiftData?.shifts?.length || 0
+                });
+
+                // バリデーション実行
+                this.logProcess('VALIDATION', `バリデーション実行中`);
+                const validationResult = await this.validateGeneratedShift(generatedShiftData, staffs, otherStoreShifts, systemSettings);
+                this.logProcess('VALIDATION_RESULT', `バリデーション完了`, {
+                    isValid: validationResult.isValid,
+                    violationCount: validationResult.violations?.length || 0,
+                    warningCount: validationResult.warnings?.length || 0,
+                    violations: validationResult.violations || [],
+                    warnings: validationResult.warnings || []
+                });
+
+                // 結果の評価
+                const score = this.calculateShiftScore(validationResult, generatedShiftData, staffs);
+                
+                if (validationResult.isValid) {
+                    // 制約違反なし - 即座に採用
+                    this.logProcess('GENERATION_SUCCESS', `試行${attempt}: 制約違反なしで成功`);
+                    
+                    this.logProcess('SAVE_SHIFT', `シフト保存開始`);
+                    const result = await this.saveShift(generatedShiftData, storeId, year, month);
+                    this.logProcess('SAVE_SHIFT_RESULT', `シフト保存完了`);
+                    
+                    const finalResult = {
+                        success: true,
+                        shiftData: result,
+                        validation: validationResult,
+                        hasWarnings: false,
+                        attempts: attempt
+                    };
+
+                    this.finalizeSession('SUCCESS', finalResult);
+                    return finalResult;
+                }
+
+                // 制約違反あり - ベスト結果として保存
+                if (!bestResult || score > this.calculateShiftScore(bestValidation, bestResult.shiftData, staffs)) {
+                    bestResult = {
+                        shiftData: generatedShiftData,
+                        validation: validationResult,
+                        score: score
+                    };
+                    bestValidation = validationResult;
+                }
+
+                this.logProcess('CONSTRAINT_VIOLATION', `試行${attempt}: 制約違反`, {
+                    violationCount: validationResult.violations?.length || 0,
+                    score: score
+                });
+
+                // 重大な制約違反がある場合は修正を試行
+                if (this.hasFixableViolations(validationResult)) {
+                    this.logProcess('ATTEMPTING_FIX', `試行${attempt}: 制約違反の修正を試行`);
+                    const fixedShiftData = await this.attemptConstraintFix(
+                        generatedShiftData, validationResult, staffs, otherStoreShifts
+                    );
+                    
+                    if (fixedShiftData) {
+                        const fixedValidation = await this.validateGeneratedShift(
+                            fixedShiftData, staffs, otherStoreShifts, systemSettings
+                        );
+                        
+                        if (fixedValidation.isValid) {
+                            this.logProcess('FIX_SUCCESS', `試行${attempt}: 修正成功`);
+                            const result = await this.saveShift(fixedShiftData, storeId, year, month);
+                            
+                            const finalResult = {
+                                success: true,
+                                shiftData: result,
+                                validation: fixedValidation,
+                                hasWarnings: false,
+                                attempts: attempt,
+                                wasFixed: true
+                            };
+
+                            this.finalizeSession('SUCCESS', finalResult);
+                            return finalResult;
+                        }
+                    }
+                }
             }
 
-            this.logProcess('SAVE_SHIFT', `シフト保存開始`);
-            const result = await this.saveShift(generatedShiftData, storeId, year, month);
-            this.logProcess('SAVE_SHIFT_RESULT', `シフト保存完了`);
+            // 全試行で制約違反 - 最良結果の処理
+            if (bestResult) {
+                const criticalViolations = this.getCriticalViolations(bestValidation);
+                
+                if (criticalViolations.length > 0) {
+                    // 重大な制約違反がある場合は保存しない
+                    this.logProcess('CRITICAL_VIOLATIONS', `重大な制約違反により生成を中止`, {
+                        violations: criticalViolations
+                    });
+                    
+                    const errorResult = {
+                        success: false,
+                        error: 'CRITICAL_CONSTRAINTS_VIOLATED',
+                        message: `重大な制約違反があるため、シフトを生成できませんでした。\n\n主な問題:\n${criticalViolations.slice(0, 5).join('\n')}`,
+                        violations: criticalViolations,
+                        attempts: MAX_RETRY_ATTEMPTS
+                    };
 
-            const finalResult = {
-                success: true,
-                shiftData: result,
-                validation: validationResult,
-                hasWarnings: !validationResult.isValid,
-                warningMessage: !validationResult.isValid ?
-                    `制約違反がありますが、シフトを生成しました。手動で調整してください。\n主な問題: ${validationResult.violations?.slice(0, 3).join(', ') || '不明'}` : null
-            };
+                    this.finalizeSession('FAILED', errorResult);
+                    throw new Error(errorResult.message);
+                }
 
-            this.finalizeSession('SUCCESS', finalResult);
-            return finalResult;
+                // 軽微な制約違反のみ - 警告付きで保存
+                this.logProcess('MINOR_VIOLATIONS_SAVE', `軽微な制約違反のみ、警告付きで保存`);
+                const result = await this.saveShift(bestResult.shiftData, storeId, year, month);
+                
+                const finalResult = {
+                    success: true,
+                    shiftData: result,
+                    validation: bestValidation,
+                    hasWarnings: true,
+                    warningMessage: `一部制約違反がありますが、最良結果として保存しました。\n\n要確認事項:\n${bestValidation.violations?.slice(0, 3).join('\n') || ''}`,
+                    attempts: MAX_RETRY_ATTEMPTS
+                };
+
+                this.finalizeSession('SUCCESS_WITH_WARNINGS', finalResult);
+                return finalResult;
+            }
+
+            // 全試行失敗
+            throw new Error('すべての試行でシフト生成に失敗しました');
 
         } catch (error) {
             this.logError('GENERATE_SHIFT_ERROR', error);
@@ -616,7 +1088,7 @@ class ShiftGeneratorService {
         }
     }
 
-    buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts) {
+    buildPrompt(store, staffs, storeClosedDays, storeRequirements, year, month, period, otherStoreShifts, attempt = 1, systemSettings = null) {
         // 期間内の全日付を生成
         const allDates = [];
         const startDate = period.startDate.clone();
@@ -625,33 +1097,7 @@ class ShiftGeneratorService {
             startDate.add(1, 'day');
         }
 
-        // 🔥 リアルタイムデータに基づくスタッフ制約解析
-        const staffConstraintDetails = staffs.map(staff => {
-            const unavailableDays = staff.dayPreferences?.filter(p => {
-                const isAvailable = Boolean(p.available);
-                return !isAvailable;
-            }) || [];
-
-            const dayOffDates = staff.dayOffRequests?.filter(req =>
-                req.status === 'approved' || req.status === 'pending'
-            ).map(req => req.date) || [];
-
-            const unavailableDayNames = unavailableDays.map(p =>
-                ['日', '月', '火', '水', '木', '金', '土'][p.day_of_week]
-            );
-
-            return {
-                staffId: staff.id,
-                staffName: `${staff.first_name} ${staff.last_name}`,
-                unavailableDayNames: unavailableDayNames,
-                dayOffDates: dayOffDates,
-                otherShifts: otherStoreShifts[staff.id] || []
-            };
-        });
-
-        this.logProcess('🔥 REALTIME_STAFF_CONSTRAINTS', `🔥 リアルタイムスタッフ制約解析`, {
-            staffConstraints: staffConstraintDetails
-        });
+        const minDailyHours = systemSettings?.min_daily_hours || 4.0;
 
         let prompt = `あなたはシフト管理システムです。以下の条件を厳密に守ってシフトを生成してください。
 
@@ -660,11 +1106,26 @@ class ShiftGeneratorService {
 2. **休み希望日には絶対にシフトを入れない** - 例外は一切認められません
 3. **他店舗勤務と重複する時間帯には絶対にシフトを入れない**
 4. **月間勤務時間の上限を絶対に超えない**
+5. **1日の最低勤務時間（${minDailyHours}時間）を必ず守る**
+6. **日本の労働法に従った休憩時間を必ず設定する**
+   - 6時間以上8時間未満：45分以上の休憩
+   - 8時間以上：60分以上の休憩
 
 ## 期間情報
 - 対象期間: ${period.startDate.format('YYYY-MM-DD')} ～ ${period.endDate.format('YYYY-MM-DD')}
 - 生成する日数: ${allDates.length}日間
 - 生成対象日付: ${allDates.join(', ')}
+
+## 各スタッフの月間時間制約（絶対遵守）
+${staffs.map(s => 
+  `${s.first_name} ${s.last_name}: ${s.min_hours_per_month || 0}時間以上 ${s.max_hours_per_month || 160}時間以下`
+).join('\n')}
+
+**重要**: 上記の時間制約を1時間でも超過/不足させてはいけません。
+
+## システム設定
+- 1日最低勤務時間: ${minDailyHours}時間（これ以下の勤務時間は禁止）
+- 休憩時間は労働基準法に基づき自動設定
 
 ## スタッフ制約（厳密に遵守すること）
 
@@ -706,23 +1167,75 @@ class ShiftGeneratorService {
                 });
             }
 
+            // 🔥 新機能: スタッフの希望時間を表示
+            const preferredTimes = staff.dayPreferences?.filter(p => 
+                Boolean(p.available) && p.preferred_start_time && p.preferred_end_time
+            ) || [];
+
+            if (preferredTimes.length > 0) {
+                prompt += `
+   - 希望勤務時間（可能な限り優先して使用）:`;
+                preferredTimes.forEach(pref => {
+                    const dayName = ['日', '月', '火', '水', '木', '金', '土'][pref.day_of_week];
+                    prompt += `
+     ${dayName}曜日: ${pref.preferred_start_time}-${pref.preferred_end_time} ← 特別な理由がない限り、この時間で開始してください`;
+                });
+            }
+
             prompt += `
 
 📋 **勤務条件**:
    - 月間勤務時間: ${staff.min_hours_per_month || 0}時間以上 ${staff.max_hours_per_month || 160}時間以下（厳守）
    - 1日最大勤務時間: ${staff.max_hours_per_day || 8}時間以下（厳守）
+   - 1日最低勤務時間: ${minDailyHours}時間以上（厳守）
    - 可能な限り月間最小勤務時間に近づけること
 
 `;
         });
 
+        // 🔥 再生成時の追加指示
+        if (attempt > 1) {
+            prompt += `
+
+## 🔄 再生成指示（試行${attempt}回目）
+前回の生成で制約違反が発生しました。今回は以下を**より厳密に**守ってください：
+
+1. **1日最低勤務時間の厳守**
+   - ${minDailyHours}時間未満の勤務は絶対に禁止
+   - 労働基準法の休憩時間も含めて計算してください
+
+2. **休憩時間の自動設定**
+   - 6時間以上8時間未満の勤務：break_start_time: "12:00", break_end_time: "12:45"
+   - 8時間以上の勤務：break_start_time: "12:00", break_end_time: "13:00"
+
+3. **スタッフ希望時間の優先**
+   - スタッフが希望時間を設定している場合、可能な限りその開始時間を使用
+   - 人員要件を満たすためにやむを得ない場合のみ変更可
+
+4. **月間勤務時間の厳密な管理**
+   - 各スタッフの割り当て前に、必ず月間累計時間をチェック
+   - 最大時間に近づいたら、それ以上の割り当てを停止
+   - 最小時間に満たない場合は、勤務可能日に追加配置
+
+5. **制約チェックの優先順位**
+   - 第1優先：勤務不可曜日・休み希望の絶対遵守
+   - 第2優先：月間最大勤務時間の絶対遵守
+   - 第3優先：1日最低勤務時間の絶対遵守
+   - 第4優先：労働法の休憩時間の絶対遵守
+   - 第5優先：スタッフ希望時間の可能な限りの尊重
+   - 第6優先：月間最小勤務時間の可能な限りの達成
+   - 第7優先：店舗の人員要件（満たせない日があっても構いません）`;
+        }
+
         prompt += `
 ## 🎯 シフト生成の優先順位（上から順に重要）
 1. **絶対制約の遵守** - 勤務不可曜日・休み希望・他店舗重複の回避
 2. **月間勤務時間の範囲内での配置** - 最小時間の確保を優先
-3. **1日勤務時間の上限遵守**
-4. **人員要件の満足**（可能な範囲で）
-5. **全日程への配置**（制約に違反しない範囲で）
+3. **1日最低勤務時間の遵守** - ${minDailyHours}時間以上必須
+4. **労働法の休憩時間設定** - 6時間以上で必須
+5. **スタッフ希望時間の尊重** - 可能な限り希望開始時間を使用
+6. **人員要件の満足**（可能な範囲で）
+7. **全日程への配置**（制約に違反しない範囲で）
 
 ## 営業時間と店舗要件
 - 営業時間: ${store.opening_time} - ${store.closing_time}`;
@@ -758,6 +1271,7 @@ class ShiftGeneratorService {
 - 人員要件を満たせない日があっても構いません
 - 全日程にスタッフを配置する必要はありません
 - **制約違反は絶対に避けてください**
+- **1日${minDailyHours}時間未満のシフトは絶対に作成しないでください**
 
 ## 出力形式
 以下のJSON形式で正確に出力してください。制約に違反する配置は一切含めないでください。
@@ -771,7 +1285,9 @@ class ShiftGeneratorService {
         {
           "staff_id": 1,
           "start_time": "09:00", 
-          "end_time": "17:00"
+          "end_time": "17:00",
+          "break_start_time": "12:00",
+          "break_end_time": "12:45"
         }
       ]
     }
@@ -779,7 +1295,12 @@ class ShiftGeneratorService {
 }
 \`\`\`
 
-**重要**: 勤務不可曜日や休み希望日にシフトを配置することは絶対に禁止です。制約を守れない場合は、その日のassignmentsを空配列にしてください。`;
+**重要事項**:
+- 勤務不可曜日や休み希望日にシフトを配置することは絶対に禁止です
+- 1日${minDailyHours}時間未満の勤務は絶対に禁止です
+- 6時間以上の勤務には必ず休憩時間を設定してください
+- 制約を守れない場合は、その日のassignmentsを空配列にしてください
+- スタッフの希望開始時間がある場合は、可能な限りその時間を使用してください`;
 
         return prompt;
     }
@@ -791,7 +1312,7 @@ class ShiftGeneratorService {
 
         const data = {
             model: 'claude-sonnet-4-20250514',
-            max_tokens: 8192,
+            max_tokens: 30000,
             temperature: 0.1,
             messages: [{ role: 'user', content: prompt }]
         };
@@ -961,6 +1482,8 @@ class ShiftGeneratorService {
                                 date: dayShift.date,
                                 start_time: assignment.start_time,
                                 end_time: assignment.end_time,
+                                break_start_time: assignment.break_start_time || null,
+                                break_end_time: assignment.break_end_time || null,
                             }, { transaction: t });
                             assignmentCount++;
                         }
@@ -982,12 +1505,13 @@ class ShiftGeneratorService {
 
             const settings = await SystemSetting.findOne({ where: { user_id: store.owner_id } });
             const closingDay = settings ? settings.closing_day : 25;
+            const systemSettings = settings ? settings : { min_daily_hours: 4.0 };
             const period = this.getShiftPeriod(year, month, closingDay);
 
             const staffs = await this.fetchRealTimeStaffData(storeId, period);
             const otherStoreShifts = await this.getOtherStoreShifts(staffs, storeId, year, month, period);
 
-            return await this.validateGeneratedShift(shiftData, staffs, otherStoreShifts);
+            return await this.validateGeneratedShift(shiftData, staffs, otherStoreShifts, systemSettings);
         } catch (error) {
             this.logError('VALIDATE_SHIFT_ERROR', error);
             throw error;

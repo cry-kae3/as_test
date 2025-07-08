@@ -66,6 +66,7 @@ const getAllStaff = async (req, res) => {
                 model: StaffDayPreference,
                 as: 'dayPreferences',
                 required: false,
+                order: [['day_of_week', 'ASC']]
             },
             {
                 model: StaffDayOffRequest,
@@ -126,13 +127,23 @@ const getAllStaff = async (req, res) => {
             include,
             order: [['id', 'ASC']],
             distinct: true,
+            logging: (sql, timing) => {
+                console.log(`[STAFF_GETALL_SQL] ${sql}`);
+                if (timing) console.log(`[STAFF_GETALL_TIMING] ${timing}ms`);
+            }
         });
 
-        // 各スタッフのstore_idsとai_generation_store_idsを追加
         const formattedStaff = staff.map(s => {
             const staffData = s.toJSON();
             staffData.store_ids = staffData.stores ? staffData.stores.map(store => store.id) : [];
             staffData.ai_generation_store_ids = staffData.aiGenerationStores ? staffData.aiGenerationStores.map(store => store.id) : [];
+
+            console.log(`[STAFF_${s.id}_PREFERENCES] dayPreferences:`, staffData.dayPreferences?.map(pref => ({
+                day_of_week: pref.day_of_week,
+                available: pref.available,
+                type: typeof pref.available
+            })));
+
             return staffData;
         });
 
@@ -144,7 +155,6 @@ const getAllStaff = async (req, res) => {
         });
     }
 };
-
 
 const getStaffById = async (req, res) => {
     try {
@@ -165,12 +175,20 @@ const getStaffById = async (req, res) => {
                 attributes: ['id', 'name', 'area'],
                 required: false
             },
-            { model: StaffDayPreference, as: 'dayPreferences' },
+            {
+                model: StaffDayPreference,
+                as: 'dayPreferences',
+                order: [['day_of_week', 'ASC']]
+            },
             { model: StaffDayOffRequest, as: 'dayOffRequests' },
         ];
 
         const staff = await Staff.findByPk(id, {
-            include
+            include,
+            logging: (sql, timing) => {
+                console.log(`[STAFF_BYID_SQL] ${sql}`);
+                if (timing) console.log(`[STAFF_BYID_TIMING] ${timing}ms`);
+            }
         });
 
         if (!staff) {
@@ -217,6 +235,12 @@ const getStaffById = async (req, res) => {
             store_ids: staff.stores ? staff.stores.map(store => store.id) : [],
             ai_generation_store_ids: staff.aiGenerationStores ? staff.aiGenerationStores.map(store => store.id) : []
         };
+
+        console.log(`[STAFF_${id}_RESPONSE] dayPreferences:`, completeResponse.dayPreferences.map(pref => ({
+            day_of_week: pref.day_of_week,
+            available: pref.available,
+            type: typeof pref.available
+        })));
 
         res.status(200).json(completeResponse);
     } catch (error) {
@@ -347,7 +371,6 @@ const createStaff = async (req, res) => {
             ]
         });
 
-        // レスポンスにstore_idsとai_generation_store_idsを追加
         const response = {
             ...createdStaff.toJSON(),
             store_ids: createdStaff.stores ? createdStaff.stores.map(store => store.id) : [],
@@ -419,7 +442,6 @@ const updateStaff = async (req, res) => {
             }
         }
 
-
         const previousValues = {
             store_id: staff.store_id,
             first_name: staff.first_name,
@@ -471,12 +493,19 @@ const updateStaff = async (req, res) => {
             }
 
             if (day_preferences !== undefined) {
+                console.log(`[UPDATE_STAFF_${id}] 希望シフト更新前に既存データを削除`);
                 await StaffDayPreference.destroy({
                     where: { staff_id: id },
                     transaction: t
                 });
 
                 if (day_preferences && Array.isArray(day_preferences) && day_preferences.length > 0) {
+                    console.log(`[UPDATE_STAFF_${id}] 新しい希望シフトデータ:`, day_preferences.map(pref => ({
+                        day_of_week: pref.day_of_week,
+                        available: pref.available,
+                        type: typeof pref.available
+                    })));
+
                     await StaffDayPreference.bulkCreate(
                         day_preferences.map(pref => ({
                             staff_id: id,
@@ -616,24 +645,36 @@ const updateStaff = async (req, res) => {
                     through: { attributes: [] },
                     attributes: ['id', 'name', 'area']
                 },
-                { model: StaffDayPreference, as: 'dayPreferences' },
+                {
+                    model: StaffDayPreference,
+                    as: 'dayPreferences',
+                    order: [['day_of_week', 'ASC']]
+                },
                 { model: StaffDayOffRequest, as: 'dayOffRequests' },
-            ]
+            ],
+            logging: (sql, timing) => {
+                console.log(`[UPDATE_STAFF_${id}_FINAL_SQL] ${sql}`);
+                if (timing) console.log(`[UPDATE_STAFF_${id}_FINAL_TIMING] ${timing}ms`);
+            }
         });
 
-        // レスポンスにstore_idsとai_generation_store_idsを追加
         const response = {
             ...updatedStaff.toJSON(),
             store_ids: updatedStaff.stores ? updatedStaff.stores.map(store => store.id) : [],
             ai_generation_store_ids: updatedStaff.aiGenerationStores ? updatedStaff.aiGenerationStores.map(store => store.id) : []
         };
 
+        console.log(`[UPDATE_STAFF_${id}_FINAL_RESPONSE] dayPreferences:`, response.dayPreferences?.map(pref => ({
+            day_of_week: pref.day_of_week,
+            available: pref.available,
+            type: typeof pref.available
+        })));
+
         res.status(200).json(response);
     } catch (error) {
         res.status(500).json({ message: 'スタッフ情報の更新中にエラーが発生しました', error: error.message });
     }
 };
-
 
 const deleteStaff = async (req, res) => {
     try {
@@ -670,7 +711,6 @@ const deleteStaff = async (req, res) => {
             }
         }
 
-
         await staff.destroy();
 
         res.status(200).json({ message: 'スタッフが削除されました' });
@@ -685,8 +725,18 @@ const getStaffDayPreferences = async (req, res) => {
 
         const dayPreferences = await StaffDayPreference.findAll({
             where: { staff_id: id },
-            order: [['day_of_week', 'ASC']]
+            order: [['day_of_week', 'ASC']],
+            logging: (sql, timing) => {
+                console.log(`[GET_PREFERENCES_${id}_SQL] ${sql}`);
+                if (timing) console.log(`[GET_PREFERENCES_${id}_TIMING] ${timing}ms`);
+            }
         });
+
+        console.log(`[GET_PREFERENCES_${id}_RESPONSE]`, dayPreferences.map(pref => ({
+            day_of_week: pref.day_of_week,
+            available: pref.available,
+            type: typeof pref.available
+        })));
 
         res.status(200).json(dayPreferences);
     } catch (error) {

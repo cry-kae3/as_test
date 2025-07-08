@@ -1,351 +1,426 @@
-import { ref } from "vue";
-import { useStore } from "vuex";
-import api from "@/services/api";
+import { ref, computed } from 'vue';
+import { useStore } from 'vuex';
 
 export function useAllStoreShiftManagement() {
     const store = useStore();
 
-    const allStoreShifts = ref({});
+    // リアクティブデータ
     const allSystemStaff = ref([]);
-    const allSystemStoreShifts = ref({});
+    const allStoreShifts = ref(new Map());
+    const currentYearMonth = ref({ year: null, month: null });
 
-    const formatHours = (hours) => {
-        if (typeof hours !== "number" || isNaN(hours) || hours < 0) {
-            hours = 0;
-        }
-
-        const totalMinutes = Math.round(hours * 60);
-        const displayHours = Math.floor(totalMinutes / 60);
-        const displayMinutes = totalMinutes % 60;
-
-        if (displayMinutes === 0) {
-            return `${displayHours}時間`;
-        } else {
-            return `${displayHours}時間${displayMinutes}分`;
-        }
-    };
-
-    const fetchAllStoreShifts = async (staffList, selectedStore, currentYear, currentMonth) => {
-        if (!staffList || staffList.length === 0 || !selectedStore) {
-            allStoreShifts.value = {};
-            return;
-        }
+    /**
+     * 勤務時間の計算（休憩時間を考慮）
+     */
+    const calculateWorkMinutes = (startTime, endTime, breakStartTime = null, breakEndTime = null) => {
+        if (!startTime || !endTime) return 0;
 
         try {
-            const uniqueStoreIds = new Set();
-            staffList.forEach((staff) => {
-                const storeIds = staff.store_ids || (staff.stores ? staff.stores.map(s => s.id) : []);
-                storeIds.forEach((id) => {
-                    if (id !== selectedStore.id) {
-                        uniqueStoreIds.add(id);
-                    }
-                });
-            });
+            const start = new Date(`2000-01-01T${startTime}`);
+            const end = new Date(`2000-01-01T${endTime}`);
 
-            const storeShiftsPromises = Array.from(uniqueStoreIds).map(
-                (storeId) => store.dispatch("shift/fetchShiftByYearMonth", {
-                    year: currentYear,
-                    month: currentMonth,
-                    storeId: storeId,
-                }).catch(() => null)
-            );
+            // 終了時間が開始時間より前の場合は翌日とみなす
+            if (end < start) {
+                end.setDate(end.getDate() + 1);
+            }
 
-            const results = await Promise.all(storeShiftsPromises);
+            let workMinutes = (end - start) / (1000 * 60);
 
-            const newAllStoreShifts = {};
-            results.forEach((response) => {
-                if (response && response.shifts) {
-                    newAllStoreShifts[response.store_id] = response.shifts;
+            // 休憩時間を差し引く
+            if (breakStartTime && breakEndTime) {
+                const breakStart = new Date(`2000-01-01T${breakStartTime}`);
+                const breakEnd = new Date(`2000-01-01T${breakEndTime}`);
+
+                if (breakEnd < breakStart) {
+                    breakEnd.setDate(breakEnd.getDate() + 1);
                 }
-            });
-            allStoreShifts.value = newAllStoreShifts;
+
+                const breakMinutes = (breakEnd - breakStart) / (1000 * 60);
+                workMinutes -= breakMinutes;
+            }
+
+            return Math.max(0, workMinutes);
         } catch (error) {
-            allStoreShifts.value = {};
+            console.error('勤務時間計算エラー:', error);
+            return 0;
         }
     };
 
-    const fetchAllSystemStaffAndShifts = async (currentYear, currentMonth) => {
+    /**
+     * 全店舗のシフト情報を取得
+     */
+    const fetchAllStoreShifts = async (staffList, currentStore, year, month) => {
         try {
-            const allStaffResponse = await api.get('/staff');
-            allSystemStaff.value = allStaffResponse.data || [];
+            console.log('🔄 全店舗シフト取得開始:', {
+                year,
+                month,
+                currentStore: currentStore?.name,
+                staffCount: staffList?.length
+            });
 
-            const allShiftsResponse = await api.get(`/shifts?year=${currentYear}&month=${currentMonth}`);
-            const allShifts = allShiftsResponse.data || [];
-
-            const shiftsByStore = {};
-            for (const shift of allShifts) {
-                const shiftDetails = await api.get(`/shifts/${shift.id}`);
-                if (!shiftsByStore[shift.store_id]) {
-                    shiftsByStore[shift.store_id] = {
-                        storeName: shift.Store?.name || `店舗${shift.store_id}`,
-                        shifts: []
-                    };
-                }
-                shiftsByStore[shift.store_id].shifts.push(...(shiftDetails.data.shifts || []));
-            }
-            allSystemStoreShifts.value = shiftsByStore;
-
-        } catch (error) {
-            allSystemStaff.value = [];
-            allSystemStoreShifts.value = {};
-        }
-    };
-
-    const calculateStoreHoursForAllStaff = (staffId, storeId) => {
-        const storeData = allSystemStoreShifts.value[storeId];
-        if (!storeData || !storeData.shifts) return 0;
-
-        let totalMinutes = 0;
-        storeData.shifts.forEach((dayShift) => {
-            const assignment = dayShift.assignments?.find((a) => a.staff_id === staffId);
-            if (assignment) {
-                const startTime = new Date(`2000-01-01T${assignment.start_time}`);
-                const endTime = new Date(`2000-01-01T${assignment.end_time}`);
-                let minutes = (endTime - startTime) / (1000 * 60);
-
-                if (assignment.break_start_time && assignment.break_end_time) {
-                    const breakStart = new Date(`2000-01-01T${assignment.break_start_time}`);
-                    const breakEnd = new Date(`2000-01-01T${assignment.break_end_time}`);
-                    minutes -= (breakEnd - breakStart) / (1000 * 60);
-                }
-                totalMinutes += minutes;
-            }
-        });
-        return Math.round((totalMinutes / 60) * 10) / 10;
-    };
-
-    const getAllStoreHoursBreakdownForAllStaff = (staffId) => {
-        const breakdown = [];
-        Object.entries(allSystemStoreShifts.value).forEach(([storeId, storeData]) => {
-            const hours = calculateStoreHoursForAllStaff(staffId, parseInt(storeId));
-            if (hours > 0) {
-                breakdown.push({
-                    storeId: parseInt(storeId),
-                    storeName: storeData.storeName,
-                    hours,
-                });
-            }
-        });
-        return breakdown.sort((a, b) => a.storeName.localeCompare(b.storeName));
-    };
-
-    const calculateTotalHoursForAllSystemStaff = (staffId) => {
-        return Object.keys(allSystemStoreShifts.value).reduce((total, storeId) => {
-            return total + calculateStoreHoursForAllStaff(staffId, parseInt(storeId));
-        }, 0);
-    };
-
-    const isHoursOutOfRangeForAllSystemStaff = (staffId) => {
-        const staff = allSystemStaff.value.find((s) => s.id === staffId);
-        if (!staff) return false;
-        const totalHours = calculateTotalHoursForAllSystemStaff(staffId);
-        const minHours = staff.min_hours_per_month || 0;
-        const maxHours = staff.max_hours_per_month || 0;
-        return maxHours > 0 && (totalHours < minHours || totalHours > maxHours);
-    };
-
-    const hasStaffWarningsForAllSystemStaff = (staffId) => {
-        return isHoursOutOfRangeForAllSystemStaff(staffId);
-    };
-
-    const getStaffWarningsForAllSystemStaff = (staffId) => {
-        if (!hasStaffWarningsForAllSystemStaff(staffId)) return [];
-        const staff = allSystemStaff.value.find((s) => s.id === staffId);
-        const totalHours = calculateTotalHoursForAllSystemStaff(staffId);
-        const minHours = staff.min_hours_per_month || 0;
-        const maxHours = staff.max_hours_per_month || 0;
-        const warnings = [];
-        if (totalHours < minHours) warnings.push({ type: 'under_hours', message: `月間勤務時間が下限を下回っています (${formatHours(totalHours)} / ${formatHours(minHours)})` });
-        if (totalHours > maxHours) warnings.push({ type: 'over_hours', message: `月間勤務時間が上限を超過しています (${formatHours(totalHours)} / ${formatHours(maxHours)})` });
-        return warnings;
-    };
-
-    const getOtherStoreHoursBreakdown = (staffId, staffList, selectedStore) => {
-        const breakdown = [];
-
-        // staffListの存在チェック
-        if (!staffList || !Array.isArray(staffList)) {
-            return breakdown;
-        }
-
-        const staff = staffList.find((s) => s.id === staffId);
-        if (!staff) return breakdown;
-
-        const staffStoreIds = staff.store_ids || (staff.stores ? staff.stores.map(s => s.id) : []);
-
-        Object.entries(allStoreShifts.value).forEach(([storeId, storeShifts]) => {
-            const storeIdNum = parseInt(storeId);
-            if (storeIdNum === selectedStore.id || !staffStoreIds.includes(storeIdNum)) {
+            if (!staffList || staffList.length === 0) {
+                console.log('⚠️ スタッフリストが空のため、全店舗シフト取得をスキップ');
                 return;
             }
 
-            let totalMinutes = 0;
-            if (storeShifts && Array.isArray(storeShifts)) {
-                storeShifts.forEach((dayShift) => {
-                    const assignment = dayShift.assignments?.find((a) => a.staff_id === staffId);
-                    if (assignment) {
-                        const startTime = new Date(`2000-01-01T${assignment.start_time}`);
-                        const endTime = new Date(`2000-01-01T${assignment.end_time}`);
-                        let minutes = (endTime - startTime) / (1000 * 60);
+            const allStores = await store.dispatch('store/fetchStores');
+            const allShiftsMap = new Map();
 
-                        if (assignment.break_start_time && assignment.break_end_time) {
-                            const breakStart = new Date(`2000-01-01T${assignment.break_start_time}`);
-                            const breakEnd = new Date(`2000-01-01T${assignment.break_end_time}`);
-                            minutes -= (breakEnd - breakStart) / (1000 * 60);
+            // 各店舗のシフトデータを取得
+            for (const shopStore of allStores) {
+                if (shopStore.id === currentStore?.id) continue; // 現在の店舗は除外
+
+                try {
+                    console.log(`📊 店舗 ${shopStore.name} のシフト取得中...`);
+
+                    const shiftData = await store.dispatch('shift/fetchShiftByYearMonth', {
+                        year,
+                        month,
+                        storeId: shopStore.id
+                    });
+
+                    if (shiftData && shiftData.shifts) {
+                        // 現在の店舗のスタッフのシフトのみをフィルタリング
+                        const relevantShifts = shiftData.shifts.filter(shift =>
+                            shift.assignments && shift.assignments.some(assignment =>
+                                staffList.some(staff => staff.id === assignment.staff_id)
+                            )
+                        );
+
+                        if (relevantShifts.length > 0) {
+                            allShiftsMap.set(shopStore.id, {
+                                store: shopStore,
+                                shifts: relevantShifts
+                            });
+                            console.log(`✅ 店舗 ${shopStore.name}: ${relevantShifts.length}日分のシフト取得`);
                         }
+                    }
+                } catch (error) {
+                    // 404エラー（シフトが存在しない）は正常なケースとして処理
+                    if (error.response?.status !== 404) {
+                        console.error(`❌ 店舗 ${shopStore.name} のシフト取得エラー:`, error);
+                    }
+                }
+            }
+
+            allStoreShifts.value = allShiftsMap;
+            console.log('✅ 全店舗シフト取得完了:', {
+                storeCount: allShiftsMap.size,
+                stores: Array.from(allShiftsMap.keys()).map(id =>
+                    allShiftsMap.get(id).store.name
+                )
+            });
+
+        } catch (error) {
+            console.error('❌ 全店舗シフト取得エラー:', error);
+        }
+    };
+
+    /**
+     * 全システムのスタッフとシフト情報を取得
+     */
+    const fetchAllSystemStaffAndShifts = async (year, month) => {
+        try {
+            console.log('🔄 全システムスタッフ&シフト取得開始:', { year, month });
+
+            // 全システムのスタッフを取得
+            const systemStaff = await store.dispatch('staff/fetchStaff');
+            allSystemStaff.value = systemStaff || [];
+
+            // 年月を記録
+            currentYearMonth.value = { year, month };
+
+            console.log('✅ 全システムスタッフ取得完了:', {
+                staffCount: allSystemStaff.value.length
+            });
+
+        } catch (error) {
+            console.error('❌ 全システムスタッフ取得エラー:', error);
+            allSystemStaff.value = [];
+        }
+    };
+
+    /**
+     * スタッフの他店舗での勤務時間内訳を取得
+     */
+    const getOtherStoreHoursBreakdown = (staffId, currentStoreId = null) => {
+        if (!allStoreShifts.value || allStoreShifts.value.size === 0) {
+            return {
+                stores: [],
+                totalHours: 0,
+                breakdown: {}
+            };
+        }
+
+        const breakdown = {};
+        let totalMinutes = 0;
+
+        allStoreShifts.value.forEach((storeData, storeId) => {
+            if (currentStoreId && storeId === currentStoreId) return;
+
+            const { store: shopStore, shifts } = storeData;
+            let storeMinutes = 0;
+
+            shifts.forEach(shift => {
+                if (!shift.assignments) return;
+
+                shift.assignments.forEach(assignment => {
+                    if (assignment.staff_id === staffId) {
+                        const minutes = calculateWorkMinutes(
+                            assignment.start_time,
+                            assignment.end_time,
+                            assignment.break_start_time,
+                            assignment.break_end_time
+                        );
+                        storeMinutes += minutes;
                         totalMinutes += minutes;
                     }
                 });
-            }
+            });
 
-            if (totalMinutes > 0) {
-                const storeInfo = store.state.store.stores.find((s) => s.id === storeIdNum);
-                breakdown.push({
-                    storeId: storeIdNum,
-                    storeName: storeInfo ? storeInfo.name : `店舗${storeIdNum}`,
-                    hours: Math.round((totalMinutes / 60) * 10) / 10,
-                });
+            if (storeMinutes > 0) {
+                breakdown[storeId] = {
+                    storeName: shopStore.name,
+                    hours: parseFloat((storeMinutes / 60).toFixed(2)),
+                    minutes: storeMinutes
+                };
             }
         });
-        return breakdown.sort((a, b) => a.storeName.localeCompare(b.storeName));
+
+        const stores = Object.values(breakdown).map(item => ({
+            name: item.storeName,
+            hours: item.hours
+        }));
+
+        return {
+            stores,
+            totalHours: parseFloat((totalMinutes / 60).toFixed(2)),
+            breakdown
+        };
     };
 
-    // 内部で勤務時間を計算するよう修正
-    const calculateTotalHoursAllStores = (staffId, shifts, staffList, selectedStore, calculateTotalHoursFunc) => {
-        // 現在の店舗での勤務時間を計算
-        let currentStoreHours = 0;
-        if (calculateTotalHoursFunc && typeof calculateTotalHoursFunc === 'function') {
-            currentStoreHours = calculateTotalHoursFunc(staffId);
-        } else if (shifts && Array.isArray(shifts)) {
-            // calculateTotalHoursFuncが渡されない場合は、shiftsから直接計算
-            shifts.forEach((dayShift) => {
-                const assignment = dayShift.assignments?.find((a) => a.staff_id === staffId);
-                if (assignment) {
-                    const startTime = new Date(`2000-01-01T${assignment.start_time}`);
-                    const endTime = new Date(`2000-01-01T${assignment.end_time}`);
-                    let minutes = (endTime - startTime) / (1000 * 60);
+    /**
+     * スタッフの全店舗合計勤務時間を計算
+     */
+    const calculateTotalHoursAllStores = (staffId, currentStoreHours = 0, currentStoreId = null) => {
+        const otherStoreData = getOtherStoreHoursBreakdown(staffId, currentStoreId);
+        const totalHours = currentStoreHours + otherStoreData.totalHours;
 
-                    if (assignment.break_start_time && assignment.break_end_time) {
-                        const breakStart = new Date(`2000-01-01T${assignment.break_start_time}`);
-                        const breakEnd = new Date(`2000-01-01T${assignment.break_end_time}`);
-                        minutes -= (breakEnd - breakStart) / (1000 * 60);
-                    }
-                    currentStoreHours += minutes;
-                }
-            });
-            currentStoreHours = Math.round((currentStoreHours / 60) * 10) / 10;
-        }
-
-        // 他店舗での勤務時間を取得
-        const breakdown = getOtherStoreHoursBreakdown(staffId, staffList, selectedStore);
-        const otherStoreHours = breakdown.reduce((total, item) => total + item.hours, 0);
-
-        return currentStoreHours + otherStoreHours;
+        return {
+            currentStoreHours,
+            otherStoreHours: otherStoreData.totalHours,
+            totalHours,
+            breakdown: otherStoreData.breakdown
+        };
     };
 
-    const isHoursOutOfRangeAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc) => {
-        // staffListの存在チェック
-        if (!staffList || !Array.isArray(staffList)) {
-            return false;
+    /**
+     * 全システムスタッフの全店舗時間内訳を取得
+     */
+    const getAllStoreHoursBreakdownForAllStaff = () => {
+        if (!allSystemStaff.value || allSystemStaff.value.length === 0) {
+            return {};
         }
 
-        const staff = staffList.find((s) => s.id === staffId);
-        if (!staff) return false;
+        const result = {};
 
-        const totalHours = calculateTotalHoursAllStores(staffId, shifts, staffList, selectedStore, calculateTotalHoursFunc);
+        allSystemStaff.value.forEach(staff => {
+            const breakdown = getOtherStoreHoursBreakdown(staff.id);
+            result[staff.id] = {
+                staffName: `${staff.last_name} ${staff.first_name}`,
+                ...breakdown
+            };
+        });
+
+        return result;
+    };
+
+    /**
+     * 全システムスタッフの総勤務時間を計算
+     */
+    const calculateTotalHoursForAllSystemStaff = (staffId, currentStoreHours = 0) => {
+        const allStoreBreakdown = getAllStoreHoursBreakdownForAllStaff();
+        const staffBreakdown = allStoreBreakdown[staffId];
+
+        if (!staffBreakdown) {
+            return {
+                currentStoreHours,
+                otherStoreHours: 0,
+                totalHours: currentStoreHours,
+                breakdown: {}
+            };
+        }
+
+        return {
+            currentStoreHours,
+            otherStoreHours: staffBreakdown.totalHours,
+            totalHours: currentStoreHours + staffBreakdown.totalHours,
+            breakdown: staffBreakdown.breakdown
+        };
+    };
+
+    /**
+     * 全店舗合計での勤務時間が範囲外かチェック
+     */
+    const isHoursOutOfRangeAllStores = (staff, currentStoreHours = 0) => {
+        const totalData = calculateTotalHoursAllStores(staff.id, currentStoreHours);
+        const totalHours = totalData.totalHours;
+
         const minHours = staff.min_hours_per_month || 0;
         const maxHours = staff.max_hours_per_month || 0;
 
-        return maxHours > 0 && (totalHours < minHours || totalHours > maxHours);
+        return {
+            isUnder: minHours > 0 && totalHours < minHours,
+            isOver: maxHours > 0 && totalHours > maxHours,
+            totalHours,
+            minHours,
+            maxHours,
+            shortage: minHours > 0 && totalHours < minHours ? minHours - totalHours : 0,
+            excess: maxHours > 0 && totalHours > maxHours ? totalHours - maxHours : 0
+        };
     };
 
-    const hasStaffWarningsAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc) => {
-        return isHoursOutOfRangeAllStores(staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc);
-    };
+    /**
+     * 全システムスタッフでの勤務時間が範囲外かチェック
+     */
+    const isHoursOutOfRangeForAllSystemStaff = (staff, currentStoreHours = 0) => {
+        const totalData = calculateTotalHoursForAllSystemStaff(staff.id, currentStoreHours);
+        const totalHours = totalData.totalHours;
 
-    const getStaffWarningsAllStores = (staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc) => {
-        if (!hasStaffWarningsAllStores(staffId, staffList, shifts, selectedStore, calculateTotalHoursFunc)) return [];
-
-        // staffListの存在チェック
-        if (!staffList || !Array.isArray(staffList)) {
-            return [];
-        }
-
-        const staff = staffList.find(s => s.id === staffId);
-        if (!staff) return [];
-
-        const totalHours = calculateTotalHoursAllStores(staffId, shifts, staffList, selectedStore, calculateTotalHoursFunc);
         const minHours = staff.min_hours_per_month || 0;
         const maxHours = staff.max_hours_per_month || 0;
+
+        return {
+            isUnder: minHours > 0 && totalHours < minHours,
+            isOver: maxHours > 0 && totalHours > maxHours,
+            totalHours,
+            minHours,
+            maxHours,
+            shortage: minHours > 0 && totalHours < minHours ? minHours - totalHours : 0,
+            excess: maxHours > 0 && totalHours > maxHours ? totalHours - maxHours : 0
+        };
+    };
+
+    /**
+     * スタッフに警告があるかチェック（全店舗版）
+     */
+    const hasStaffWarningsAllStores = (staff, currentStoreHours = 0) => {
+        const rangeCheck = isHoursOutOfRangeAllStores(staff, currentStoreHours);
+        return rangeCheck.isUnder || rangeCheck.isOver;
+    };
+
+    /**
+     * スタッフに警告があるかチェック（全システム版）
+     */
+    const hasStaffWarningsForAllSystemStaff = (staff, currentStoreHours = 0) => {
+        const rangeCheck = isHoursOutOfRangeForAllSystemStaff(staff, currentStoreHours);
+        return rangeCheck.isUnder || rangeCheck.isOver;
+    };
+
+    /**
+     * スタッフの警告内容を取得（全店舗版）
+     */
+    const getStaffWarningsAllStores = (staff, currentStoreHours = 0) => {
         const warnings = [];
-        if (totalHours < minHours) warnings.push({ type: 'under_hours', message: `全店舗合計勤務時間が下限を下回っています (${formatHours(totalHours)} / ${formatHours(minHours)})` });
-        if (totalHours > maxHours) warnings.push({ type: 'over_hours', message: `全店舗合計勤務時間が上限を超過しています (${formatHours(totalHours)} / ${formatHours(maxHours)})` });
+        const rangeCheck = isHoursOutOfRangeAllStores(staff, currentStoreHours);
+
+        if (rangeCheck.isUnder) {
+            warnings.push(`月間最小勤務時間不足: ${rangeCheck.shortage.toFixed(1)}時間`);
+        }
+
+        if (rangeCheck.isOver) {
+            warnings.push(`月間最大勤務時間超過: ${rangeCheck.excess.toFixed(1)}時間`);
+        }
+
         return warnings;
     };
 
-    const getStaffStatus = (staffId) => {
-        if (isHoursOutOfRangeForAllSystemStaff(staffId)) {
-            return 'violation';
+    /**
+     * スタッフの警告内容を取得（全システム版）
+     */
+    const getStaffWarningsForAllSystemStaff = (staff, currentStoreHours = 0) => {
+        const warnings = [];
+        const rangeCheck = isHoursOutOfRangeForAllSystemStaff(staff, currentStoreHours);
+
+        if (rangeCheck.isUnder) {
+            warnings.push(`月間最小勤務時間不足: ${rangeCheck.shortage.toFixed(1)}時間`);
         }
-        if (checkStaffOtherWarnings(staffId)) {
-            return 'warning';
+
+        if (rangeCheck.isOver) {
+            warnings.push(`月間最大勤務時間超過: ${rangeCheck.excess.toFixed(1)}時間`);
         }
-        return 'normal';
+
+        return warnings;
     };
 
-    const checkStaffOtherWarnings = (staffId) => {
-        return false;
-    };
+    /**
+     * スタッフのステータスを取得
+     */
+    const getStaffStatus = (staff, currentStoreHours = 0) => {
+        const totalData = calculateTotalHoursForAllSystemStaff(staff.id, currentStoreHours);
+        const rangeCheck = isHoursOutOfRangeForAllSystemStaff(staff, currentStoreHours);
 
-    const getStaffStatusInfo = (staffId) => {
-        const status = getStaffStatus(staffId);
-        const warnings = getStaffWarningsForAllSystemStaff(staffId);
-
-        switch (status) {
-            case "violation":
-                return {
-                    icon: "pi pi-times-circle",
-                    text: "違反あり",
-                    class: "status-violation",
-                    title: warnings.map((w) => w.message).join("\n"),
-                };
-            case "warning":
-                return {
-                    icon: "pi pi-exclamation-triangle",
-                    text: "要確認",
-                    class: "status-warning",
-                    title: warnings.map((w) => w.message).join("\n"),
-                };
-            default:
-                return {
-                    icon: "pi pi-check-circle",
-                    text: "正常",
-                    class: "status-ok",
-                    title: "正常な状態です",
-                };
+        if (rangeCheck.isOver) {
+            return {
+                type: 'error',
+                label: '超過',
+                description: `月間最大勤務時間を${rangeCheck.excess.toFixed(1)}時間超過`
+            };
         }
+
+        if (rangeCheck.isUnder) {
+            return {
+                type: 'warning',
+                label: '不足',
+                description: `月間最小勤務時間まで${rangeCheck.shortage.toFixed(1)}時間不足`
+            };
+        }
+
+        return {
+            type: 'success',
+            label: '正常',
+            description: '月間勤務時間は適正範囲内'
+        };
     };
 
+    /**
+     * スタッフステータスの詳細情報を取得
+     */
+    const getStaffStatusInfo = (staff, currentStoreHours = 0) => {
+        const totalData = calculateTotalHoursForAllSystemStaff(staff.id, currentStoreHours);
+        const status = getStaffStatus(staff, currentStoreHours);
+
+        return {
+            ...status,
+            currentStoreHours: totalData.currentStoreHours,
+            otherStoreHours: totalData.otherStoreHours,
+            totalHours: totalData.totalHours,
+            minHours: staff.min_hours_per_month || 0,
+            maxHours: staff.max_hours_per_month || 0,
+            breakdown: totalData.breakdown
+        };
+    };
 
     return {
-        allStoreShifts,
-        allSystemStaff,
-        allSystemStoreShifts,
+        // データ
+        allSystemStaff: computed(() => allSystemStaff.value),
+        allStoreShifts: computed(() => allStoreShifts.value),
+        currentYearMonth: computed(() => currentYearMonth.value),
+
+        // 関数
         fetchAllStoreShifts,
         fetchAllSystemStaffAndShifts,
-        calculateStoreHoursForAllStaff,
-        getAllStoreHoursBreakdownForAllStaff,
-        calculateTotalHoursForAllSystemStaff,
-        isHoursOutOfRangeForAllSystemStaff,
-        hasStaffWarningsForAllSystemStaff,
-        getStaffWarningsForAllSystemStaff,
         getOtherStoreHoursBreakdown,
         calculateTotalHoursAllStores,
+        getAllStoreHoursBreakdownForAllStaff,
+        calculateTotalHoursForAllSystemStaff,
         isHoursOutOfRangeAllStores,
+        isHoursOutOfRangeForAllSystemStaff,
         hasStaffWarningsAllStores,
+        hasStaffWarningsForAllSystemStaff,
         getStaffWarningsAllStores,
+        getStaffWarningsForAllSystemStaff,
         getStaffStatus,
-        checkStaffOtherWarnings,
-        getStaffStatusInfo,
+        getStaffStatusInfo
     };
 }

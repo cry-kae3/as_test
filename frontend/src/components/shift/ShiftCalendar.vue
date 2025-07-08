@@ -1,966 +1,813 @@
 <template>
-    <div class="calendar-section">
-      <div class="edit-mode-indicator" v-if="isEditMode">
-        <i class="pi pi-pencil"></i>
-        <span>編集モード - セルをクリックして編集</span>
+  <div class="shift-calendar">
+    <!-- カレンダーヘッダー -->
+    <div class="calendar-header">
+      <div class="weekday-headers">
+        <div 
+          v-for="day in weekdays" 
+          :key="day"
+          class="weekday-header"
+          :class="{ 
+            'weekend': day === '日' || day === '土',
+            'sunday': day === '日',
+            'saturday': day === '土'
+          }"
+        >
+          {{ day }}
+        </div>
       </div>
-  
-      <div class="calendar-view">
-        <div class="calendar-container">
-          <div class="calendar-header">
-            <div class="staff-column-header">
-              <span>スタッフ名</span>
+    </div>
+
+    <!-- カレンダーボディ -->
+    <div class="calendar-body">
+      <div class="calendar-grid">
+        <div
+          v-for="day in daysInMonth"
+          :key="day.date"
+          class="day-cell"
+          :class="{
+            'selected': selectedDate === day.date,
+            'weekend': day.dayOfWeek === 0 || day.dayOfWeek === 6,
+            'sunday': day.dayOfWeek === 0,
+            'saturday': day.dayOfWeek === 6,
+            'today': isToday(day.date),
+            'past': isPastDate(day.date),
+            'has-warnings': hasDateWarnings(day.date),
+            'has-shortage': hasStaffingShortage(day.date)
+          }"
+          @click="selectDate(day.date)"
+        >
+          <!-- 日付ヘッダー -->
+          <div class="day-header">
+            <span class="day-number">{{ day.dayOfMonth }}</span>
+            
+            <!-- 警告アイコン -->
+            <div v-if="hasDateWarnings(day.date)" class="warning-indicators">
+              <i 
+                v-if="hasStaffingShortage(day.date)"
+                class="pi pi-exclamation-triangle warning-icon shortage"
+                :title="getShortageTooltip(day.date)"
+              ></i>
+              <i 
+                v-if="hasShiftViolations(day.date)"
+                class="pi pi-exclamation-circle warning-icon violation"
+                title="シフト制約違反があります"
+              ></i>
             </div>
-            <div
-              v-for="day in daysInMonth"
-              :key="day.date"
-              class="date-cell-wrapper"
-            >
-              <div class="date-warning-row">
-                <div
-                  v-if="hasDateWarnings(day.date)"
-                  class="warning-indicator"
-                  :data-warning-count="getDateWarnings(day.date).length"
-                >
-                  <i class="pi pi-exclamation-triangle"></i>
-                  <div class="warning-tooltip">
-                    <div
-                      v-for="warning in getDateWarnings(day.date)"
-                      :key="warning.type"
-                      class="warning-tooltip-item"
-                      :class="warning.type"
-                    >
-                      <i :class="warning.icon"></i>
-                      <span>{{ warning.message }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div
-                class="date-cell-header"
+          </div>
+
+          <!-- スタッフ人数表示 -->
+          <div class="staff-count-display">
+            <div class="assigned-count">
+              <i class="pi pi-users"></i>
+              <span>{{ getAssignedStaffCount(day.date) }}人</span>
+            </div>
+            
+            <!-- 人員要件表示 -->
+            <div v-if="hasHourRequirements(day.date)" class="requirement-summary">
+              <div 
+                v-for="(requirement, timeSlot) in getHourRequirements(day.date)"
+                :key="timeSlot"
+                class="requirement-item"
                 :class="{
-                  'is-weekend': day.isWeekend,
-                  'is-holiday': day.isNationalHoliday,
-                  'is-today': day.isToday,
-                  'is-selected': selectedDate === day.date,
-                  'has-warnings': hasDateWarnings(day.date),
-                  'is-store-closed': day.isStoreClosed,
+                  'shortage': getAssignedStaffCount(day.date, requirement.startTime, requirement.endTime) < requirement.requiredCount
                 }"
-                @click="selectDate(day.date)"
               >
-                <div class="date-number">{{ day.day }}</div>
-                <div class="date-weekday">{{ day.dayOfWeekLabel }}</div>
-                <div v-if="day.isNationalHoliday" class="holiday-indicator">
-                  祝
-                </div>
-                <div
-                  v-if="
-                    day.isStoreClosed &&
-                    !day.isNationalHoliday &&
-                    !day.isWeekend
-                  "
-                  class="closed-day-indicator"
-                >
-                  休
-                </div>
+                <span class="time-slot">{{ requirement.timeSlot }}</span>
+                <span class="count-info">
+                  {{ getAssignedStaffCount(day.date, requirement.startTime, requirement.endTime) }}/{{ requirement.requiredCount }}
+                </span>
               </div>
             </div>
           </div>
-  
-          <div class="calendar-body">
+
+          <!-- スタッフ一覧 -->
+          <div class="staff-list">
             <div
               v-for="staff in staffList"
               :key="staff.id"
               class="staff-row"
               :class="{
-                'hours-violation': isHoursOutOfRangeAllStores(staff.id),
+                'has-shift': getShiftForStaff(staff.id, day.date),
+                'unavailable': !canStaffWorkOnDate(staff, day.date),
+                'has-violation': hasStaffViolation(staff, day.date),
+                'hours-warning': hasStaffWarningsAllStores(staff, calculateTotalHours(staff.id)),
+                'hours-out-of-range': isHoursOutOfRangeAllStores(staff, calculateTotalHours(staff.id))
               }"
+              @click.stop="openShiftEditor(day, staff)"
+              :title="getStaffTooltip(staff, day.date)"
             >
-              <div
-                class="staff-info"
-                :class="{
-                  'hours-violation': isHoursOutOfRangeAllStores(staff.id),
-                }"
-              >
-                <div class="staff-avatar">
-                  {{ staff.first_name.charAt(0) }}
-                </div>
-                <div class="staff-details">
-                  <span class="staff-name"
-                    >{{ staff.last_name }} {{ staff.first_name }}</span
-                  >
-                  <span class="staff-role">{{
-                    staff.position || "一般"
-                  }}</span>
-                  <div class="staff-hours-info">
-                    <div class="hours-display">
-                      <span class="current-hours current-store-hours"
-                        >{{ selectedStore.name }}:
-                        {{
-                          formatHours(calculateTotalHours(staff.id))
-                        }}</span
-                      >
-                      <div
-                        v-if="
-                          getOtherStoreHoursBreakdown(staff.id).length > 0
-                        "
-                        class="other-stores-hours"
-                      >
-                        <div
-                          v-for="breakdown in getOtherStoreHoursBreakdown(
-                            staff.id
-                          )"
-                          :key="breakdown.storeId"
-                          class="store-breakdown"
-                        >
-                          <span class="store-name"
-                            >{{ breakdown.storeName }}:</span
-                          >
-                          <span class="store-hours">{{
-                            formatHours(breakdown.hours)
-                          }}</span>
-                        </div>
-                      </div>
-                      <span
-                        class="total-hours-all-stores"
-                        :class="{
-                          'out-of-range': isHoursOutOfRangeAllStores(
-                            staff.id
-                          ),
-                          'in-range': !isHoursOutOfRangeAllStores(staff.id),
-                        }"
-                      >
-                        合計:
-                        {{
-                          formatHours(
-                            calculateTotalHoursAllStores(staff.id)
-                          )
-                        }}
-                      </span>
-                    </div>
-                    <span class="hours-range">
-                      / {{ formatHours(staff.min_hours_per_month || 0) }} -
-                      {{ formatHours(staff.max_hours_per_month || 0) }}
-                    </span>
-                  </div>
-                  <div
-                    v-if="hasStaffWarningsAllStores(staff.id)"
-                    class="warning-indicator-staff"
-                    :title="
-                      getStaffWarningsAllStores(staff.id)
-                        .map((w) => w.message)
-                        .join(', ')
-                    "
-                  >
-                    <i class="pi pi-exclamation-triangle"></i>
-                  </div>
-                </div>
+              <div class="staff-info">
+                <span class="staff-name">{{ staff.last_name }}</span>
+                <span class="staff-hours">
+                  {{ formatHours(calculateTotalHoursAllStores(staff.id)) }}h
+                </span>
               </div>
-  
-              <div
-                v-for="day in daysInMonth"
-                :key="`${staff.id}-${day.date}`"
-                class="shift-cell"
+
+              <div 
+                v-if="getShiftForStaff(staff.id, day.date)" 
+                class="shift-info"
                 :class="{
-                  'is-weekend': day.isWeekend,
-                  'is-holiday': day.isNationalHoliday,
-                  'is-today': day.isToday,
-                  'is-past': isPastDate(day.date),
-                  'is-editable': isEditMode,
-                  'has-shift': getShiftForStaff(day.date, staff.id),
-                  'past-editable': isEditMode && isPastDate(day.date),
-                  'is-selected': selectedDate === day.date,
-                  'is-store-closed': day.isStoreClosed,
-                  'can-work':
-                    canStaffWorkOnDate(staff, day.date) &&
-                    !getShiftForStaff(day.date, staff.id) &&
-                    !day.isStoreClosed,
-                  unavailable:
-                    (!canStaffWorkOnDate(staff, day.date) ||
-                      day.isStoreClosed) &&
-                    !getShiftForStaff(day.date, staff.id),
+                  'past-date': isPastDate(day.date),
+                  'edit-mode': isEditMode
                 }"
-                @click="openShiftEditor(day, staff)"
               >
-                <div
-                  v-if="getShiftForStaff(day.date, staff.id)"
-                  class="shift-time-card"
-                >
-                  <Button
-                    v-if="isEditMode"
-                    icon="pi pi-times"
-                    class="p-button-rounded p-button-danger p-button-text quick-delete-btn"
-                    @click.stop="
-                      quickDeleteShift(
-                        getShiftForStaff(day.date, staff.id)
-                      )
-                    "
-                    title="シフトを削除"
-                    size="small"
-                  />
-                  <div class="shift-start">
-                    {{
-                      formatTime(
-                        getShiftForStaff(day.date, staff.id).start_time
-                      )
-                    }}
-                  </div>
-                  <div class="shift-separator">-</div>
-                  <div class="shift-end">
-                    {{
-                      formatTime(
-                        getShiftForStaff(day.date, staff.id).end_time
-                      )
-                    }}
-                  </div>
-                  <div
-                    v-if="
-                      getShiftForStaff(day.date, staff.id).break_start_time
-                    "
-                    class="break-time-indicator"
-                  >
-                    <i class="pi pi-coffee"></i>
-                    <span>
-                      {{
-                        formatTime(
-                          getShiftForStaff(day.date, staff.id)
-                            .break_start_time
-                        )
-                      }}
-                      -
-                      {{
-                        formatTime(
-                          getShiftForStaff(day.date, staff.id)
-                            .break_end_time
-                        )
-                      }}
-                    </span>
-                  </div>
-                  <div
-                    v-if="hasShiftViolation(day.date, staff.id)"
-                    class="violation-icon"
-                  >
-                    <i class="pi pi-exclamation-triangle"></i>
-                    <div class="violation-tooltip">
-                      <div
-                        v-for="violation in getShiftViolations(
-                          day.date,
-                          staff.id
-                        )"
-                        :key="violation.type"
-                        class="violation-tooltip-item"
-                      >
-                        {{ violation.message }}
-                      </div>
-                    </div>
-                  </div>
+                <div class="shift-time">
+                  {{ formatTime(getShiftForStaff(staff.id, day.date).start_time) }}
+                  -
+                  {{ formatTime(getShiftForStaff(staff.id, day.date).end_time) }}
                 </div>
-                <div
-                  v-else-if="day.isStoreClosed"
-                  class="store-closed-indicator"
-                >
-                  <span class="closed-text">定休日</span>
-                </div>
-                <div v-else class="no-shift">
-                  <span
-                    v-if="isEditMode && canStaffWorkOnDate(staff, day.date)"
-                    class="work-available-indicator"
-                    :title="getWorkAvailabilityTooltip(staff, day.date)"
-                    >+</span
-                  >
-                  <span
-                    v-else-if="
-                      isEditMode && !canStaffWorkOnDate(staff, day.date)
-                    "
-                    class="work-unavailable-indicator"
-                    :title="getWorkUnavailabilityReason(staff, day.date)"
-                    >×</span
-                  >
-                  <span v-else-if="isEditMode">+</span>
-                </div>
+                
+                <!-- 削除ボタン（編集モード時のみ） -->
+                <Button
+                  v-if="isEditMode && !isPastDate(day.date)"
+                  icon="pi pi-times"
+                  class="p-button-danger p-button-text p-button-sm quick-delete-btn"
+                  @click.stop="$emit('quick-delete-shift', getShiftForStaff(staff.id, day.date))"
+                  title="シフト削除"
+                />
+              </div>
+
+              <div v-else class="no-shift">
+                <span v-if="!canStaffWorkOnDate(staff, day.date)" class="unavailable-reason">
+                  {{ getWorkUnavailabilityReason(staff, day.date) }}
+                </span>
+                <span v-else-if="isEditMode" class="add-shift-hint">
+                  クリックして追加
+                </span>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </template>
+
+    <!-- 凡例 -->
+    <div class="calendar-legend">
+      <div class="legend-section">
+        <h4>カレンダー凡例</h4>
+        <div class="legend-items">
+          <div class="legend-item">
+            <div class="legend-color has-shortage"></div>
+            <span>人員要件不足</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color has-warnings"></div>
+            <span>制約違反あり</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color weekend"></div>
+            <span>土日</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color past"></div>
+            <span>過去の日付</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="legend-section">
+        <h4>スタッフ表示</h4>
+        <div class="legend-items">
+          <div class="legend-item">
+            <i class="pi pi-exclamation-triangle legend-icon shortage"></i>
+            <span>人員不足</span>
+          </div>
+          <div class="legend-item">
+            <i class="pi pi-exclamation-circle legend-icon violation"></i>
+            <span>制約違反</span>
+          </div>
+          <div class="legend-item">
+            <i class="pi pi-users legend-icon"></i>
+            <span>配置人数</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import Button from 'primevue/button';
+
+export default {
+  name: 'ShiftCalendar',
+  components: {
+    Button
+  },
   
-  <script>
-  import Button from 'primevue/button';
-  
-  export default {
-    name: 'ShiftCalendar',
-    components: {
-      Button,
+  props: {
+    isEditMode: {
+      type: Boolean,
+      default: false
     },
-    props: {
-      isEditMode: Boolean,
-      selectedDate: String,
-      selectedStore: Object,
-      daysInMonth: Array,
-      staffList: Array,
-      shifts: Array,
-      getShiftForStaff: Function,
-      calculateTotalHours: Function,
-      calculateTotalHoursAllStores: Function,
-      getOtherStoreHoursBreakdown: Function,
-      isHoursOutOfRangeAllStores: Function,
-      hasStaffWarningsAllStores: Function,
-      getStaffWarningsAllStores: Function,
-      hasDateWarnings: Function,
-      getDateWarnings: Function,
-      hasShiftViolation: Function,
-      getShiftViolations: Function,
-      canStaffWorkOnDate: Function,
-      getWorkAvailabilityTooltip: Function,
-      getWorkUnavailabilityReason: Function,
-      formatTime: Function,
-      formatHours: Function,
-      isPastDate: Function,
+    selectedDate: {
+      type: String,
+      default: null
     },
-    emits: [
-      'select-date',
-      'open-shift-editor',
-      'quick-delete-shift',
-    ],
-    methods: {
-      selectDate(date) {
-        this.$emit('select-date', date);
-      },
-      openShiftEditor(day, staff) {
-        this.$emit('open-shift-editor', day, staff);
-      },
-      quickDeleteShift(shift) {
-        this.$emit('quick-delete-shift', shift);
-      },
+    selectedStore: {
+      type: Object,
+      default: null
     },
-  };
-  </script>
+    daysInMonth: {
+      type: Array,
+      default: () => []
+    },
+    staffList: {
+      type: Array,
+      default: () => []
+    },
+    shifts: {
+      type: Array,
+      default: () => []
+    },
+    // 関数props
+    getShiftForStaff: {
+      type: Function,
+      required: true
+    },
+    calculateTotalHours: {
+      type: Function,
+      required: true
+    },
+    calculateTotalHoursAllStores: {
+      type: Function,
+      required: true
+    },
+    getOtherStoreHoursBreakdown: {
+      type: Function,
+      required: true
+    },
+    isHoursOutOfRangeAllStores: {
+      type: Function,
+      required: true
+    },
+    hasStaffWarningsAllStores: {
+      type: Function,
+      required: true
+    },
+    getStaffWarningsAllStores: {
+      type: Function,
+      required: true
+    },
+    hasDateWarnings: {
+      type: Function,
+      required: true
+    },
+    getDateWarnings: {
+      type: Function,
+      required: true
+    },
+    hasShiftViolation: {
+      type: Function,
+      required: true
+    },
+    getShiftViolations: {
+      type: Function,
+      required: true
+    },
+    canStaffWorkOnDate: {
+      type: Function,
+      required: true
+    },
+    getWorkAvailabilityTooltip: {
+      type: Function,
+      required: true
+    },
+    getWorkUnavailabilityReason: {
+      type: Function,
+      required: true
+    },
+    formatTime: {
+      type: Function,
+      required: true
+    },
+    formatHours: {
+      type: Function,
+      required: true
+    },
+    isPastDate: {
+      type: Function,
+      required: true
+    },
+    hasHourRequirements: {
+      type: Function,
+      required: true
+    },
+    getHourRequirements: {
+      type: Function,
+      required: true
+    },
+    getAssignedStaffCount: {
+      type: Function,
+      required: true
+    },
+    hasStaffingShortage: {
+      type: Function,
+      required: true
+    }
+  },
+
+  emits: [
+    'select-date',
+    'open-shift-editor',
+    'quick-delete-shift'
+  ],
+
+  setup(props, { emit }) {
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+
+    const selectDate = (date) => {
+      emit('select-date', date);
+    };
+
+    const openShiftEditor = (day, staff) => {
+      if (!props.isEditMode && !props.getShiftForStaff(staff.id, day.date)) {
+        return;
+      }
+      emit('open-shift-editor', day, staff);
+    };
+
+    const isToday = (date) => {
+      const today = new Date();
+      const targetDate = new Date(date);
+      return today.toDateString() === targetDate.toDateString();
+    };
+
+    const hasShiftViolations = (date) => {
+      if (!props.shifts || !props.staffList) return false;
+      
+      const dayShifts = props.shifts.filter(shift => shift.date === date);
+      
+      return dayShifts.some(shift => {
+        if (!shift.assignments) return false;
+        
+        return shift.assignments.some(assignment => {
+          const staff = props.staffList.find(s => s.id === assignment.staff_id);
+          return staff && props.hasShiftViolation(staff, date, assignment);
+        });
+      });
+    };
+
+    const getShortageTooltip = (date) => {
+      const warnings = props.getDateWarnings(date);
+      const shortageWarnings = warnings.filter(w => w.type === 'requirement');
+      
+      if (shortageWarnings.length === 0) return '';
+      
+      return shortageWarnings.map(w => w.message).join('\n');
+    };
+
+    const getStaffTooltip = (staff, date) => {
+      const tooltips = [];
+      
+      // 基本情報
+      tooltips.push(`${staff.last_name} ${staff.first_name}`);
+      
+      // 勤務可否
+      if (!props.canStaffWorkOnDate(staff, date)) {
+        tooltips.push(`勤務不可: ${props.getWorkUnavailabilityReason(staff, date)}`);
+        return tooltips.join('\n');
+      }
+      
+      // シフト情報
+      const shift = props.getShiftForStaff(staff.id, date);
+      if (shift) {
+        tooltips.push(`勤務時間: ${props.formatTime(shift.start_time)}-${props.formatTime(shift.end_time)}`);
+        
+        if (shift.break_start_time && shift.break_end_time) {
+          tooltips.push(`休憩: ${props.formatTime(shift.break_start_time)}-${props.formatTime(shift.break_end_time)}`);
+        }
+      }
+      
+      // 時間情報
+      const totalHours = props.calculateTotalHoursAllStores(staff.id);
+      tooltips.push(`総勤務時間: ${props.formatHours(totalHours)}h`);
+      
+      // 警告情報
+      const warnings = props.getStaffWarningsAllStores(staff, props.calculateTotalHours(staff.id));
+      if (warnings.length > 0) {
+        tooltips.push('警告: ' + warnings.join(', '));
+      }
+      
+      return tooltips.join('\n');
+    };
+
+    return {
+      weekdays,
+      selectDate,
+      openShiftEditor,
+      isToday,
+      hasShiftViolations,
+      getShortageTooltip,
+      getStaffTooltip
+    };
+  }
+};
+</script>
+
+<style scoped lang="scss">
+.shift-calendar {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1rem;
+}
+
+.weekday-headers {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.weekday-header {
+  text-align: center;
+  font-weight: 600;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
   
-  <style scoped lang="scss">
-  .calendar-section {
-    background: white;
-    border-radius: 6px;
-    overflow: hidden;
-    border: 1px solid #e5e7eb;
-    margin-bottom: 4rem;
-    box-shadow: inset 0px 0px 8px rgba(147, 147, 147, 1);
-    padding: 8px;
+  &.weekend {
+    background: rgba(255, 255, 255, 0.2);
   }
   
-  .edit-mode-indicator {
-    background: #e0f2fe;
-    padding: 0.75rem 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: #0369a1;
-    font-weight: 500;
-    font-size: 0.875rem;
+  &.sunday {
+    color: #ffcccb;
   }
   
-  .calendar-view {
-    display: flex;
-    height: auto;
-    min-height: 50vh;
+  &.saturday {
+    color: #add8e6;
   }
+}
+
+.calendar-body {
+  padding: 1rem;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: #e0e4e7;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.day-cell {
+  background: white;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
   
-  .calendar-container {
-    flex: 1;
-    overflow: auto;
-    background: #fafafa;
-    position: relative;
-  }
-  
-  .calendar-header {
-    display: flex;
-    background: white;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    min-width: fit-content;
-  }
-  
-  .staff-column-header {
-    min-width: 240px;
-    width: 240px;
-    padding: 1rem;
-    background: #fff;
-    border-right: 1px solid #e5e7eb;
-    border-bottom: 2px solid #e5e7eb;
-    color: #1e293b;
-    font-weight: 600;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: sticky;
-    left: 0;
-    z-index: 11;
-  }
-  
-  .date-cell-wrapper {
-    display: flex;
-    flex-direction: column;
-    min-width: 80px;
-    width: 80px;
-    border-right: 1px solid #e5e7eb;
-    border-bottom: 2px solid #e5e7eb;
-    flex-shrink: 0;
-  }
-  
-  .date-warning-row {
-    height: 30px;
+  &:hover {
     background: #f8f9fa;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-bottom: 1px solid #e5e7eb;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1;
   }
   
-  .date-cell-header {
-    flex: 1;
-    padding: 0.75rem 0.25rem;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
-    background: white;
-    cursor: pointer;
-    transition: all 0.2s;
+  &.selected {
+    background: #e3f2fd;
+    border: 2px solid #2196f3;
+    z-index: 2;
   }
   
-  .date-cell-header:hover {
-    background: #f3f4f6;
+  &.weekend {
+    background: #fafafa;
   }
   
-  .date-cell-header.is-today {
-    background: #dbeafe;
-    font-weight: 600;
+  &.sunday {
+    background: #fff5f5;
   }
   
-  .date-cell-header.is-weekend .date-number,
-  .date-cell-header.is-weekend .date-weekday {
-    color: #dc2626;
+  &.saturday {
+    background: #f0f8ff;
   }
   
-  .date-cell-header.is-holiday .date-number,
-  .date-cell-header.is-holiday .date-weekday {
-    color: #dc2626;
+  &.today {
+    border: 2px solid #4caf50;
+    background: #f1f8e9;
   }
   
-  .date-cell-header.is-store-closed {
-    background: #f3f4f6 !important;
-    color: #6b7280;
-    opacity: 0.8;
+  &.past {
+    opacity: 0.7;
+    background: #f5f5f5;
   }
   
-  .date-cell-header.is-store-closed .date-number,
-  .date-cell-header.is-store-closed .date-weekday {
-    color: #6b7280 !important;
+  &.has-warnings {
+    border-left: 4px solid #ff9800;
   }
   
-  .date-cell-header.is-selected {
-    background: #bfdbfe;
+  &.has-shortage {
+    border-left: 4px solid #f44336;
+  }
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.day-number {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #333;
+}
+
+.warning-indicators {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.warning-icon {
+  font-size: 0.875rem;
+  
+  &.shortage {
+    color: #f44336;
   }
   
-  .date-cell-header.is-store-closed.is-selected {
-    background: #d1d5db !important;
+  &.violation {
+    color: #ff9800;
+  }
+}
+
+.staff-count-display {
+  padding: 0.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f9f9f9;
+}
+
+.assigned-count {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5rem;
+  
+  i {
+    color: #2196f3;
+  }
+}
+
+.requirement-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.requirement-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  padding: 0.25rem;
+  border-radius: 4px;
+  background: white;
+  
+  &.shortage {
+    background: #ffebee;
+    border: 1px solid #f44336;
+    color: #c62828;
+  }
+}
+
+.time-slot {
+  font-weight: 500;
+}
+
+.count-info {
+  font-weight: 600;
+}
+
+.staff-list {
+  flex: 1;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow-y: auto;
+}
+
+.staff-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  font-size: 0.75rem;
+  
+  &:hover {
+    background: #f0f8ff;
+    border-color: #2196f3;
   }
   
-  .date-number {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #1e293b;
+  &.has-shift {
+    background: #e8f5e8;
+    border-color: #4caf50;
   }
   
-  .date-weekday {
-    font-size: 0.75rem;
-    color: #64748b;
-  }
-  
-  .holiday-indicator {
-    font-size: 0.65rem;
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-    background: #dc2626;
-    color: white;
-    font-weight: 600;
-  }
-  
-  .closed-day-indicator {
-    font-size: 0.65rem;
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-    background: #9ca3af;
-    color: white;
-    font-weight: 600;
-  }
-  
-  .warning-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    background: #fbbf24;
-    padding: 0.25rem 0.5rem;
-    border-radius: 12px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: #78350f;
-    position: relative;
-    cursor: pointer;
-  }
-  
-  .warning-indicator::before {
-    content: attr(data-warning-count);
-    margin-right: 0.125rem;
-  }
-  
-  .warning-indicator i {
-    font-size: 0.75rem;
-  }
-  
-  .warning-tooltip {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-top: 0.5rem;
-    background: white;
-    border-radius: 8px;
-    padding: 0.75rem;
-    min-width: 250px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    display: none;
-    z-index: 20;
-  }
-  
-  .warning-indicator:hover .warning-tooltip {
-    display: block;
-  }
-  
-  .warning-tooltip-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    margin-bottom: 0.5rem;
-  }
-  
-  .warning-tooltip-item:last-child {
-    margin-bottom: 0;
-  }
-  
-  .warning-tooltip-item.staffing_shortage {
-    background: #fef3c7;
-    color: #78350f;
-  }
-  
-  .warning-tooltip-item.staff_violation {
-    background: #fee2e2;
-    color: #7f1d1d;
-  }
-  
-  .calendar-body {
-    background: white;
-    min-width: fit-content;
-  }
-  
-  .staff-row {
-    display: flex;
-    transition: background 0.2s;
-    min-width: fit-content;
-  }
-  
-  .staff-row:hover {
-    background: #f9fafb;
-  }
-  
-  .staff-info {
-    min-width: 240px;
-    width: 240px;
-    padding: 1rem;
-    background: white;
-    border-right: 2px solid #e5e7eb;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    position: sticky;
-    left: 0;
-    z-index: 6;
-  }
-  
-  .staff-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-    background: #3b82f6;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    font-size: 0.9rem;
-    flex-shrink: 0;
-  }
-  
-  .staff-details {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-  }
-  
-  .staff-name {
-    font-weight: 600;
-    color: #1e293b;
-    font-size: 0.9rem;
-  }
-  
-  .staff-role {
-    font-size: 0.75rem;
-    color: #64748b;
-  }
-  
-  .staff-hours-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    margin-top: 0.25rem;
-  }
-  
-  .hours-display {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  .current-hours {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: #3b82f6;
-  }
-  
-  .current-hours.out-of-range {
-    color: #dc2626 !important;
-    font-weight: 700;
-  }
-  
-  .other-stores-hours {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-  }
-  
-  .store-breakdown {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.7rem;
-  }
-  
-  .store-name {
-    color: #6b7280;
-    font-weight: 500;
-  }
-  
-  .store-hours {
-    color: #059669;
-    font-weight: 600;
-  }
-  
-  .total-hours-all-stores {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #6b7280;
-  }
-  
-  .total-hours-all-stores.out-of-range {
-    color: #dc2626 !important;
-    font-weight: 700;
-  }
-  
-  .hours-range {
-    font-size: 0.7rem;
-    color: #94a3b8;
-  }
-  
-  .warning-indicator-staff {
-    color: #f59e0b;
-    font-size: 0.8rem;
-    cursor: help;
-  }
-  
-  .shift-cell {
-    min-width: 80px;
-    width: 80px;
-    min-height: 70px;
-    border-right: 1px solid #e5e7eb;
-    border-bottom: 1px solid #e5e7eb;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    transition: all 0.2s;
-    flex-shrink: 0;
-  }
-  
-  .shift-cell.is-today {
-    background: #dbeafe;
-  }
-  
-  .shift-cell.is-weekend .date-number,
-  .shift-cell.is-weekend .date-weekday {
-    color: #dc2626;
-  }
-  
-  .shift-cell.is-holiday .date-number,
-  .shift-cell.is-holiday .date-weekday {
-    color: #dc2626;
-  }
-  
-  .shift-cell.is-past {
-    opacity: 0.6;
-  }
-  
-  .shift-cell.is-editable {
-    cursor: pointer;
-  }
-  
-  .shift-cell.is-editable:hover {
-    background: #e0f2fe;
-    transform: scale(1.02);
-  }
-  
-  .shift-cell.past-editable:hover {
-    background: #fef3c7;
-  }
-  
-  .shift-cell.is-store-closed {
-    background: #f3f4f6 !important;
-    color: #9ca3af;
+  &.unavailable {
+    background: #ffebee;
+    border-color: #f44336;
     opacity: 0.7;
   }
   
-  .shift-cell.is-store-closed.is-editable:hover {
-    background: #f3f4f6 !important;
-    transform: none !important;
+  &.has-violation {
+    background: #fff3e0;
+    border-color: #ff9800;
   }
   
-  .shift-time-card {
-    background: #10b981;
-    color: white;
-    padding: 0.5rem 0.375rem;
-    border-radius: 6px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.125rem;
-    font-weight: 600;
-    font-size: 0.75rem;
-    min-width: 60px;
-    transition: all 0.2s;
-    position: relative;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  &.hours-warning {
+    border-left: 3px solid #ff9800;
   }
   
-  .shift-time-card:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  &.hours-out-of-range {
+    border-left: 3px solid #f44336;
   }
+}
+
+.staff-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.staff-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.staff-hours {
+  font-size: 0.7rem;
+  color: #666;
+  background: #e0e0e0;
+  padding: 0.125rem 0.375rem;
+  border-radius: 12px;
+}
+
+.shift-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   
-  .quick-delete-btn {
-    position: absolute !important;
-    top: -8px;
-    right: -8px;
-    width: 20px !important;
-    height: 20px !important;
-    min-width: 20px !important;
-    padding: 0 !important;
-    border-radius: 50% !important;
-    background: #ef4444 !important;
-    border: 2px solid white !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
-    z-index: 10;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.2s ease-in-out !important;
-    color: white !important;
+  &.past-date {
+    opacity: 0.7;
   }
+}
+
+.shift-time {
+  font-weight: 500;
+  color: #2e7d32;
+}
+
+.quick-delete-btn {
+  padding: 0.25rem;
+  width: 1.5rem;
+  height: 1.5rem;
   
-  .quick-delete-btn:hover {
-    background: #dc2626 !important;
-    transform: scale(1.1) !important;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3) !important;
-  }
-  
-  .shift-time-card:hover .quick-delete-btn {
-    opacity: 1;
-    visibility: visible;
-  }
-  
-  .quick-delete-btn .pi {
-    font-size: 10px !important;
-  }
-  
-  .break-time-indicator {
-    font-size: 0.65rem;
-    color: rgba(255, 255, 255, 0.9);
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    margin-top: 0.25rem;
-    padding: 0.125rem 0.25rem;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 3px;
-    font-weight: 500;
-  }
-  
-  .break-time-indicator .pi {
-    font-size: 0.6rem;
-  }
-  
-  .shift-start,
-  .shift-end {
-    font-weight: 700;
-    font-size: 0.8rem;
-  }
-  
-  .shift-separator {
-    font-size: 0.6rem;
-    opacity: 0.8;
-  }
-  
-  .violation-icon {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    background: #fbbf24;
-    color: #78350f;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.6rem;
-    cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  }
-  
-  .violation-tooltip {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 0.5rem;
-    background: white;
-    border-radius: 8px;
-    padding: 0.75rem;
-    min-width: 200px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    display: none;
-    z-index: 20;
-  }
-  
-  .violation-icon:hover .violation-tooltip {
-    display: block;
-  }
-  
-  .violation-tooltip-item {
-    font-size: 0.8rem;
-    color: #7f1d1d;
-    margin-bottom: 0.25rem;
-  }
-  
-  .violation-tooltip-item:last-child {
-    margin-bottom: 0;
-  }
-  
-  .no-shift {
-    color: #cbd5e1;
-    font-size: 1.2rem;
-    transition: all 0.2s;
-  }
-  
-  .shift-cell.is-editable .no-shift {
-    color: #10b981;
-    font-weight: 600;
-  }
-  
-  .shift-cell.is-store-closed .no-shift {
-    color: #9ca3af !important;
-    cursor: not-allowed;
-  }
-  
-  .store-closed-indicator {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
+  :deep(.p-button-icon) {
     font-size: 0.7rem;
-    color: #9ca3af;
-    font-weight: 500;
+  }
+}
+
+.no-shift {
+  text-align: center;
+  color: #999;
+  font-style: italic;
+}
+
+.unavailable-reason {
+  color: #d32f2f;
+  font-weight: 500;
+}
+
+.add-shift-hint {
+  color: #1976d2;
+}
+
+.calendar-legend {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-top: 1px solid #e0e0e0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.legend-section {
+  h4 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+}
+
+.legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.legend-color {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 2px;
+  border: 1px solid #ccc;
+  
+  &.has-shortage {
+    background: #ffebee;
+    border-color: #f44336;
   }
   
-  .closed-text {
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
+  &.has-warnings {
+    background: #fff3e0;
+    border-color: #ff9800;
   }
   
-  .work-available-indicator {
-    color: #10b981;
-    font-weight: 700;
-    font-size: 1.2rem;
+  &.weekend {
+    background: #fafafa;
+    border-color: #bdbdbd;
   }
   
-  .work-unavailable-indicator {
-    color: #ef4444;
-    font-weight: 700;
-    font-size: 1.2rem;
+  &.past {
+    background: #f5f5f5;
+    border-color: #9e9e9e;
+  }
+}
+
+.legend-icon {
+  font-size: 0.875rem;
+  
+  &.shortage {
+    color: #f44336;
   }
   
-  .shift-cell.can-work {
-    background-color: #f0fdf4;
-    position: relative;
+  &.violation {
+    color: #ff9800;
+  }
+}
+
+@media (max-width: 1400px) {
+  .day-cell {
+    min-height: 180px;
   }
   
-  .shift-cell.can-work::before {
-    content: "";
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    right: 2px;
-    bottom: 2px;
-    border: 2px dashed #10b981;
-    border-radius: 4px;
-    pointer-events: none;
+  .calendar-legend {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 1200px) {
+  .day-cell {
+    min-height: 160px;
   }
   
-  .shift-cell.can-work:hover {
-    background-color: #dcfce7;
+  .staff-row {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .calendar-grid {
+    grid-template-columns: 1fr;
   }
   
-  @media (max-width: 768px) {
-    .calendar-container {
-      min-height: 350px;
-      max-height: 55vh;
-    }
-  
-    .staff-column-header,
-    .staff-info {
-      min-width: 200px;
-      width: 200px;
-    }
-  
-    .date-cell-wrapper,
-    .shift-cell {
-      min-width: 70px;
-      width: 70px;
-    }
+  .weekday-headers {
+    display: none;
   }
-  </style>
+  
+  .day-cell {
+    min-height: auto;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  
+  .day-header {
+    background: #e3f2fd;
+  }
+}
+</style>

@@ -1,0 +1,1111 @@
+{
+  "sessionId": "shift-generation_store2_2025年7月_2025年07月08日_08時58分18秒",
+  "storeId": 2,
+  "year": 2025,
+  "month": 7,
+  "startTime": "2025-07-08 08:58:18",
+  "endTime": "2025-07-08 09:00:40",
+  "status": "FAILED",
+  "processes": [
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "SESSION_START",
+      "message": "シフト生成開始 - 店舗2 2025年7月",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "STORE_FETCH",
+      "message": "店舗情報取得開始",
+      "data": {
+        "storeId": 2
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "STORE_RESULT",
+      "message": "店舗情報取得完了",
+      "data": {
+        "storeName": "くるふ福井駅店"
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "SYSTEM_SETTINGS_FETCH",
+      "message": "システム設定取得開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "SYSTEM_SETTINGS_RESULT",
+      "message": "システム設定取得完了",
+      "data": {
+        "closingDay": 25,
+        "minDailyHours": "3.0"
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "PERIOD_CALCULATION",
+      "message": "期間計算: 2025年7月（締め日: 25日）",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "PERIOD_RESULT",
+      "message": "期間: 2025-06-26 ～ 2025-07-25",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "STAFF_FETCH",
+      "message": "リアルタイムスタッフ情報取得開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "REALTIME_STAFF_FETCH",
+      "message": "リアルタイムスタッフデータ取得開始",
+      "data": {
+        "storeId": 2
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "WORKABLE_STAFF_COUNT",
+      "message": "勤務可能スタッフ数",
+      "data": {
+        "count": 18
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "AI_TARGET_IDS",
+      "message": "AI生成対象スタッフID",
+      "data": {
+        "aiTargetIds": [
+          2,
+          4,
+          5
+        ]
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "AI_TARGET_FILTERED",
+      "message": "AI生成対象によるフィルタリング完了",
+      "data": {
+        "filteredCount": 3,
+        "originalCount": 18
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "STAFF_DATA_DEBUG",
+      "message": "スタッフ 2 のデータ",
+      "data": {
+        "staffId": 2,
+        "name": "山田 花子",
+        "dayPreferencesCount": 7,
+        "dayOffRequestsCount": 0,
+        "dayPreferencesDetail": [
+          {
+            "day_of_week": 0,
+            "dayName": "日",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "10:00:00",
+            "preferred_end_time": "19:00:00"
+          },
+          {
+            "day_of_week": 1,
+            "dayName": "月",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "12:00:00",
+            "preferred_end_time": "17:00:00"
+          },
+          {
+            "day_of_week": 2,
+            "dayName": "火",
+            "available": false,
+            "availableType": "boolean",
+            "preferred_start_time": null,
+            "preferred_end_time": null
+          },
+          {
+            "day_of_week": 3,
+            "dayName": "水",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "14:00:00",
+            "preferred_end_time": "17:00:00"
+          },
+          {
+            "day_of_week": 4,
+            "dayName": "木",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "09:00:00",
+            "preferred_end_time": "19:00:00"
+          },
+          {
+            "day_of_week": 5,
+            "dayName": "金",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "13:00:00",
+            "preferred_end_time": "16:00:00"
+          },
+          {
+            "day_of_week": 6,
+            "dayName": "土",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "11:00:00",
+            "preferred_end_time": "16:00:00"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "STAFF_DATA_DEBUG",
+      "message": "スタッフ 4 のデータ",
+      "data": {
+        "staffId": 4,
+        "name": "鈴木 次郎",
+        "dayPreferencesCount": 7,
+        "dayOffRequestsCount": 0,
+        "dayPreferencesDetail": [
+          {
+            "day_of_week": 1,
+            "dayName": "月",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "09:00:00",
+            "preferred_end_time": "18:00:00"
+          },
+          {
+            "day_of_week": 2,
+            "dayName": "火",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "09:00:00",
+            "preferred_end_time": "18:00:00"
+          },
+          {
+            "day_of_week": 3,
+            "dayName": "水",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "09:00:00",
+            "preferred_end_time": "18:00:00"
+          },
+          {
+            "day_of_week": 4,
+            "dayName": "木",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "09:00:00",
+            "preferred_end_time": "18:00:00"
+          },
+          {
+            "day_of_week": 5,
+            "dayName": "金",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "09:00:00",
+            "preferred_end_time": "18:00:00"
+          },
+          {
+            "day_of_week": 6,
+            "dayName": "土",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": null,
+            "preferred_end_time": null
+          },
+          {
+            "day_of_week": 0,
+            "dayName": "日",
+            "available": false,
+            "availableType": "boolean",
+            "preferred_start_time": null,
+            "preferred_end_time": null
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "STAFF_DATA_DEBUG",
+      "message": "スタッフ 5 のデータ",
+      "data": {
+        "staffId": 5,
+        "name": "高橋 美咲",
+        "dayPreferencesCount": 7,
+        "dayOffRequestsCount": 0,
+        "dayPreferencesDetail": [
+          {
+            "day_of_week": 0,
+            "dayName": "日",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "11:00:00",
+            "preferred_end_time": "17:00:00"
+          },
+          {
+            "day_of_week": 1,
+            "dayName": "月",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "09:00:00",
+            "preferred_end_time": "17:00:00"
+          },
+          {
+            "day_of_week": 2,
+            "dayName": "火",
+            "available": false,
+            "availableType": "boolean",
+            "preferred_start_time": null,
+            "preferred_end_time": null
+          },
+          {
+            "day_of_week": 3,
+            "dayName": "水",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "09:00:00",
+            "preferred_end_time": "16:00:00"
+          },
+          {
+            "day_of_week": 4,
+            "dayName": "木",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "09:00:00",
+            "preferred_end_time": "16:00:00"
+          },
+          {
+            "day_of_week": 5,
+            "dayName": "金",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "14:00:00",
+            "preferred_end_time": "18:00:00"
+          },
+          {
+            "day_of_week": 6,
+            "dayName": "土",
+            "available": true,
+            "availableType": "boolean",
+            "preferred_start_time": "11:00:00",
+            "preferred_end_time": "19:00:00"
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "DATA_INTEGRITY_CHECK",
+      "message": "データ整合性チェック",
+      "data": {
+        "totalStaff": 3,
+        "staffWithoutPreferences": 0,
+        "staffWithIncompletePreferences": 0,
+        "booleanTypeValidation": [
+          {
+            "staffId": 2,
+            "availableTypes": [
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean"
+            ]
+          },
+          {
+            "staffId": 4,
+            "availableTypes": [
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean"
+            ]
+          },
+          {
+            "staffId": 5,
+            "availableTypes": [
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean",
+              "boolean"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "STAFF_RESULT",
+      "message": "リアルタイムスタッフ情報取得完了",
+      "data": {
+        "staffCount": 3,
+        "staffDetails": [
+          {
+            "id": 2,
+            "name": "山田 花子",
+            "totalMinHours": 40,
+            "totalMaxHours": 80,
+            "dayPreferences": 7,
+            "daysOff": 0,
+            "dayPreferencesDetail": [
+              {
+                "day_of_week": 0,
+                "dayName": "日",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "10:00:00",
+                "preferred_end_time": "19:00:00"
+              },
+              {
+                "day_of_week": 1,
+                "dayName": "月",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "12:00:00",
+                "preferred_end_time": "17:00:00"
+              },
+              {
+                "day_of_week": 2,
+                "dayName": "火",
+                "available": false,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": null,
+                "preferred_end_time": null
+              },
+              {
+                "day_of_week": 3,
+                "dayName": "水",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "14:00:00",
+                "preferred_end_time": "17:00:00"
+              },
+              {
+                "day_of_week": 4,
+                "dayName": "木",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "09:00:00",
+                "preferred_end_time": "19:00:00"
+              },
+              {
+                "day_of_week": 5,
+                "dayName": "金",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "13:00:00",
+                "preferred_end_time": "16:00:00"
+              },
+              {
+                "day_of_week": 6,
+                "dayName": "土",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "11:00:00",
+                "preferred_end_time": "16:00:00"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "name": "鈴木 次郎",
+            "totalMinHours": 140,
+            "totalMaxHours": 160,
+            "dayPreferences": 7,
+            "daysOff": 0,
+            "dayPreferencesDetail": [
+              {
+                "day_of_week": 1,
+                "dayName": "月",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "09:00:00",
+                "preferred_end_time": "18:00:00"
+              },
+              {
+                "day_of_week": 2,
+                "dayName": "火",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "09:00:00",
+                "preferred_end_time": "18:00:00"
+              },
+              {
+                "day_of_week": 3,
+                "dayName": "水",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "09:00:00",
+                "preferred_end_time": "18:00:00"
+              },
+              {
+                "day_of_week": 4,
+                "dayName": "木",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "09:00:00",
+                "preferred_end_time": "18:00:00"
+              },
+              {
+                "day_of_week": 5,
+                "dayName": "金",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "09:00:00",
+                "preferred_end_time": "18:00:00"
+              },
+              {
+                "day_of_week": 6,
+                "dayName": "土",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": null,
+                "preferred_end_time": null
+              },
+              {
+                "day_of_week": 0,
+                "dayName": "日",
+                "available": false,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": null,
+                "preferred_end_time": null
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "name": "高橋 美咲",
+            "totalMinHours": 60,
+            "totalMaxHours": 100,
+            "dayPreferences": 7,
+            "daysOff": 0,
+            "dayPreferencesDetail": [
+              {
+                "day_of_week": 0,
+                "dayName": "日",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "11:00:00",
+                "preferred_end_time": "17:00:00"
+              },
+              {
+                "day_of_week": 1,
+                "dayName": "月",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "09:00:00",
+                "preferred_end_time": "17:00:00"
+              },
+              {
+                "day_of_week": 2,
+                "dayName": "火",
+                "available": false,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": null,
+                "preferred_end_time": null
+              },
+              {
+                "day_of_week": 3,
+                "dayName": "水",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "09:00:00",
+                "preferred_end_time": "16:00:00"
+              },
+              {
+                "day_of_week": 4,
+                "dayName": "木",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "09:00:00",
+                "preferred_end_time": "16:00:00"
+              },
+              {
+                "day_of_week": 5,
+                "dayName": "金",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "14:00:00",
+                "preferred_end_time": "18:00:00"
+              },
+              {
+                "day_of_week": 6,
+                "dayName": "土",
+                "available": true,
+                "availableType": "boolean",
+                "updatedAt": "2025-07-07T06:45:07.894Z",
+                "preferred_start_time": "11:00:00",
+                "preferred_end_time": "19:00:00"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "OTHER_STORE_SHIFTS",
+      "message": "他店舗シフト取得開始",
+      "data": {
+        "currentStoreId": 2,
+        "staffCount": 3
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "OTHER_STORE_SHIFTS_RESULT",
+      "message": "他店舗シフト取得完了",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "STORE_SETTINGS_FETCH",
+      "message": "店舗設定取得開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "STORE_SETTINGS_RESULT",
+      "message": "店舗設定取得完了",
+      "data": {
+        "closedDaysCount": 0,
+        "requirementsCount": 19
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "GENERATION_ATTEMPT",
+      "message": "シフト生成試行 1/3",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "PROMPT_GENERATION",
+      "message": "AIプロンプト生成完了",
+      "data": {
+        "promptLength": 4047
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "AI_API_CALL",
+      "message": "Claude API呼び出し開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:58:18",
+      "phase": "SSL_CHECK_DISABLED",
+      "message": "SSL証明書検証を無効化してAPI呼び出しを実行",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "API_CALL_SUCCESS",
+      "message": "Claude API呼び出し成功",
+      "data": {
+        "responseTime": 43683,
+        "status": 200,
+        "contentLength": 12157,
+        "model": "claude-sonnet-4-20250514",
+        "inputTokens": 3224,
+        "outputTokens": 4009,
+        "stopReason": "end_turn",
+        "sslDisabled": true
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "AI_API_RESULT",
+      "message": "Claude APIレスポンス受信完了",
+      "data": {
+        "responseLength": 12157
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "RESPONSE_PARSING",
+      "message": "レスポンス解析開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "RESPONSE_PARSING_RESULT",
+      "message": "レスポンス解析完了",
+      "data": {
+        "parsedShifts": 30
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "VALIDATION",
+      "message": "バリデーション実行中",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "VALIDATION_START",
+      "message": "シフト検証開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "VALIDATION_COMPLETE",
+      "message": "検証完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 8,
+        "warningCount": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "VALIDATION_RESULT",
+      "message": "バリデーション完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 8,
+        "warningCount": 0,
+        "violations": [
+          "次郎 鈴木 (2025-06-29): 日曜日は勤務不可",
+          "花子 山田 (2025-07-01): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-01): 火曜日は勤務不可",
+          "次郎 鈴木 (2025-07-06): 日曜日は勤務不可",
+          "花子 山田 (2025-07-08): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-08): 火曜日は勤務不可",
+          "次郎 鈴木 (2025-07-13): 日曜日は勤務不可",
+          "次郎 鈴木: 月間最小勤務時間不足 (87.0h < 140h, 不足53.0h)"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "CONSTRAINT_VIOLATION",
+      "message": "試行1: 制約違反",
+      "data": {
+        "violationCount": 8,
+        "score": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "ATTEMPTING_FIX",
+      "message": "試行1: 制約違反の修正を試行",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "CONSTRAINT_FIX_START",
+      "message": "制約違反の修正開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "CONSTRAINT_FIX_COMPLETE",
+      "message": "制約違反の修正完了",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "VALIDATION_START",
+      "message": "シフト検証開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "VALIDATION_COMPLETE",
+      "message": "検証完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 7,
+        "warningCount": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "GENERATION_ATTEMPT",
+      "message": "シフト生成試行 2/3",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "PROMPT_GENERATION",
+      "message": "AIプロンプト生成完了",
+      "data": {
+        "promptLength": 4743
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "AI_API_CALL",
+      "message": "Claude API呼び出し開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:01",
+      "phase": "SSL_CHECK_DISABLED",
+      "message": "SSL証明書検証を無効化してAPI呼び出しを実行",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "API_CALL_SUCCESS",
+      "message": "Claude API呼び出し成功",
+      "data": {
+        "responseTime": 49495,
+        "status": 200,
+        "contentLength": 14074,
+        "model": "claude-sonnet-4-20250514",
+        "inputTokens": 3818,
+        "outputTokens": 4635,
+        "stopReason": "end_turn",
+        "sslDisabled": true
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "AI_API_RESULT",
+      "message": "Claude APIレスポンス受信完了",
+      "data": {
+        "responseLength": 14074
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "RESPONSE_PARSING",
+      "message": "レスポンス解析開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "RESPONSE_PARSING_RESULT",
+      "message": "レスポンス解析完了",
+      "data": {
+        "parsedShifts": 30
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "VALIDATION",
+      "message": "バリデーション実行中",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "VALIDATION_START",
+      "message": "シフト検証開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "VALIDATION_COMPLETE",
+      "message": "検証完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 15,
+        "warningCount": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "VALIDATION_RESULT",
+      "message": "バリデーション完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 15,
+        "warningCount": 0,
+        "violations": [
+          "美咲 高橋 (2025-06-27): 1日勤務時間超過 (7.3h > 7h)",
+          "次郎 鈴木 (2025-06-29): 日曜日は勤務不可",
+          "花子 山田 (2025-07-01): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-01): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-04): 1日勤務時間超過 (7.3h > 7h)",
+          "次郎 鈴木 (2025-07-06): 日曜日は勤務不可",
+          "花子 山田 (2025-07-08): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-08): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-11): 1日勤務時間超過 (7.3h > 7h)",
+          "次郎 鈴木 (2025-07-13): 日曜日は勤務不可",
+          "美咲 高橋 (2025-07-15): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-18): 1日勤務時間超過 (7.3h > 7h)",
+          "次郎 鈴木 (2025-07-20): 日曜日は勤務不可",
+          "次郎 鈴木: 月間最小勤務時間不足 (135.3h < 140h, 不足4.8h)",
+          "美咲 高橋: 月間最大勤務時間超過 (141.0h > 100h, 超過41.0h)"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "CONSTRAINT_VIOLATION",
+      "message": "試行2: 制約違反",
+      "data": {
+        "violationCount": 15,
+        "score": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "ATTEMPTING_FIX",
+      "message": "試行2: 制約違反の修正を試行",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "CONSTRAINT_FIX_START",
+      "message": "制約違反の修正開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "CONSTRAINT_FIX_COMPLETE",
+      "message": "制約違反の修正完了",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "VALIDATION_START",
+      "message": "シフト検証開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "VALIDATION_COMPLETE",
+      "message": "検証完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 9,
+        "warningCount": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "GENERATION_ATTEMPT",
+      "message": "シフト生成試行 3/3",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "PROMPT_GENERATION",
+      "message": "AIプロンプト生成完了",
+      "data": {
+        "promptLength": 4743
+      }
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "AI_API_CALL",
+      "message": "Claude API呼び出し開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 08:59:51",
+      "phase": "SSL_CHECK_DISABLED",
+      "message": "SSL証明書検証を無効化してAPI呼び出しを実行",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "API_CALL_SUCCESS",
+      "message": "Claude API呼び出し成功",
+      "data": {
+        "responseTime": 49431,
+        "status": 200,
+        "contentLength": 14097,
+        "model": "claude-sonnet-4-20250514",
+        "inputTokens": 3818,
+        "outputTokens": 4653,
+        "stopReason": "end_turn",
+        "sslDisabled": true
+      }
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "AI_API_RESULT",
+      "message": "Claude APIレスポンス受信完了",
+      "data": {
+        "responseLength": 14097
+      }
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "RESPONSE_PARSING",
+      "message": "レスポンス解析開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "RESPONSE_PARSING_RESULT",
+      "message": "レスポンス解析完了",
+      "data": {
+        "parsedShifts": 30
+      }
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "VALIDATION",
+      "message": "バリデーション実行中",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "VALIDATION_START",
+      "message": "シフト検証開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "VALIDATION_COMPLETE",
+      "message": "検証完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 16,
+        "warningCount": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "VALIDATION_RESULT",
+      "message": "バリデーション完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 16,
+        "warningCount": 0,
+        "violations": [
+          "美咲 高橋 (2025-06-27): 1日勤務時間超過 (7.3h > 7h)",
+          "次郎 鈴木 (2025-06-29): 日曜日は勤務不可",
+          "花子 山田 (2025-07-01): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-01): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-04): 1日勤務時間超過 (7.3h > 7h)",
+          "次郎 鈴木 (2025-07-06): 日曜日は勤務不可",
+          "花子 山田 (2025-07-08): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-08): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-11): 1日勤務時間超過 (7.3h > 7h)",
+          "次郎 鈴木 (2025-07-13): 日曜日は勤務不可",
+          "美咲 高橋 (2025-07-15): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-18): 1日勤務時間超過 (7.3h > 7h)",
+          "次郎 鈴木 (2025-07-20): 日曜日は勤務不可",
+          "美咲 高橋 (2025-07-22): 火曜日は勤務不可",
+          "次郎 鈴木: 月間最小勤務時間不足 (131.0h < 140h, 不足9.0h)",
+          "美咲 高橋: 月間最大勤務時間超過 (141.0h > 100h, 超過41.0h)"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "CONSTRAINT_VIOLATION",
+      "message": "試行3: 制約違反",
+      "data": {
+        "violationCount": 16,
+        "score": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "ATTEMPTING_FIX",
+      "message": "試行3: 制約違反の修正を試行",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "CONSTRAINT_FIX_START",
+      "message": "制約違反の修正開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "CONSTRAINT_FIX_COMPLETE",
+      "message": "制約違反の修正完了",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "VALIDATION_START",
+      "message": "シフト検証開始",
+      "data": null
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "VALIDATION_COMPLETE",
+      "message": "検証完了",
+      "data": {
+        "isValid": false,
+        "violationCount": 10,
+        "warningCount": 0
+      }
+    },
+    {
+      "timestamp": "2025-07-08 09:00:40",
+      "phase": "CRITICAL_VIOLATIONS",
+      "message": "重大な制約違反により生成を中止",
+      "data": {
+        "violations": [
+          "次郎 鈴木 (2025-06-29): 日曜日は勤務不可",
+          "花子 山田 (2025-07-01): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-01): 火曜日は勤務不可",
+          "次郎 鈴木 (2025-07-06): 日曜日は勤務不可",
+          "花子 山田 (2025-07-08): 火曜日は勤務不可",
+          "美咲 高橋 (2025-07-08): 火曜日は勤務不可",
+          "次郎 鈴木 (2025-07-13): 日曜日は勤務不可"
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "result": {
+    "success": false,
+    "error": "CRITICAL_CONSTRAINTS_VIOLATED",
+    "message": "重大な制約違反があるため、シフトを生成できませんでした。\n\n主な問題:\n次郎 鈴木 (2025-06-29): 日曜日は勤務不可\n花子 山田 (2025-07-01): 火曜日は勤務不可\n美咲 高橋 (2025-07-01): 火曜日は勤務不可\n次郎 鈴木 (2025-07-06): 日曜日は勤務不可\n花子 山田 (2025-07-08): 火曜日は勤務不可",
+    "violations": [
+      "次郎 鈴木 (2025-06-29): 日曜日は勤務不可",
+      "花子 山田 (2025-07-01): 火曜日は勤務不可",
+      "美咲 高橋 (2025-07-01): 火曜日は勤務不可",
+      "次郎 鈴木 (2025-07-06): 日曜日は勤務不可",
+      "花子 山田 (2025-07-08): 火曜日は勤務不可",
+      "美咲 高橋 (2025-07-08): 火曜日は勤務不可",
+      "次郎 鈴木 (2025-07-13): 日曜日は勤務不可"
+    ],
+    "attempts": 3
+  }
+}

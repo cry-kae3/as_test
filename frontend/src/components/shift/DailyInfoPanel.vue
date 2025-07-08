@@ -1,547 +1,932 @@
 <template>
-    <div class="daily-info-panel">
-      <div
-        v-if="hasDateWarnings(selectedDate)"
-        class="daily-info-section date-warnings-section"
-      >
-        <h4 class="section-title">
-          <i class="pi pi-exclamation-triangle"></i>
-          警告・注意事項
-        </h4>
-        <div class="date-warnings">
-          <div
-            v-for="warning in getDateWarnings(selectedDate)"
-            :key="warning.type"
-            class="warning-item"
-            :class="warning.type"
-          >
-            <i :class="warning.icon"></i>
-            <span>{{ warning.message }}</span>
-          </div>
-        </div>
+  <div class="daily-info-panel">
+    <!-- パネルヘッダー -->
+    <div class="panel-header">
+      <h3 class="panel-title">
+        {{ formatSelectedDateDisplay(selectedDate) }} の詳細情報
+      </h3>
+      <div class="header-badges">
+        <Badge 
+          v-if="getTotalAssignedStaff() > 0"
+          :value="`${getTotalAssignedStaff()}人配置`"
+          severity="info"
+        />
+        <Badge 
+          v-if="hasDateWarnings(selectedDate)"
+          value="警告あり"
+          severity="warning"
+        />
+        <Badge 
+          v-if="hasStaffingShortage(selectedDate)"
+          value="人員不足"
+          severity="danger"
+        />
       </div>
-  
-      <div class="daily-info-section requirements-section">
+    </div>
+
+    <!-- 人員要件セクション -->
+    <div v-if="getDailyRequirements(selectedDate).length > 0" class="info-section">
+      <div class="section-header">
         <h4 class="section-title">
           <i class="pi pi-users"></i>
           人員要件
         </h4>
-        <div
-          v-if="getDailyRequirements(selectedDate).length > 0"
-          class="requirements-list"
-        >
-          <div
-            v-for="req in getDailyRequirements(selectedDate)"
-            :key="`req-${req.start_time}-${req.end_time}`"
-            class="requirement-item"
-            :class="{
-              shortage: hasStaffingShortage(selectedDate, req),
-            }"
-          >
-            <div class="time-range">
-              {{ formatTime(req.start_time) }} -
-              {{ formatTime(req.end_time) }}
-            </div>
-            <div class="staff-count">
-              <span class="assigned-count">{{
-                getAssignedStaffCount(selectedDate, req)
-              }}</span>
-              <span class="separator">/</span>
-              <span class="required-count">{{
-                req.required_staff_count
-              }}</span>
-              <span class="count-unit">名</span>
-            </div>
-            <div
-              v-if="hasStaffingShortage(selectedDate, req)"
-              class="shortage-icon"
-            >
-              <i class="pi pi-exclamation-triangle"></i>
-            </div>
-          </div>
-        </div>
-        <div v-else class="no-requirements">
-          <i class="pi pi-info-circle"></i>
-          <span>設定なし</span>
-        </div>
       </div>
-  
-      <div class="daily-info-section staff-summary-section">
-        <h4 class="section-title">
-          <i class="pi pi-clock"></i>
-          勤務スタッフ
-        </h4>
-        <div class="staff-summary-grid">
-          <div
-            v-for="staff in getDailyShiftStaff(selectedDate)"
-            :key="`summary-${staff.id}`"
-            class="staff-summary-card"
-            :class="{
-              'has-warnings': hasStaffWarningsAllStores(staff.id),
-              'hours-violation': isHoursOutOfRangeAllStores(staff.id),
-            }"
-          >
-            <div class="staff-header">
-              <div class="staff-avatar-tiny">
-                {{ staff.first_name.charAt(0) }}
-              </div>
-              <div class="staff-name-summary">
-                {{ staff.last_name }} {{ staff.first_name }}
-              </div>
-              <div
-                v-if="hasStaffWarningsAllStores(staff.id)"
-                class="warning-indicator-small"
-              >
-                <i class="pi pi-exclamation-triangle"></i>
-              </div>
-            </div>
-  
-            <div class="summary-stats">
-              <div class="stat-item">
-                <div class="hours-display">
-                  <span
-                    class="stat-value current-store-hours"
-                    >{{ selectedStore.name }}:
-                    {{ formatHours(calculateTotalHours(staff.id)) }}</span
-                  >
-                  <div
-                    v-if="
-                      getOtherStoreHoursBreakdown(staff.id).length > 0
-                    "
-                    class="other-stores-hours-tiny"
-                  >
-                    <div
-                      v-for="breakdown in getOtherStoreHoursBreakdown(
-                        staff.id
-                      )"
-                      :key="breakdown.storeId"
-                      class="store-breakdown-tiny"
-                    >
-                      {{ breakdown.storeName }}:
-                      {{ formatHours(breakdown.hours) }}
-                    </div>
-                  </div>
-                  <span
-                    class="total-hours-all-stores"
-                    :class="{
-                      'out-of-range': isHoursOutOfRangeAllStores(
-                        staff.id
-                      ),
-                      'in-range': !isHoursOutOfRangeAllStores(
-                        staff.id
-                      ),
-                    }"
-                  >
-                    合計:
-                    {{
-                      formatHours(calculateTotalHoursAllStores(staff.id))
-                    }}
-                  </span>
-                </div>
-                <span class="stat-range">
-                  / {{ formatHours(staff.min_hours_per_month || 0) }} -
-                  {{ formatHours(staff.max_hours_per_month || 0) }}
-                </span>
-              </div>
-  
-              <div class="today-shift">
-                <span class="today-hours">
-                  本日:
-                  {{
-                    formatHours(
-                      calculateDayHours(
-                        getShiftForStaff(selectedDate, staff.id)
-                      )
-                    )
-                  }}
-                </span>
-                <div
-                  v-if="hasShiftViolation(selectedDate, staff.id)"
-                  class="violations"
-                >
-                  <div
-                    v-for="violation in getShiftViolations(
-                      selectedDate,
-                      staff.id
-                    )"
-                    :key="violation.type"
-                    class="violation-badge"
-                    :title="violation.message"
-                  >
-                    <i class="pi pi-exclamation-triangle"></i>
-                  </div>
-                </div>
-              </div>
+      
+      <div class="requirements-grid">
+        <div 
+          v-for="requirement in getDailyRequirements(selectedDate)"
+          :key="`${requirement.start_time}-${requirement.end_time}`"
+          class="requirement-card"
+          :class="{
+            'shortage': getAssignedStaffCount(selectedDate, requirement.start_time, requirement.end_time) < requirement.required_staff_count,
+            'adequate': getAssignedStaffCount(selectedDate, requirement.start_time, requirement.end_time) >= requirement.required_staff_count
+          }"
+        >
+          <div class="requirement-header">
+            <span class="time-range">
+              {{ formatTime(requirement.start_time) }} - {{ formatTime(requirement.end_time) }}
+            </span>
+            <div class="staff-count">
+              <span class="assigned">{{ getAssignedStaffCount(selectedDate, requirement.start_time, requirement.end_time) }}</span>
+              <span class="separator">/</span>
+              <span class="required">{{ requirement.required_staff_count }}</span>
+              <span class="unit">人</span>
             </div>
           </div>
-          <div
-            v-if="getDailyShiftStaff(selectedDate).length === 0"
-            class="no-shift-staff"
-          >
-            <i class="pi pi-info-circle"></i>
-            <span>シフトに入っているスタッフはいません</span>
+          
+          <div v-if="getAssignedStaffCount(selectedDate, requirement.start_time, requirement.end_time) < requirement.required_staff_count" 
+               class="shortage-info">
+            <i class="pi pi-exclamation-triangle"></i>
+            <span>{{ requirement.required_staff_count - getAssignedStaffCount(selectedDate, requirement.start_time, requirement.end_time) }}人不足</span>
+          </div>
+          
+          <div v-else class="adequate-info">
+            <i class="pi pi-check-circle"></i>
+            <span>要件満足</span>
           </div>
         </div>
       </div>
     </div>
-  </template>
+
+    <!-- 配置スタッフセクション -->
+    <div v-if="getDailyShiftStaff(selectedDate).length > 0" class="info-section">
+      <div class="section-header">
+        <h4 class="section-title">
+          <i class="pi pi-calendar"></i>
+          配置スタッフ ({{ getDailyShiftStaff(selectedDate).length }}人)
+        </h4>
+      </div>
+      
+      <div class="staff-grid">
+        <div 
+          v-for="shiftStaff in getDailyShiftStaff(selectedDate)"
+          :key="shiftStaff.id"
+          class="staff-card"
+          :class="{
+            'has-warnings': hasStaffWarningsAllStores(shiftStaff, calculateTotalHours(shiftStaff.id)),
+            'hours-out-of-range': isHoursOutOfRangeAllStores(shiftStaff, calculateTotalHours(shiftStaff.id)).isUnder || isHoursOutOfRangeAllStores(shiftStaff, calculateTotalHours(shiftStaff.id)).isOver,
+            'has-violation': hasShiftViolation(shiftStaff, selectedDate)
+          }"
+        >
+          <div class="staff-header">
+            <div class="staff-name">
+              {{ shiftStaff.last_name }} {{ shiftStaff.first_name }}
+            </div>
+            <div class="staff-badges">
+              <Badge 
+                v-if="hasShiftViolation(shiftStaff, selectedDate)"
+                value="制約違反"
+                severity="warning"
+                size="small"
+              />
+              <Badge 
+                v-if="isHoursOutOfRangeAllStores(shiftStaff, calculateTotalHours(shiftStaff.id)).isOver"
+                value="時間超過"
+                severity="danger"
+                size="small"
+              />
+              <Badge 
+                v-if="isHoursOutOfRangeAllStores(shiftStaff, calculateTotalHours(shiftStaff.id)).isUnder"
+                value="時間不足"
+                severity="warning"
+                size="small"
+              />
+            </div>
+          </div>
+          
+          <div class="shift-details">
+            <div class="time-info">
+              <i class="pi pi-clock"></i>
+              <span>{{ formatTime(shiftStaff.assignment.start_time) }} - {{ formatTime(shiftStaff.assignment.end_time) }}</span>
+            </div>
+            
+            <div v-if="shiftStaff.assignment.break_start_time && shiftStaff.assignment.break_end_time" 
+                 class="break-info">
+              <i class="pi pi-pause"></i>
+              <span>休憩: {{ formatTime(shiftStaff.assignment.break_start_time) }} - {{ formatTime(shiftStaff.assignment.break_end_time) }}</span>
+            </div>
+            
+            <div class="hours-info">
+              <div class="daily-hours">
+                <span class="label">勤務:</span>
+                <span class="value">{{ formatHours(calculateDayHours(shiftStaff.assignment)) }}h</span>
+              </div>
+              
+              <div class="total-hours">
+                <span class="label">今月:</span>
+                <span class="value">{{ formatHours(calculateTotalHoursAllStores(shiftStaff.id)) }}h</span>
+              </div>
+              
+              <div v-if="getOtherStoreHoursBreakdown(shiftStaff.id).totalHours > 0" class="other-stores">
+                <span class="label">他店:</span>
+                <span class="value">{{ formatHours(getOtherStoreHoursBreakdown(shiftStaff.id).totalHours) }}h</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 警告詳細 -->
+          <div v-if="getShiftViolations(shiftStaff, selectedDate).length > 0" class="violations">
+            <div class="violations-header">
+              <i class="pi pi-exclamation-triangle"></i>
+              <span>制約違反</span>
+            </div>
+            <ul class="violations-list">
+              <li v-for="violation in getShiftViolations(shiftStaff, selectedDate)" :key="violation">
+                {{ violation }}
+              </li>
+            </ul>
+          </div>
+          
+          <!-- 他店舗勤務詳細 -->
+          <div v-if="getOtherStoreHoursBreakdown(shiftStaff.id).stores.length > 0" class="other-stores-detail">
+            <div class="other-stores-header">
+              <i class="pi pi-building"></i>
+              <span>他店舗勤務</span>
+            </div>
+            <div class="other-stores-list">
+              <div 
+                v-for="store in getOtherStoreHoursBreakdown(shiftStaff.id).stores"
+                :key="store.name"
+                class="store-item"
+              >
+                <span class="store-name">{{ store.name }}</span>
+                <span class="store-hours">{{ formatHours(store.hours) }}h</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 未配置スタッフセクション -->
+    <div v-if="getUnassignedStaff().length > 0" class="info-section">
+      <div class="section-header">
+        <h4 class="section-title">
+          <i class="pi pi-user-minus"></i>
+          未配置スタッフ ({{ getUnassignedStaff().length }}人)
+        </h4>
+      </div>
+      
+      <div class="unassigned-grid">
+        <div 
+          v-for="staff in getUnassignedStaff()"
+          :key="staff.id"
+          class="unassigned-card"
+          :class="{
+            'unavailable': !canStaffWorkOnDate(staff, selectedDate),
+            'available': canStaffWorkOnDate(staff, selectedDate)
+          }"
+        >
+          <div class="staff-info">
+            <span class="staff-name">{{ staff.last_name }} {{ staff.first_name }}</span>
+            <div class="availability-status">
+              <i :class="canStaffWorkOnDate(staff, selectedDate) ? 'pi pi-check-circle available' : 'pi pi-times-circle unavailable'"></i>
+              <span v-if="canStaffWorkOnDate(staff, selectedDate)" class="available">勤務可能</span>
+              <span v-else class="unavailable">{{ getWorkUnavailabilityReason(staff, selectedDate) }}</span>
+            </div>
+          </div>
+          
+          <div class="staff-details">
+            <div class="hours-summary">
+              <span class="label">今月:</span>
+              <span class="value">{{ formatHours(calculateTotalHoursAllStores(staff.id)) }}h</span>
+            </div>
+            
+            <div v-if="hasStaffWarningsAllStores(staff, calculateTotalHours(staff.id))" class="warnings">
+              <i class="pi pi-exclamation-triangle"></i>
+              <span>時間制約</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 日付警告セクション -->
+    <div v-if="hasDateWarnings(selectedDate)" class="info-section warning-section">
+      <div class="section-header">
+        <h4 class="section-title warning">
+          <i class="pi pi-exclamation-triangle"></i>
+          警告・注意事項
+        </h4>
+      </div>
+      
+      <div class="warnings-list">
+        <div 
+          v-for="warning in getDateWarnings(selectedDate)"
+          :key="warning.message"
+          class="warning-item"
+          :class="warning.severity"
+        >
+          <i :class="warning.severity === 'error' ? 'pi pi-times-circle' : 'pi pi-exclamation-triangle'"></i>
+          <div class="warning-content">
+            <div v-if="warning.staffName" class="warning-staff">{{ warning.staffName }}</div>
+            <div class="warning-message">{{ warning.message }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- サマリーセクション -->
+    <div class="info-section summary-section">
+      <div class="section-header">
+        <h4 class="section-title">
+          <i class="pi pi-chart-bar"></i>
+          日次サマリー
+        </h4>
+      </div>
+      
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-label">配置スタッフ数</div>
+          <div class="summary-value primary">{{ getTotalAssignedStaff() }}人</div>
+        </div>
+        
+        <div class="summary-item">
+          <div class="summary-label">総勤務時間</div>
+          <div class="summary-value">{{ formatHours(getTotalWorkHours()) }}h</div>
+        </div>
+        
+        <div class="summary-item">
+          <div class="summary-label">人員要件</div>
+          <div class="summary-value" :class="{ 'danger': hasStaffingShortage(selectedDate), 'success': !hasStaffingShortage(selectedDate) && getDailyRequirements(selectedDate).length > 0 }">
+            {{ hasStaffingShortage(selectedDate) ? '不足あり' : getDailyRequirements(selectedDate).length > 0 ? '満足' : '設定なし' }}
+          </div>
+        </div>
+        
+        <div class="summary-item">
+          <div class="summary-label">制約違反</div>
+          <div class="summary-value" :class="{ 'danger': hasDateWarnings(selectedDate), 'success': !hasDateWarnings(selectedDate) }">
+            {{ hasDateWarnings(selectedDate) ? 'あり' : 'なし' }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import Badge from 'primevue/badge';
+
+export default {
+  name: 'DailyInfoPanel',
+  components: {
+    Badge
+  },
   
-  <script>
-  export default {
-    name: 'DailyInfoPanel',
-    props: {
-      selectedDate: String,
-      selectedStore: Object,
-      staffList: Array,
-      shifts: Array,
-      getDailyShiftStaff: Function,
-      hasDateWarnings: Function,
-      getDateWarnings: Function,
-      getDailyRequirements: Function,
-      hasStaffingShortage: Function,
-      getAssignedStaffCount: Function,
-      hasStaffWarningsAllStores: Function,
-      isHoursOutOfRangeAllStores: Function,
-      calculateTotalHours: Function,
-      getOtherStoreHoursBreakdown: Function,
-      calculateTotalHoursAllStores: Function,
-      getShiftForStaff: Function,
-      hasShiftViolation: Function,
-      getShiftViolations: Function,
-      calculateDayHours: Function,
-      formatTime: Function,
-      formatHours: Function,
+  props: {
+    selectedDate: {
+      type: String,
+      required: true
     },
-  };
-  </script>
+    selectedStore: {
+      type: Object,
+      required: true
+    },
+    staffList: {
+      type: Array,
+      default: () => []
+    },
+    shifts: {
+      type: Array,
+      default: () => []
+    },
+    // 関数props
+    getDailyShiftStaff: {
+      type: Function,
+      required: true
+    },
+    hasDateWarnings: {
+      type: Function,
+      required: true
+    },
+    getDateWarnings: {
+      type: Function,
+      required: true
+    },
+    getDailyRequirements: {
+      type: Function,
+      required: true
+    },
+    hasStaffingShortage: {
+      type: Function,
+      required: true
+    },
+    getAssignedStaffCount: {
+      type: Function,
+      required: true
+    },
+    hasStaffWarningsAllStores: {
+      type: Function,
+      required: true
+    },
+    isHoursOutOfRangeAllStores: {
+      type: Function,
+      required: true
+    },
+    calculateTotalHours: {
+      type: Function,
+      required: true
+    },
+    getOtherStoreHoursBreakdown: {
+      type: Function,
+      required: true
+    },
+    calculateTotalHoursAllStores: {
+      type: Function,
+      required: true
+    },
+    getShiftForStaff: {
+      type: Function,
+      required: true
+    },
+    hasShiftViolation: {
+      type: Function,
+      required: true
+    },
+    getShiftViolations: {
+      type: Function,
+      required: true
+    },
+    calculateDayHours: {
+      type: Function,
+      required: true
+    },
+    formatTime: {
+      type: Function,
+      required: true
+    },
+    formatHours: {
+      type: Function,
+      required: true
+    },
+    canStaffWorkOnDate: {
+      type: Function,
+      required: true
+    },
+    getWorkUnavailabilityReason: {
+      type: Function,
+      required: true
+    }
+  },
+
+  setup(props) {
+    const formatSelectedDateDisplay = (date) => {
+      if (!date) return '';
+      
+      const targetDate = new Date(date);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth() + 1;
+      const day = targetDate.getDate();
+      const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+      const dayOfWeek = dayNames[targetDate.getDay()];
+      
+      return `${year}年${month}月${day}日（${dayOfWeek}）`;
+    };
+
+    const getTotalAssignedStaff = () => {
+      return props.getDailyShiftStaff(props.selectedDate).length;
+    };
+
+    const getTotalWorkHours = () => {
+      const dailyStaff = props.getDailyShiftStaff(props.selectedDate);
+      let totalMinutes = 0;
+      
+      dailyStaff.forEach(staff => {
+        totalMinutes += props.calculateDayHours(staff.assignment) * 60;
+      });
+      
+      return totalMinutes / 60;
+    };
+
+    const getUnassignedStaff = () => {
+      if (!props.staffList || props.staffList.length === 0) return [];
+      
+      const assignedStaffIds = props.getDailyShiftStaff(props.selectedDate).map(staff => staff.id);
+      
+      return props.staffList.filter(staff => !assignedStaffIds.includes(staff.id));
+    };
+
+    const getWorkUnavailabilityReason = (staff, date) => {
+      if (!props.canStaffWorkOnDate(staff, date)) {
+        return props.getWorkUnavailabilityReason(staff, date);
+      }
+      return '';
+    };
+
+    return {
+      formatSelectedDateDisplay,
+      getTotalAssignedStaff,
+      getTotalWorkHours,
+      getUnassignedStaff,
+      getWorkUnavailabilityReason
+    };
+  }
+};
+</script>
+
+<style scoped lang="scss">
+.daily-info-panel {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.header-badges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.info-section {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
   
-  <style scoped lang="scss">
-  .daily-info-panel {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1.5rem;
-    padding: 1.5rem;
-    align-items: stretch;
+  &:last-child {
+    border-bottom: none;
   }
   
-  .daily-info-section {
+  &.warning-section {
+    background: #fff3e0;
+    border-left: 4px solid #ff9800;
+  }
+  
+  &.summary-section {
     background: #f8f9fa;
-    border-radius: 8px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
+  }
+}
+
+.section-header {
+  margin-bottom: 1rem;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  
+  &.warning {
+    color: #f57c00;
   }
   
-  .daily-info-section .section-title {
-    padding: 0.75rem 1rem;
-    font-size: 1.1rem;
-    background-color: #f1f5f9;
-    border-bottom: 1px solid #e2e8f0;
-    flex-shrink: 0;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    box-sizing: border-box;
+  i {
+    color: #2196f3;
+    
+    &.pi-exclamation-triangle {
+      color: #ff9800;
+    }
+  }
+}
+
+.requirements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.requirement-card {
+  padding: 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  transition: all 0.2s ease;
+  
+  &.shortage {
+    border-color: #f44336;
+    background: #ffebee;
   }
   
-  .date-warnings-section .section-title i {
-    color: #f59e0b;
-    font-size: 1rem;
+  &.adequate {
+    border-color: #4caf50;
+    background: #f1f8e9;
   }
+}
+
+.requirement-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.time-range {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.875rem;
+}
+
+.staff-count {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
   
-  .date-warnings {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    flex: 1;
-    padding: 1rem;
-    min-height: 200px;
-    max-height: 300px;
-    overflow-y: auto;
-  }
-  
-  .warning-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.85rem;
-  }
-  
-  .warning-item.staffing_shortage {
-    background: #fef3c7;
-    color: #78350f;
-  }
-  
-  .warning-item.staff_violation {
-    background: #fee2e2;
-    color: #7f1d1d;
-  }
-  
-  .requirements-section {
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .requirements-list {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    min-height: 200px;
-    max-height: 300px;
-    overflow-y: auto;
-    padding: 1rem;
-  }
-  
-  .requirement-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem;
-    background: white;
-    border-radius: 6px;
-    border: 1px solid #e5e7eb;
-  }
-  
-  .requirement-item.shortage {
-    background: #fef3c7;
-    border-color: #fbbf24;
-  }
-  
-  .time-range {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #475569;
-  }
-  
-  .staff-count {
-    display: flex;
-    align-items: baseline;
-    gap: 0.25rem;
-  }
-  
-  .assigned-count {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: #3b82f6;
+  .assigned {
+    color: #2196f3;
+    font-size: 1.125rem;
   }
   
   .separator {
-    color: #94a3b8;
+    color: #666;
   }
   
-  .required-count {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: #64748b;
+  .required {
+    color: #333;
+    font-size: 1.125rem;
   }
   
-  .count-unit {
-    font-size: 0.8rem;
-    color: #94a3b8;
+  .unit {
+    color: #666;
+    font-size: 0.875rem;
+  }
+}
+
+.shortage-info,
+.adequate-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.shortage-info {
+  color: #f44336;
+}
+
+.adequate-info {
+  color: #4caf50;
+}
+
+.staff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.staff-card {
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
   
-  .shortage-icon {
-    color: #f59e0b;
-    font-size: 0.9rem;
-    margin-left: 0.5rem;
+  &.has-warnings {
+    border-left: 4px solid #ff9800;
   }
   
-  .no-requirements {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    color: #94a3b8;
-    font-size: 0.85rem;
-    padding: 2rem;
+  &.hours-out-of-range {
+    border-left: 4px solid #f44336;
   }
   
-  .staff-summary-section {
-    display: flex;
+  &.has-violation {
+    background: #fff3e0;
+    border-color: #ff9800;
+  }
+}
+
+.staff-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.staff-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+.staff-badges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.shift-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.time-info,
+.break-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #333;
+  
+  i {
+    color: #2196f3;
+  }
+}
+
+.break-info {
+  i {
+    color: #ff9800;
+  }
+}
+
+.hours-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.daily-hours,
+.total-hours,
+.other-stores {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.label {
+  color: #666;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.value {
+  font-weight: 600;
+  color: #333;
+}
+
+.violations,
+.other-stores-detail {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #f5f5f5;
+  border-radius: 6px;
+}
+
+.violations-header,
+.other-stores-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.violations-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  
+  li {
+    font-size: 0.875rem;
+    color: #f57c00;
+    margin-bottom: 0.25rem;
+  }
+}
+
+.other-stores-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.store-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.store-name {
+  color: #333;
+}
+
+.store-hours {
+  font-weight: 600;
+  color: #2196f3;
+}
+
+.unassigned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.unassigned-card {
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  
+  &.unavailable {
+    background: #fafafa;
+    opacity: 0.8;
+  }
+  
+  &.available {
+    border-color: #4caf50;
+    background: #f8fff8;
+  }
+}
+
+.staff-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.availability-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  
+  .available {
+    color: #4caf50;
+  }
+  
+  .unavailable {
+    color: #f44336;
+  }
+}
+
+.staff-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hours-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.warnings {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #ff9800;
+  font-size: 0.875rem;
+}
+
+.warnings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.warning-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  
+  &.error {
+    background: #ffebee;
+    color: #c62828;
+    
+    i {
+      color: #f44336;
+    }
+  }
+  
+  &.warning {
+    background: #fff3e0;
+    color: #ef6c00;
+    
+    i {
+      color: #ff9800;
+    }
+  }
+}
+
+.warning-content {
+  flex: 1;
+}
+
+.warning-staff {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.warning-message {
+  font-size: 0.875rem;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+}
+
+.summary-item {
+  text-align: center;
+  padding: 1rem;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.summary-label {
+  font-size: 0.875rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.summary-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #333;
+  
+  &.primary {
+    color: #2196f3;
+  }
+  
+  &.success {
+    color: #4caf50;
+  }
+  
+  &.danger {
+    color: #f44336;
+  }
+}
+
+@media (max-width: 768px) {
+  .panel-header {
     flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
   }
   
-  .staff-summary-grid {
-    flex: 1;
-    padding: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    min-height: 300px;
-    max-height: 1000px;
-    overflow-y: auto;
+  .requirements-grid,
+  .staff-grid,
+  .unassigned-grid {
+    grid-template-columns: 1fr;
   }
   
-  .staff-summary-card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    padding: 0.75rem;
-    transition: all 0.2s;
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
-  
-  .staff-summary-card:hover {
-    background: #f9fafb;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-  
-  .staff-summary-card.has-warnings {
-    background: #fef3c7;
-    border-color: #fbbf24;
+
+  .hours-info {
+    grid-template-columns: 1fr;
   }
   
   .staff-header {
-    display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 0.5rem;
-    margin-bottom: 0.5rem;
+    align-items: stretch;
   }
-  
-  .staff-avatar-tiny {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    background: #3b82f6;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    font-size: 0.7rem;
-  }
-  
-  .staff-name-summary {
-    font-weight: 600;
-    color: #1e293b;
-    font-size: 0.85rem;
-    flex: 1;
-  }
-  
-  .warning-indicator-small {
-    color: #f59e0b;
-    font-size: 0.8rem;
-  }
-  
-  .summary-stats {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  .stat-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  .hours-display {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  .stat-value {
-    font-weight: 700;
-    color: #3b82f6;
-    font-size: 1rem;
-  }
-  
-  .stat-value.out-of-range {
-    color: #dc2626 !important;
-    font-weight: 700;
-  }
-  
-  .other-stores-hours-tiny {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    margin-top: 0.25rem;
-  }
-  
-  .store-breakdown-tiny {
-    font-size: 0.6rem;
-    color: #6b7280;
-  }
-  
-  .total-hours-all-stores {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #6b7280;
-  }
-  
-  .total-hours-all-stores.out-of-range {
-    color: #dc2626 !important;
-    font-weight: 700;
-  }
-  
-  .stat-range {
-    color: #94a3b8;
-    font-size: 0.8rem;
-  }
-  
-  .today-shift {
-    padding: 0.375rem 0.625rem;
-    background: #dbeafe;
-    border-radius: 6px;
-    margin-top: 0.5rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .today-hours {
-    font-weight: 600;
-    color: #059669;
-    font-size: 0.85rem;
-  }
-  
-  .violations {
-    display: flex;
-    gap: 0.25rem;
-  }
-  
-  .violation-badge {
-    font-size: 0.65rem;
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-    background: #fee2e2;
-    color: #dc2626;
-    font-weight: 600;
-    cursor: help;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-  }
-  
-  .no-shift-staff {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    color: #94a3b8;
-    font-size: 0.85rem;
-    padding: 2rem;
-    text-align: center;
-  }
-  
-  @media (max-width: 1200px) {
-    .daily-info-panel {
-      grid-template-columns: 1fr;
-  
-      .daily-info-section {
-        height: auto;
-      }
-  
-      .date-warnings,
-      .requirements-list,
-      .staff-summary-grid {
-        min-height: auto;
-      }
-    }
-  }
-  </style>
+}
+</style>
