@@ -202,6 +202,13 @@
                     title="シフトを削除"
                     size="small"
                   />
+                  <div class="work-hours-display">
+                    {{
+                      formatHours(
+                        calculateWorkHours(getShiftForStaff(day.date, staff.id))
+                      )
+                    }}
+                  </div>
                   <div class="shift-start">
                     {{
                       formatTime(
@@ -214,13 +221,6 @@
                     {{
                       formatTime(
                         getShiftForStaff(day.date, staff.id).end_time
-                      )
-                    }}
-                  </div>
-                  <div class="work-hours-display">
-                    {{
-                      formatHours(
-                        calculateWorkHours(getShiftForStaff(day.date, staff.id))
                       )
                     }}
                   </div>
@@ -243,6 +243,13 @@
                         formatTime(
                           getShiftForStaff(day.date, staff.id)
                             .break_end_time
+                        )
+                      }}
+                    </span>
+                    <span class="break-duration">
+                      {{
+                        formatHours(
+                          calculateBreakHours(getShiftForStaff(day.date, staff.id))
                         )
                       }}
                     </span>
@@ -374,6 +381,15 @@
         }
         
         return Math.round((workMillis / (1000 * 60 * 60)) * 100) / 100;
+      },
+      calculateBreakHours(shift) {
+        if (!shift || !shift.break_start_time || !shift.break_end_time) return 0;
+        
+        const breakStart = new Date(`2000-01-01T${shift.break_start_time}`);
+        const breakEnd = new Date(`2000-01-01T${shift.break_end_time}`);
+        const breakMillis = breakEnd - breakStart;
+        
+        return Math.round((breakMillis / (1000 * 60 * 60)) * 100) / 100;
       },
     },
   };
@@ -754,7 +770,7 @@
   .shift-cell {
     min-width: 90px;
     width: 90px;
-    min-height: 130px;
+    min-height: 140px;
     padding: 5px;
     border-right: 1px solid #e5e7eb;
     border-bottom: 1px solid #e5e7eb;
@@ -822,7 +838,7 @@
     min-width: 75px;
     width: 100%;
     max-width: 80px;
-    height: 120px;
+    height: 130px;
     transition: all 0.2s;
     position: relative;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -869,9 +885,9 @@
   }
   
   .work-hours-display {
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 1);
     background: rgba(0, 0, 0, 0.2);
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
@@ -879,7 +895,7 @@
   }
   
   .break-time-indicator {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     color: rgba(255, 255, 255, 0.95);
     display: flex;
     flex-direction: column;
@@ -904,6 +920,16 @@
     font-size: 0.6rem;
     font-weight: 700;
     opacity: 0.9;
+  }
+  
+  .break-duration {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 1);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.05rem 0.2rem;
+    border-radius: 3px;
+    margin-top: 0.1rem;
   }
   
   .shift-start,
@@ -1048,11 +1074,13 @@
     
     .shift-cell {
       padding: 3px;
+      min-height: 150px;
     }
     
     .shift-time-card {
       min-width: 70px;
       max-width: 74px;
+      height: 140px;
     }
   }
   </style>
