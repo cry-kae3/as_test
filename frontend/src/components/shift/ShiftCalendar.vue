@@ -458,8 +458,8 @@
   .date-cell-wrapper {
     display: flex;
     flex-direction: column;
-    min-width: 120px;
-    width: 120px;
+    min-width: 140px;
+    width: 140px;
     border-right: 1px solid #e5e7eb;
     border-bottom: 2px solid #e5e7eb;
     flex-shrink: 0;

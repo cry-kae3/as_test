@@ -280,19 +280,6 @@
 
     <ConfirmDialog></ConfirmDialog>
     <Toast />
-
-    <!-- デバッグ情報パネル（開発環境のみ） -->
-    <div v-if="isDevelopment" class="debug-panel">
-      <div class="debug-info">
-        <h4>デバッグ情報</h4>
-        <div>selectedStore: {{ selectedStore?.name }}</div>
-        <div>hasCurrentShift: {{ hasCurrentShift }}</div>
-        <div>staffList.length: {{ staffList.length }}</div>
-        <div>loading: {{ loading }}</div>
-        <div>stores.length: {{ stores.length }}</div>
-        <div>storeRequirements.length: {{ storeRequirements.length }}</div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -359,9 +346,6 @@ export default {
     const store = useStore();
     const toast = useToast();
     const confirm = useConfirm();
-
-    // 開発環境判定
-    const isDevelopment = computed(() => process.env.NODE_ENV === 'development');
 
     // Composablesの利用
     const shiftManagement = useShiftManagement();
@@ -896,9 +880,6 @@ const handleDeleteShift = async () => {
     });
 
     return {
-      // 開発環境判定
-      isDevelopment,
-
       // 基本状態
       loading,
       saving,
@@ -1289,28 +1270,6 @@ const handleDeleteShift = async () => {
   text-align: left;
 }
 
-.debug-panel {
-  position: fixed;
-  bottom: 10px;
-  right: 10px;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 1rem;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  z-index: 9999;
-  min-width: 250px;
-}
-
-.debug-info h4 {
-  margin: 0 0 0.5rem 0;
-  color: #ffd700;
-}
-
-.debug-info div {
-  margin-bottom: 0.25rem;
-}
-
 @media (max-width: 768px) {
   .shift-management {
     padding: 1rem;
@@ -1341,13 +1300,6 @@ const handleDeleteShift = async () => {
   .action-button {
     flex: 1;
     min-width: 140px;
-  }
-
-  .debug-panel {
-    position: relative;
-    bottom: auto;
-    right: auto;
-    margin-top: 1rem;
   }
 }
 </style>
