@@ -824,7 +824,7 @@
   .shift-time-card {
     background: #10b981;
     color: white;
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem 0.5rem;
     border-radius: 6px;
     display: flex;
     flex-direction: column;
@@ -833,7 +833,7 @@
     font-weight: 600;
     font-size: 0.75rem;
     width: 100%;
-    height: 130px;
+    min-height: 140px;
     transition: all 0.2s;
     position: relative;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -906,10 +906,7 @@
   }
   
   .break-time-indicator.no-break {
-    background: rgba(255, 255, 255, 0.9);
-    color: rgba(255, 255, 255, 0.9);
-    font-style: italic;
-    font-size: 0.8rem;
+
   }
   
   .break-label {
