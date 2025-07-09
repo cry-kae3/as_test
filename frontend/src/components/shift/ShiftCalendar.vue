@@ -209,15 +209,13 @@
                       )
                     }}
                   </div>
-                  <div class="shift-start">
+                  <div class="shift-time-range">
                     {{
                       formatTime(
                         getShiftForStaff(day.date, staff.id).start_time
                       )
                     }}
-                  </div>
-                  <div class="shift-separator">-</div>
-                  <div class="shift-end">
+                    -
                     {{
                       formatTime(
                         getShiftForStaff(day.date, staff.id).end_time
@@ -460,8 +458,8 @@
   .date-cell-wrapper {
     display: flex;
     flex-direction: column;
-    min-width: 90px;
-    width: 90px;
+    min-width: 120px;
+    width: 120px;
     border-right: 1px solid #e5e7eb;
     border-bottom: 2px solid #e5e7eb;
     flex-shrink: 0;
@@ -768,10 +766,9 @@
   }
   
   .shift-cell {
-    min-width: 90px;
-    width: 90px;
+    width: 140px;
     min-height: 140px;
-    padding: 5px;
+    padding: 10px;
     border-right: 1px solid #e5e7eb;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
@@ -835,9 +832,7 @@
     gap: 0.1rem;
     font-weight: 600;
     font-size: 0.75rem;
-    min-width: 75px;
     width: 100%;
-    max-width: 80px;
     height: 130px;
     transition: all 0.2s;
     position: relative;
@@ -895,15 +890,15 @@
   }
   
   .break-time-indicator {
-    font-size: 0.6rem;
-    color: rgba(255, 255, 255, 0.95);
+    font-size: 0.8rem;
+    color: #10b981;
+    background: white;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.1rem;
     margin-top: 0.2rem;
-    padding: 0.15rem 0.25rem;
-    background: rgba(255, 255, 255, 0.25);
+    padding: 0.25rem;
     border-radius: 4px;
     font-weight: 500;
     width: 100%;
@@ -911,37 +906,34 @@
   }
   
   .break-time-indicator.no-break {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.9);
     font-style: italic;
-    font-size: 0.6rem;
+    font-size: 0.8rem;
   }
   
   .break-label {
-    font-size: 0.6rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    opacity: 0.9;
+    color: #10b981;
   }
   
   .break-duration {
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    color: rgba(255, 255, 255, 1);
-    background: rgba(0, 0, 0, 0.2);
+    color: #10b981;
     padding: 0.05rem 0.2rem;
-    border-radius: 3px;
     margin-top: 0.1rem;
   }
   
-  .shift-start,
-  .shift-end {
+  .shift-time-range {
     font-weight: 700;
-    font-size: 0.85rem;
-  }
-  
-  .shift-separator {
-    font-size: 0.7rem;
-    opacity: 0.8;
-    line-height: 0.8;
+    font-size: 1rem;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin:0.25rem 0;
   }
   
   .violation-icon {
@@ -1068,8 +1060,8 @@
   
     .date-cell-wrapper,
     .shift-cell {
-      min-width: 80px;
-      width: 80px;
+      min-width: 110px;
+      width: 110px;
     }
     
     .shift-cell {
@@ -1078,8 +1070,8 @@
     }
     
     .shift-time-card {
-      min-width: 70px;
-      max-width: 74px;
+      min-width: 100px;
+      max-width: 104px;
       height: 140px;
     }
   }
