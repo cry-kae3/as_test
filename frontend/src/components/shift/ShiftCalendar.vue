@@ -49,6 +49,7 @@
                   'has-warnings': hasDateWarnings(day.date),
                   'has-staffing-shortage': hasDateStaffingShortage(day.date),
                   'is-store-closed': day.isStoreClosed,
+                  'is-past': isPastDate(day.date),
                 }"
                 @click="selectDate(day.date)"
               >
@@ -463,6 +464,7 @@
     border-right: 1px solid #e5e7eb;
     border-bottom: 2px solid #e5e7eb;
     flex-shrink: 0;
+    position: relative;
   }
   
   .date-warning-row {
@@ -485,6 +487,7 @@
     background: white;
     cursor: pointer;
     transition: all 0.2s;
+    position: relative;
   }
   
   .date-cell-header:hover {
@@ -532,6 +535,18 @@
   .date-cell-header.has-staffing-shortage .date-number {
     color: #78350f !important;
     font-weight: 700;
+  }
+  
+  .date-cell-header.is-past::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+    z-index: 1;
   }
   
   .date-number {
@@ -794,7 +809,19 @@
   }
   
   .shift-cell.is-past {
-    opacity: 0.6;
+    position: relative;
+  }
+  
+  .shift-cell.is-past::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    z-index: 2;
   }
   
   .shift-cell.is-editable {
@@ -838,6 +865,7 @@
     position: relative;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     justify-content: flex-start;
+    z-index: 2;
   }
   
   .shift-time-card:hover {
@@ -948,6 +976,7 @@
     font-size: 0.6rem;
     cursor: pointer;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    z-index: 3;
   }
   
   .violation-tooltip {
@@ -982,6 +1011,7 @@
     color: #cbd5e1;
     font-size: 1.2rem;
     transition: all 0.2s;
+    z-index: 2;
   }
   
   .shift-cell.is-editable .no-shift {
@@ -1003,6 +1033,7 @@
     font-size: 0.7rem;
     color: #9ca3af;
     font-weight: 500;
+    z-index: 2;
   }
   
   .closed-text {

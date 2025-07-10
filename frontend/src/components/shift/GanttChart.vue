@@ -61,12 +61,19 @@
                 class="hour-requirement-badge"
                 :class="{
                   shortage: req.hasShortage,
-                  satisfied: !req.hasShortage
+                  satisfied: !req.hasShortage,
                 }"
-                :title="`${formatTime(req.requirement.start_time)}-${formatTime(req.requirement.end_time)}: ${req.assignedCount}/${req.requiredCount}名`"
+                :title="`${formatTime(req.requirement.start_time)}-${formatTime(
+                  req.requirement.end_time
+                )}: ${req.assignedCount}/${req.requiredCount}名`"
               >
-                <span class="staffing-count">{{ req.assignedCount }}/{{ req.requiredCount }}</span>
-                <i v-if="req.hasShortage" class="pi pi-exclamation-triangle shortage-icon"></i>
+                <span class="staffing-count"
+                  >{{ req.assignedCount }}/{{ req.requiredCount }}</span
+                >
+                <i
+                  v-if="req.hasShortage"
+                  class="pi pi-exclamation-triangle shortage-icon"
+                ></i>
               </div>
             </div>
           </div>
@@ -103,17 +110,12 @@
                 }}</span>
                 <div class="staff-hours-small">
                   <div class="hours-display">
-                    <span
-                      class="current-hours current-store-hours"
+                    <span class="current-hours current-store-hours"
                       >{{ selectedStore.name }}:
-                      {{
-                        formatHours(calculateTotalHours(staff.id))
-                      }}</span
+                      {{ formatHours(calculateTotalHours(staff.id)) }}</span
                     >
                     <div
-                      v-if="
-                        getOtherStoreHoursBreakdown(staff.id).length > 0
-                      "
+                      v-if="getOtherStoreHoursBreakdown(staff.id).length > 0"
                       class="other-stores-hours-small"
                     >
                       <div
@@ -130,20 +132,12 @@
                     <span
                       class="total-hours-all-stores"
                       :class="{
-                        'out-of-range': isHoursOutOfRangeAllStores(
-                          staff.id
-                        ),
-                        'in-range': !isHoursOutOfRangeAllStores(
-                          staff.id
-                        ),
+                        'out-of-range': isHoursOutOfRangeAllStores(staff.id),
+                        'in-range': !isHoursOutOfRangeAllStores(staff.id),
                       }"
                     >
                       合計:
-                      {{
-                        formatHours(
-                          calculateTotalHoursAllStores(staff.id)
-                        )
-                      }}
+                      {{ formatHours(calculateTotalHoursAllStores(staff.id)) }}
                     </span>
                   </div>
                   <span class="hours-range">
@@ -183,7 +177,7 @@
                   class="gantt-hour-line"
                   :style="getTimeHeaderStyle()"
                   :class="{
-                    'has-shortage': hasHourlyShortage(selectedDate, hour)
+                    'has-shortage': hasHourlyShortage(selectedDate, hour),
                   }"
                 ></div>
               </div>
@@ -195,18 +189,14 @@
                 "
                 class="gantt-availability-indicator"
                 :style="getGanttAvailabilityStyle(staff, selectedDate)"
-                :title="
-                  getGanttAvailabilityTooltip(staff, selectedDate)
-                "
+                :title="getGanttAvailabilityTooltip(staff, selectedDate)"
               ></div>
 
               <div
                 v-if="getShiftForStaff(selectedDate, staff.id)"
                 class="gantt-shift-block"
                 :style="
-                  getGanttBarStyle(
-                    getShiftForStaff(selectedDate, staff.id)
-                  )
+                  getGanttBarStyle(getShiftForStaff(selectedDate, staff.id))
                 "
                 :class="{
                   'is-editable':
@@ -223,8 +213,7 @@
               >
                 <div
                   v-if="
-                    getShiftForStaff(selectedDate, staff.id)
-                      .break_start_time
+                    getShiftForStaff(selectedDate, staff.id).break_start_time
                   "
                   class="gantt-break-bar"
                   :style="
@@ -236,8 +225,7 @@
                 <span class="shift-time-text">
                   {{
                     formatTime(
-                      getShiftForStaff(selectedDate, staff.id)
-                        .start_time
+                      getShiftForStaff(selectedDate, staff.id).start_time
                     )
                   }}
                   -
@@ -263,11 +251,11 @@
 </template>
 
 <script>
-import Button from 'primevue/button';
-import Calendar from 'primevue/calendar';
+import Button from "primevue/button";
+import Calendar from "primevue/calendar";
 
 export default {
-  name: 'GanttChart',
+  name: "GanttChart",
   components: {
     Button,
     Calendar,
@@ -304,18 +292,19 @@ export default {
     isPastDate: Function,
   },
   emits: [
-    'previous-date',
-    'next-date',
-    'gantt-date-select',
-    'open-gantt-shift-editor',
-    'open-shift-editor',
-    'update:selectedDateCalendar',
+    "previous-date",
+    "next-date",
+    "gantt-date-select",
+    "open-gantt-shift-editor",
+    "open-shift-editor",
+    "update:selectedDateCalendar",
   ],
   methods: {
     syncGanttScroll() {
       if (this.$refs.ganttTimelineHeader && this.$refs.ganttBody) {
         requestAnimationFrame(() => {
-          this.$refs.ganttTimelineHeader.scrollLeft = this.$refs.ganttBody.scrollLeft;
+          this.$refs.ganttTimelineHeader.scrollLeft =
+            this.$refs.ganttBody.scrollLeft;
         });
       }
     },
@@ -385,7 +374,9 @@ export default {
       const startHourFloat = this.parseTimeToFloat(
         dayPreference.preferred_start_time
       );
-      const endHourFloat = this.parseTimeToFloat(dayPreference.preferred_end_time);
+      const endHourFloat = this.parseTimeToFloat(
+        dayPreference.preferred_end_time
+      );
 
       const hourWidth = 60;
       const left = startHourFloat * hourWidth;
@@ -425,7 +416,7 @@ export default {
     hasHourlyShortage(date, hour) {
       if (!this.getHourlyStaffingInfo) return false;
       const staffingInfo = this.getHourlyStaffingInfo(date, hour);
-      return staffingInfo.some(info => info.hasShortage);
+      return staffingInfo.some((info) => info.hasShortage);
     },
   },
 };
@@ -788,6 +779,7 @@ export default {
   cursor: pointer;
   z-index: 3;
   transition: all 0.2s;
+  overflow: hidden;
 }
 
 .gantt-shift-block:hover {
@@ -803,6 +795,8 @@ export default {
   font-size: 0.75rem;
   white-space: nowrap;
   padding: 0 0.75rem;
+  position: relative;
+  z-index: 2;
 }
 
 .gantt-violation-icon {
@@ -834,19 +828,18 @@ export default {
 
 .gantt-break-bar {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 8px;
+  top: 0;
+  bottom: 0;
+
   background: repeating-linear-gradient(
     45deg,
-    rgba(255, 255, 255, 0.8),
-    rgba(255, 255, 255, 0.8) 4px,
-    transparent 4px,
-    transparent 8px
+    rgba(200, 200, 200, 0.8),
+    rgba(200, 200, 200, 0.8) 4px,
+    rgba(100, 100, 100, 0.4) 4px,
+    rgba(100, 100, 100, 0.4) 8px
   );
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 4px;
-  z-index: 5;
+  
+  z-index: 1;
 }
 
 .hours-display {
