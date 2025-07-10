@@ -222,19 +222,41 @@
                     )
                   "
                 ></div>
-                <span class="shift-time-text">
-                  {{
-                    formatTime(
-                      getShiftForStaff(selectedDate, staff.id).start_time
-                    )
-                  }}
-                  -
-                  {{
-                    formatTime(
-                      getShiftForStaff(selectedDate, staff.id).end_time
-                    )
-                  }}
-                </span>
+                <div class="shift-info-wrapper">
+                  <span class="shift-time-text">
+                    {{
+                      formatTime(
+                        getShiftForStaff(selectedDate, staff.id).start_time
+                      )
+                    }}
+                    -
+                    {{
+                      formatTime(
+                        getShiftForStaff(selectedDate, staff.id).end_time
+                      )
+                    }}
+                  </span>
+                  <span
+                    v-if="
+                      getShiftForStaff(selectedDate, staff.id).break_start_time &&
+                      getShiftForStaff(selectedDate, staff.id).break_end_time
+                    "
+                    class="break-time-text"
+                  >
+                    休憩:
+                    {{
+                      formatTime(
+                        getShiftForStaff(selectedDate, staff.id).break_start_time
+                      )
+                    }}
+                    -
+                    {{
+                      formatTime(
+                        getShiftForStaff(selectedDate, staff.id).break_end_time
+                      )
+                    }}
+                  </span>
+                </div>
                 <div
                   v-if="hasShiftViolation(selectedDate, staff.id)"
                   class="gantt-violation-icon"
@@ -791,12 +813,25 @@ export default {
   background: #f59e0b;
 }
 
-.shift-time-text {
-  font-size: 0.75rem;
-  white-space: nowrap;
+.shift-info-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
   padding: 0 0.75rem;
   position: relative;
   z-index: 2;
+}
+
+.shift-time-text {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.break-time-text {
+  font-size: 0.65rem;
+  opacity: 0.9;
+  white-space: nowrap;
 }
 
 .gantt-violation-icon {
@@ -830,15 +865,10 @@ export default {
   position: absolute;
   top: 0;
   bottom: 0;
+  background: rgba(82, 82, 82, 0.1);
+  border-left: 1px dashed #ddd;
+  border-right: 1px dashed #ddd;
 
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(200, 200, 200, 0.8),
-    rgba(200, 200, 200, 0.8) 4px,
-    rgba(100, 100, 100, 0.4) 4px,
-    rgba(100, 100, 100, 0.4) 8px
-  );
-  
   z-index: 1;
 }
 
